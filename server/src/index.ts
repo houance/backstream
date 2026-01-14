@@ -1,31 +1,29 @@
 import { Hono } from 'hono'
-import {serve} from "@hono/node-server";
-import {serveStatic} from "@hono/node-server/serve-static";
+import { serve } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
+import infoRoute from './routes/info.js'
 
 
 const app = new Hono()
 
-// Define prefix for all data routes
-const api = app.basePath('/api')
-// Define your backup routes using the chainable API
-const routes = api.get('/backups', (c) => {
-  return c.json({
-    jobs: [{ id: '1', status: 'idle', tool: 'restic' }]
-  })
-})
+// Serve static files ONLY in production
+if (process.env.NODE_ENV === 'production') {
+  app.use('/*', serveStatic({ root: '../web/dist' }));
+  app.get('*', serveStatic({ path: '../web/dist/index.html' }));
+}
 
-// Serve built React files and fallback route
-app.use('/*', serveStatic({ root: '../web/dist' }))
-app.get('*', serveStatic({ path: '../web/dist/index.html' }))
+// Define prefix for all data routes
+const routes = app.basePath('/api')
+  .route('/info', infoRoute)
 
 // Export the AppType for the frontend
-export type AppType = typeof routes
 export default app
+export type AppType = typeof routes
 
 serve({
   fetch: app.fetch,
   port: 3000,
   hostname: 'localhost',
 }, (info) => {
-  console.log(`Server is running on http://localhost:${info.port}`)
+  console.log(`Server is running on http://${info.address}:${info.port}`)
 })
