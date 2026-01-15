@@ -1,4 +1,5 @@
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import type {ResticEnv} from "../restic/types.js";
 
 // 1. Repository Table
 export const repositories = sqliteTable("repository_table", {
@@ -7,7 +8,9 @@ export const repositories = sqliteTable("repository_table", {
     providerType: text("provider_type", {enum: ["local", "backblaze b2", "aliyun oss"]}).notNull(), // local, alibaba oss, etc.
     lastBackupAt: integer("last_backup_at", { mode: "timestamp" }),
     size: integer("size").default(0),
-    configData: text("config_data"), // Store as JSON string
+    configData: text("config_data", { mode: "json" })
+        .$type<ResticEnv>()
+        .notNull()
 });
 
 // 2. Data Source Table
