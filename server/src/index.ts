@@ -2,9 +2,20 @@ import { Hono } from 'hono'
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import infoRoute from './routes/info.js'
+import { db } from './service/db/index.js';
 
+type Env = {
+  Variables: {
+    db: typeof db;
+  };
+};
 
-const app = new Hono()
+const app = new Hono<Env>();
+
+app.use('*', async (c, next) => {
+  c.set('db', db);
+  await next();
+});
 
 // Serve static files ONLY in production
 if (process.env.NODE_ENV === 'production') {
@@ -14,7 +25,7 @@ if (process.env.NODE_ENV === 'production') {
 
 // Define prefix for all data routes
 const routes = app.basePath('/api')
-  .route('/info', infoRoute)
+    .route('/info', infoRoute)
 
 // Export the AppType for the frontend
 export default app

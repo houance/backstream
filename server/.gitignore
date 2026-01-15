@@ -28,3 +28,6 @@ lerna-debug.log*
 .DS_Store
 /dist/
 /node_modules/
+/drizzle/
+/backup_app.db
+/db/
