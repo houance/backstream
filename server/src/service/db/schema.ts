@@ -5,8 +5,7 @@ import type {ResticEnv} from "../restic/types.js";
 export const repositories = sqliteTable("repository_table", {
     id: integer("repository_id").primaryKey({ autoIncrement: true }),
     name: text("name").notNull(),
-    providerType: text("provider_type", {enum: ["local", "backblaze b2", "aliyun oss"]}).notNull(), // local, alibaba oss, etc.
-    lastBackupAt: integer("last_backup_at", { mode: "timestamp" }),
+    providerType: text("provider_type", {enum: ["local", "backblaze b2", "aliyun oss"]}).notNull(),
     size: integer("size").default(0),
     configData: text("config_data", { mode: "json" })
         .$type<ResticEnv>()

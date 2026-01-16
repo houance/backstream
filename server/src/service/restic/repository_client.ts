@@ -1,5 +1,4 @@
 import type {Repository} from '../db/schema.js';
-import {type Subprocess} from "execa";
 import {execute} from "./utils.js";
 import {ExitCode} from "./types.js";
 
@@ -8,7 +7,6 @@ export class RepositoryClient {
     private readonly _env: Record<string, string>;
     private _initialized = false;
     private _isLocked: boolean = false;
-    private _childProcess: Subprocess | null = null;
 
     private constructor(repository: Repository, createRepo?: boolean) {
         this._repository = repository;
@@ -46,7 +44,7 @@ export class RepositoryClient {
         return this._env;
     }
 
-    public async isRepoExist(): Promise<boolean> {
+    private async isRepoExist(): Promise<boolean> {
         const result = await execute('restic cat config', { env: this._env });
         if (result.success) {
             return true;

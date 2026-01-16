@@ -22,12 +22,16 @@ export function executeStream(
     }
     return execa(args[0], args.slice(1), {
         reject: false,
-        timeout: options?.timeout ?? 2400000, // timout 2 hours
+        forceKillAfterDelay: 10000, // kill after sigterm send in 10 seconds
+        timeout: options?.timeout ?? 7200000, // timout 2 hours
         env: options?.env ?? {},
         // get options except reject, env, timeout
         ...(options && Object.fromEntries(Object.entries(options)
             .filter(([key]) =>
-                key !== 'reject' && key !== 'env' && key !== 'timeout'))),
+                key !== 'reject' &&
+                key !== 'env' &&
+                key !== 'timeout' &&
+                key !== 'forceKillAfterDelay'))),
     });
 }
 
@@ -51,7 +55,9 @@ export async function execute(
         // get options except reject, env, timeout
         ...(options && Object.fromEntries(Object.entries(options)
             .filter(([key]) =>
-                key !== 'reject' && key !== 'env' && key !== 'timeout'))),
+                key !== 'reject' &&
+                key !== 'env' &&
+                key !== 'timeout'))),
     });
     if (!result.failed) {
         return {
