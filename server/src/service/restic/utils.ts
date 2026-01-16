@@ -11,7 +11,7 @@ export function parseExitCodeFromResult(input: number | undefined): ExitCode {
 
 export function executeStream(
     command: string,
-    options?: Options,
+    options: Options,
     commandPath?: string,
 ):Subprocess {
     // Split command into arguments (e.g., "restic backup" -> ["restic", "backup"])
@@ -21,24 +21,23 @@ export function executeStream(
         args[0] = commandPath;
     }
     return execa(args[0], args.slice(1), {
+        ...options,
         reject: false,
+        buffer: false,
+        cleanup: true,
         forceKillAfterDelay: 10000, // kill after sigterm send in 10 seconds
-        timeout: options?.timeout ?? 7200000, // timout 2 hours
-        env: options?.env ?? {},
-        // get options except reject, env, timeout
-        ...(options && Object.fromEntries(Object.entries(options)
-            .filter(([key]) =>
-                key !== 'reject' &&
-                key !== 'env' &&
-                key !== 'timeout' &&
-                key !== 'forceKillAfterDelay'))),
+        timeout: Math.max(options.timeout ?? 7200000, 7200000), // timout 2 hours
+        env: {
+            ...options.env,
+            RESTIC_PROGRESS_FPS: '0.5'
+        }
     });
 }
 
 // execute short living command, timeout at 30 seconds
 export async function execute(
     command: string,
-    options?: Options,
+    options: Options,
     commandPath?: string,
 ):Promise<ResticResult> {
     // Split command into arguments (e.g., "restic backup" -> ["restic", "backup"])
@@ -49,15 +48,16 @@ export async function execute(
     }
     // run command
     const result: Result = await execa(args[0], args.slice(1), {
+        ...options,
         reject: false,
-        timeout: options?.timeout ?? 30000,
-        env: options?.env ?? {},
-        // get options except reject, env, timeout
-        ...(options && Object.fromEntries(Object.entries(options)
-            .filter(([key]) =>
-                key !== 'reject' &&
-                key !== 'env' &&
-                key !== 'timeout'))),
+        buffer: true,
+        cleanup: true,
+        forceKillAfterDelay: 10000, // kill after sigterm send in 10 seconds
+        timeout: Math.min(options.timeout ?? 10000, 10000), // timeout max 10 seconds
+        env: {
+            ...options.env,
+            RESTIC_PROGRESS_FPS: '0.5'
+        }
     });
     if (!result.failed) {
         return {
