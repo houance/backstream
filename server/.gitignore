@@ -31,3 +31,4 @@ lerna-debug.log*
 /drizzle/
 /backup_app.db
 /db/
+/src/test/
