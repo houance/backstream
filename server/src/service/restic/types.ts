@@ -1,6 +1,3 @@
-import {Readable} from "stream";
-import type {Subprocess} from "execa";
-
 export enum ExitCode {
     Success = 0,
     Failure = 1,
@@ -13,16 +10,12 @@ export enum ExitCode {
     UNKNOWN = -1, // not recognized exit code
 }
 
-export type ResticStreamResult =
-    | { success: true; exitCode: ExitCode.Success; stdout: Readable }
-    | { success: false; exitCode: ExitCode; stderr: Readable };
-
 export type ResticResult =
     | { success: true; exitCode: ExitCode.Success; }
     | { success: false; exitCode: ExitCode; stderr: string };
 
 export interface ResticEnv {
-    path: string; // restic -r <path>
-    password: string;
+    RESTIC_REPOSITORY: string; // restic -r <path>
+    RESTIC_PASSWORD: string;
     certificate?: Record<string, string>[];
 }

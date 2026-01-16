@@ -1,44 +1,56 @@
 import type {Repository} from '../db/schema.js';
-import {ExitCode, type ResticEnv, type ResticResult} from './types.js'
-import {execa, type Result, type Subprocess} from "execa";
-import {parseExitCodeFromResult} from "./utils.js";
+import {type Subprocess} from "execa";
+import {execute} from "./utils.js";
+import {ExitCode} from "./types.js";
 
 export class RepositoryClient {
-    private _repository: Repository;
+    private readonly _repository: Repository;
+    private readonly _env: Record<string, string>;
     private _isLocked: boolean = false;
     private _childProcess: Subprocess | null = null;
-    private _abortController: AbortController | null = null;
 
     constructor(repository: Repository) {
         this._repository = repository;
+        // convert config data to env
+        this._env = {
+            RESTIC_REPOSITORY: this._repository.configData.RESTIC_REPOSITORY,
+            RESTIC_PASSWORD: this._repository.configData.RESTIC_PASSWORD,
+        }
+        if (this._repository.configData.certificate) {
+            this._repository.configData.certificate.forEach((cert) => {
+                Object.assign(this._env, cert)
+            })
+        }
     }
 
     public getLockStatus(): Readonly<boolean> {
         return this._isLocked;
     }
 
-    public getResticEnv(): Readonly<ResticEnv> {
-        return this._repository.configData;
+    public getResticEnv(): Record<string, string> {
+        return this._env;
     }
 
-    public async init(): Promise<ResticResult> {
-        const result: Result = await execa('restic', {
-            env: {
-
-            },
-            reject: false
-        })
-        if (result.failed) {
-            return {
-                success: false,
-                exitCode: parseExitCodeFromResult(result.exitCode),
-                stderr: typeof result.stderr === 'string' ? result.stderr : ""
-            }
-        } else {
-            return {
-                success: true,
-                exitCode: ExitCode.Success
-            }
+    public async isRepoExist(): Promise<boolean> {
+        const result = await execute('restic cat config', this._env);
+        if (result.success) {
+            return true;
         }
+        if (result.exitCode === ExitCode.RepositoryDoesNotExist) {
+            return false;
+        }
+        throw new Error(
+            `Restic cat config failed (Exit Code: ${result.exitCode}): ${result.stderr || 'Unknown error'}`
+        );
+    }
+
+    public async createRepo(): Promise<boolean> {
+        const result = await execute(`restic init`, this._env);
+        if (result.success) {
+            return true
+        }
+        throw new Error(
+            `Restic init failed (Exit Code: ${result.exitCode}): ${result.stderr || 'Unknown error'}`
+        );
     }
 }
