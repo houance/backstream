@@ -6,7 +6,7 @@ export class RepositoryClient {
     private readonly _repository: Repository;
     private readonly _env: Record<string, string>;
     private _initialized = false;
-    private _isLocked: boolean = false;
+    private _status: 'ok' | 'check' | 'prune' = 'ok';
 
     private constructor(repository: Repository, createRepo?: boolean) {
         this._repository = repository;
@@ -32,18 +32,6 @@ export class RepositoryClient {
         return client;
     }
 
-    public isInitialized(): Readonly<boolean> {
-        return this._initialized;
-    }
-
-    public getLockStatus(): Readonly<boolean> {
-        return this._isLocked;
-    }
-
-    public getResticEnv(): Record<string, string> {
-        return this._env;
-    }
-
     private async isRepoExist(): Promise<boolean> {
         const result = await execute('restic cat config', { env: this._env });
         if (result.success) {
@@ -67,5 +55,13 @@ export class RepositoryClient {
         throw new Error(
             `Restic init failed (Exit Code: ${result.exitCode}): ${result.stderr || 'Unknown error'}`
         );
+    }
+
+    public isInitialized(): Readonly<boolean> {
+        return this._initialized;
+    }
+
+    public getResticEnv(): Record<string, string> {
+        return this._env;
     }
 }

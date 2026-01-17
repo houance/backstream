@@ -1,3 +1,5 @@
+import type {Subprocess} from "execa";
+
 export enum ExitCode {
     Success = 0,
     Failure = 1,
@@ -18,4 +20,12 @@ export interface ResticEnv {
     RESTIC_REPOSITORY: string; // restic -r <path>
     RESTIC_PASSWORD: string;
     certificate?: Record<string, string>[];
+}
+
+export interface ResticJobProgress {
+    id: string;
+    type: string;
+    status: 'running' | 'success' | 'failed';
+    startedAt: Date;
+    process: Subprocess;
 }

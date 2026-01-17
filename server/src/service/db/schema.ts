@@ -6,7 +6,9 @@ export const repositories = sqliteTable("repository_table", {
     id: integer("repository_id").primaryKey({ autoIncrement: true }),
     name: text("name").notNull(),
     providerType: text("provider_type", {enum: ["local", "backblaze b2", "aliyun oss"]}).notNull(),
-    size: integer("size").default(0),
+    usage: integer("size").default(0),
+    capacity: integer("capacity").notNull().default(0),
+    lastBackupAt: integer("last_backup_at", { mode: "timestamp" }),
     configData: text("config_data", { mode: "json" })
         .$type<ResticEnv>()
         .notNull()
