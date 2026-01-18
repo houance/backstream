@@ -8,7 +8,6 @@ export const repository = sqliteTable("repository_table", {
     providerType: text("provider_type", {enum: ["local", "backblaze b2", "aliyun oss"]}).notNull(),
     usage: integer("size").default(0),
     capacity: integer("capacity").notNull().default(0),
-    lastBackupAt: integer("last_backup_at", { mode: "timestamp" }),
     configData: text("config_data", { mode: "json" })
         .$type<ResticEnv>()
         .notNull()
@@ -48,12 +47,14 @@ export const snapshotsMetadata = sqliteTable("snapshots_metadata_table", {
 // 5. Execution Table
 export const execution = sqliteTable("execution_table", {
     id: integer("execution_id"),
+    uuid: integer("uuid"),
     logFile: text("log_file"),
     errorFile: text("error_file"),
     commandType: text("command_type", { enum: ["backup", "prune", "check", "forget", "restore", "copy"]}),
     fullCommand: text("full_command"),
     startedAt: integer("started_at", { mode: "timestamp" }),
     executeStatus: text("execute_status", { enum: ["success", "fail", "running"] }),
+    foreignSource: text("foreign_source", { enum: ["repository_id", "backup_target_id"] }),
     foreignId: integer("foreign_id").notNull().default(-1), // 关联 ID, 空的说明这次执行没有登记 ID
 })
 

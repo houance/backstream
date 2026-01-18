@@ -1,35 +1,65 @@
-import type {Repository} from '../db/schema.js';
 import {execute} from "./utils.js";
-import {ExitCode} from "./types.js";
+import {
+    ExitCode,
+    type ResticEnv,
+    type Snapshot,
+    type Node
+} from "./types.js";
 
 export class RepositoryClient {
-    private readonly _repository: Repository;
     private readonly _env: Record<string, string>;
     private _initialized = false;
-    private _status: 'ok' | 'check' | 'prune' = 'ok';
 
-    private constructor(repository: Repository, createRepo?: boolean) {
-        this._repository = repository;
+    private constructor(resticEnv: ResticEnv, createRepo?: boolean) {
         // convert config data to env
         this._env = {
-            RESTIC_REPOSITORY: this._repository.configData.RESTIC_REPOSITORY,
-            RESTIC_PASSWORD: this._repository.configData.RESTIC_PASSWORD,
+            RESTIC_REPOSITORY: resticEnv.RESTIC_REPOSITORY,
+            RESTIC_PASSWORD: resticEnv.RESTIC_PASSWORD,
         }
-        if (this._repository.configData.certificate) {
-            this._repository.configData.certificate.forEach((cert) => {
+        if (resticEnv.certificate) {
+            resticEnv.certificate.forEach((cert) => {
                 Object.assign(this._env, cert)
             })
         }
     }
 
-    public static async create(repository: Repository, createRepo?: boolean): Promise<RepositoryClient> {
-        const client = new RepositoryClient(repository, createRepo);
+    public static async create(resticEnv: ResticEnv, createRepo?: boolean): Promise<RepositoryClient> {
+        const client = new RepositoryClient(resticEnv, createRepo);
         // inspect init status
         client._initialized = await client.isRepoExist();
         if (client._initialized) return client;
         // create repo as required
         if (createRepo) client._initialized = await client.createRepo();
         return client;
+    }
+
+    public async getSnapshotsByPath(path: string): Promise<Snapshot[]> {
+        const result = await execute(`restic snapshots --path ${path} --json`, { env: this._env });
+        if (!result.success) throw new Error(
+            `Restic snapshots failed (Exit Code: ${result.exitCode}): ${result.stderr || 'Unknown error'}`
+        );
+        if (result.stdout === '') return [];
+        return JSON.parse(result.stdout);
+    }
+
+    public async getSnapshotFilesByPath(snapshotId: string, path: string='/'): Promise<Node[]> {
+        const result = await execute(`restic ls ${snapshotId} ${path} --json`, { env: this._env });
+        if (!result.success) throw new Error(
+            `Restic ls failed (Exit Code: ${result.exitCode}): ${result.stderr || 'Unknown error'}`
+        );
+        if (result.stdout === '') return [];
+        let nodes: Node[] = [];
+        result.stdout.split('\n').forEach((line) => {
+            const trimLine: string = line.trim();
+            const data: { message_type: string, path: string[] } = JSON.parse(trimLine);
+            if (data.message_type === 'node') {
+                const node: Node = JSON.parse(trimLine);
+                if (node.path !== path) {
+                    nodes.push(node);
+                }
+            }
+        })
+        return nodes;
     }
 
     private async isRepoExist(): Promise<boolean> {
@@ -59,9 +89,5 @@ export class RepositoryClient {
 
     public isInitialized(): Readonly<boolean> {
         return this._initialized;
-    }
-
-    public getResticEnv(): Record<string, string> {
-        return this._env;
     }
 }

@@ -11,6 +11,8 @@ export function parseExitCodeFromResult(input: number | undefined): ExitCode {
 
 export function executeStream(
     command: string,
+    logFile: string,
+    errorFile: string,
     options: Options,
     commandPath?: string,
 ):Subprocess {
@@ -22,6 +24,8 @@ export function executeStream(
     }
     return execa(args[0], args.slice(1), {
         ...options,
+        stdout: [{ file: logFile, append: true}, 'pipe'],
+        stderr: [{ file: errorFile, append: true }, 'pipe'],
         reject: false,
         buffer: false,
         cleanup: true,
@@ -62,7 +66,8 @@ export async function execute(
     if (!result.failed) {
         return {
             success: true,
-            exitCode: ExitCode.Success
+            exitCode: ExitCode.Success,
+            stdout: typeof result.stdout === 'string' ? result.stdout as string : ""
         }
     } else {
         return {
