@@ -29,8 +29,6 @@ export const backupTargets = sqliteTable("backup_target_table", {
     repositoryId: integer("repository_id").references(() => repository.id),
     retentionPolicy: text("retention_policy", { mode: "json"}),
     schedulePolicy: text("schedule_policy"),
-    lastRunAt: integer("last_run_at", { mode: "timestamp" }),
-    backupStatus: text("backup_status"),
     index: integer("index").notNull().default(1),
 });
 
@@ -55,7 +53,8 @@ export const execution = sqliteTable("execution_table", {
     commandType: text("command_type", { enum: ["backup", "prune", "check", "forget", "restore", "copy"]}),
     fullCommand: text("full_command"),
     startedAt: integer("started_at", { mode: "timestamp" }),
-    executeStatus: text("execute_status"),
+    executeStatus: text("execute_status", { enum: ["success", "fail", "running"] }),
+    foreignId: integer("foreign_id").notNull().default(-1), // 关联 ID, 空的说明这次执行没有登记 ID
 })
 
 // For selecting (reading)
