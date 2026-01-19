@@ -1,4 +1,4 @@
-import {execute, executeStream, parseExitCodeFromResult} from "./utils.js";
+import {createTempDir, execute, executeStream, getParentPathFromNode, parseExitCodeFromResult} from "./utils.js";
 import {
     ExitCode,
     type Node,
@@ -8,6 +8,7 @@ import {
     type Task
 } from "./types.js";
 import type {Result} from "execa";
+import {join} from "node:path";
 
 export class RepositoryClient {
     private readonly _env: Record<string, string>;
@@ -36,7 +37,8 @@ export class RepositoryClient {
         }
         // Try to create if requested
         if (createRepo) {
-            client._initialized = await client.createRepo();
+            await client.createRepo();
+            client._initialized = true;
         }
         return client;
     }
@@ -45,14 +47,9 @@ export class RepositoryClient {
         const process = executeStream(
             `restic backup . --skip-if-unchanged --json`,
             logFile,
-            errorFile, {
-            cwd: path,
-            env: this._env
-        });
-        const exitCode = (async (): Promise<ExitCode> => {
-            const result:Result = await process;
-            return parseExitCodeFromResult(result.exitCode)
-        })();
+            errorFile,
+            { cwd: path, env: this._env }
+        );
         const progress: Progress = { totalBytes: 0, bytesDone: 0, percentDone: 0 };
         // 2. Process the stream in the background (Immediate Execution)
         // We don't 'await' this here so we can return the Task immediately
@@ -81,14 +78,81 @@ export class RepositoryClient {
                 console.error("Stream processing error:", err);
             }
         })();
+        const exitCode = (async (): Promise<ExitCode> => {
+            const result:Result = await process;
+            return parseExitCodeFromResult(result.exitCode)
+        })();
         return {
             uuid: crypto.randomUUID(),
-            command: `restic backup .`,
+            command: `restic backup ${path}(set as cwd) --skip-if-unchanged --json`,
             logFile: logFile,
             errorFile: errorFile,
-            result: exitCode,
+            getResult: () => exitCode,
             cancel: () => process.kill(),
             getProgress: () => progress,
+        }
+    }
+
+    public async deleteSnapshot(snapshotId: string): Promise<void> {
+        const result = await execute(`restic forget ${snapshotId} --json`, { env: this._env });
+        if (!result.success) {
+            `Restic snapshots failed (Exit Code: ${result.exitCode}): ${result.stderr || 'Unknown error'}`
+        }
+    }
+
+    public restore(snapshotId: string, node: Node, logFile: string, errorFile: string): Task {
+        const dir = createTempDir();
+        const command = `restic restore ${snapshotId}:${getParentPathFromNode(node)} ` +
+            `--target ${dir} --include /${node.name} --json`
+        const process = executeStream(
+            command,
+            logFile,
+            errorFile,
+            { env: this._env }
+        );
+        // 更新 progress
+        const progress: Progress = { totalBytes: 0, bytesDone: 0, percentDone: 0 };
+        // 2. Process the stream in the background (Immediate Execution)
+        (async () => {
+            try {
+                // Execa v9+ yields lines automatically from the subprocess
+                for await (const line of process) {
+                    try {
+                        const data: {
+                            message_type: string,
+                            percent_done: number,
+                            total_bytes: number,
+                            bytes_restored: number
+                        } = JSON.parse(line.toString());
+                        // Restic specific JSON logic (adjust based on actual restic output)
+                        if (data.message_type === 'status') {
+                            progress.totalBytes = data.total_bytes;
+                            progress.bytesDone = data.bytes_restored;
+                            progress.percentDone = data.percent_done;
+                        }
+                    } catch {
+                        /* Ignore non-JSON lines or partial chunks */
+                    }
+                }
+            } catch (err) {
+                console.error("Stream processing error:", err);
+            }
+        })();
+        // 处理结果
+        const restoreFile = join(dir, node.name)
+        const exitCode = (async (): Promise<ExitCode> => {
+            const result:Result = await process;
+            return parseExitCodeFromResult(result.exitCode)
+        })();
+        return {
+            uuid: crypto.randomUUID(),
+            command: command,
+            logFile: logFile,
+            errorFile: errorFile,
+            getResult: () => exitCode,
+            cancel: () => process.kill(),
+            getProgress: () => progress,
+            restoreFile: restoreFile,
         }
     }
 
@@ -134,12 +198,12 @@ export class RepositoryClient {
         );
     }
 
-    public async createRepo(): Promise<boolean> {
-        if (this._initialized) return true;
+    public async createRepo(): Promise<void> {
+        if (this._initialized) return;
         const result = await execute(`restic init`, { env: this._env });
         if (result.success) {
             this._initialized = true
-            return true
+            return;
         }
         throw new Error(
             `Restic init failed (Exit Code: ${result.exitCode}): ${result.stderr || 'Unknown error'}`

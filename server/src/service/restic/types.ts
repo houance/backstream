@@ -40,7 +40,6 @@ export interface Snapshot {
     shortId: string;
 }
 
-
 export interface SnapshotSummary {
     backupStart: Date;
     backupEnd: Date;
@@ -85,7 +84,8 @@ export interface Task {
     command: string;
     logFile: string;
     errorFile: string;
-    result: Promise<ExitCode>;
+    getResult: () => Promise<ExitCode>;
     cancel: () => void;
     getProgress: () => Progress;
+    restoreFile?: string
 }

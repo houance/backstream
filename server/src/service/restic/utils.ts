@@ -1,5 +1,8 @@
-import {ExitCode, type ResticResult} from "./types.js";
+import {ExitCode, type ResticResult, type Node} from "./types.js";
 import {execa, type Options, type Result, type ResultPromise} from "execa";
+import {tmpdir} from "node:os";
+import {mkdtempSync} from "node:fs";
+import {join} from "node:path";
 
 export function parseExitCodeFromResult(input: number | undefined): ExitCode {
     // Check if the input exists as a value in the Enum
@@ -7,6 +10,19 @@ export function parseExitCodeFromResult(input: number | undefined): ExitCode {
         return input as ExitCode;
     }
     return ExitCode.UNKNOWN;
+}
+
+export function getParentPathFromNode(node: Node): string {
+    if ("/" === node.path) {
+        return "/";
+    }
+    return node.path.lastIndexOf("/") === 0 ?
+        "/" :
+        node.path.substring(0, node.path.lastIndexOf("/"));
+}
+
+export function createTempDir(): string {
+    return mkdtempSync(join(tmpdir(), 'backstream-'))
 }
 
 export function executeStream(
@@ -33,7 +49,7 @@ export function executeStream(
         timeout: Math.max(options.timeout ?? 7200000, 7200000), // timout 2 hours
         env: {
             ...options.env,
-            RESTIC_PROGRESS_FPS: '50'
+            RESTIC_PROGRESS_FPS: '60'
         }
     });
 }
