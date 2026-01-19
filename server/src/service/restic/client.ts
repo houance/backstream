@@ -151,8 +151,8 @@ export class RepositoryClient {
 
     public prune(type: 'local' | 'cloud', logFile: string, errorFile: string): Task {
         const command = type === "local" ?
-            `restic prune --max-unused 0 --repack-cacheable-only --verbose --retry-lock 10s` :
-            `restic prune --max-unused unlimited --verbose --retry-lock 10s`;
+            `restic prune --max-unused 0 --repack-cacheable-only --verbose` :
+            `restic prune --max-unused unlimited --verbose`;
         const process = executeStream(
             command,
             logFile,
@@ -188,8 +188,8 @@ export class RepositoryClient {
         }
     }
 
-    public async deleteSnapshot(snapshotId: string): Promise<void> {
-        const result = await execute(`restic forget ${snapshotId} --json --retry-lock 5s`, { env: this._env });
+    public async forgetBySnapId(snapshotId: string): Promise<void> {
+        const result = await execute(`restic forget ${snapshotId} --json`, { env: this._env });
         if (!result.success) throw new Error(
             `Restic snapshots failed (Exit Code: ${result.exitCode}): ${result.stderr || 'Unknown error'}`
         );
