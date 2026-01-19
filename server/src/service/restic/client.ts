@@ -93,13 +93,6 @@ export class RepositoryClient {
         }
     }
 
-    public async deleteSnapshot(snapshotId: string): Promise<void> {
-        const result = await execute(`restic forget ${snapshotId} --json`, { env: this._env });
-        if (!result.success) {
-            `Restic snapshots failed (Exit Code: ${result.exitCode}): ${result.stderr || 'Unknown error'}`
-        }
-    }
-
     public restore(snapshotId: string, node: Node, logFile: string, errorFile: string): Task {
         const dir = createTempDir();
         const command = `restic restore ${snapshotId}:${getParentPathFromNode(node)} ` +
@@ -154,6 +147,52 @@ export class RepositoryClient {
             getProgress: () => progress,
             restoreFile: restoreFile,
         }
+    }
+
+    public prune(type: 'local' | 'cloud', logFile: string, errorFile: string): Task {
+        const command = type === "local" ?
+            `restic prune --max-unused 0 --repack-cacheable-only --verbose --retry-lock 10s` :
+            `restic prune --max-unused unlimited --verbose --retry-lock 10s`;
+        const process = executeStream(
+            command,
+            logFile,
+            errorFile,
+            { env: this._env }
+        );
+        // 更新 progress
+        const progress: Progress = { totalBytes: 0, bytesDone: 0, percentDone: 0 };
+        // 2. Process the stream in the background (Immediate Execution)
+        (async () => {
+            try {
+                // Execa v9+ yields lines automatically from the subprocess
+                for await (const line of process) {
+                    // todo: regex from stdout
+                }
+            } catch (err) {
+                console.error("Stream processing error:", err);
+            }
+        })();
+        // 处理结果
+        const exitCode = (async (): Promise<ExitCode> => {
+            const result:Result = await process;
+            return parseExitCodeFromResult(result.exitCode)
+        })();
+        return {
+            uuid: crypto.randomUUID(),
+            command: command,
+            logFile: logFile,
+            errorFile: errorFile,
+            getResult: () => exitCode,
+            cancel: () => process.kill(),
+            getProgress: () => progress,
+        }
+    }
+
+    public async deleteSnapshot(snapshotId: string): Promise<void> {
+        const result = await execute(`restic forget ${snapshotId} --json --retry-lock 5s`, { env: this._env });
+        if (!result.success) throw new Error(
+            `Restic snapshots failed (Exit Code: ${result.exitCode}): ${result.stderr || 'Unknown error'}`
+        );
     }
 
     public async getSnapshotsByPath(path: string): Promise<Snapshot[]> {
