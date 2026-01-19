@@ -1,16 +1,19 @@
-import {execute} from "./utils.js";
+import {execute, executeStream, parseExitCodeFromResult} from "./utils.js";
 import {
     ExitCode,
+    type Node,
+    type Progress,
     type ResticEnv,
     type Snapshot,
-    type Node
+    type Task
 } from "./types.js";
+import type {Result} from "execa";
 
 export class RepositoryClient {
     private readonly _env: Record<string, string>;
     private _initialized = false;
 
-    private constructor(resticEnv: ResticEnv, createRepo?: boolean) {
+    private constructor(resticEnv: ResticEnv) {
         // convert config data to env
         this._env = {
             RESTIC_REPOSITORY: resticEnv.RESTIC_REPOSITORY,
@@ -24,13 +27,69 @@ export class RepositoryClient {
     }
 
     public static async create(resticEnv: ResticEnv, createRepo?: boolean): Promise<RepositoryClient> {
-        const client = new RepositoryClient(resticEnv, createRepo);
-        // inspect init status
-        client._initialized = await client.isRepoExist();
-        if (client._initialized) return client;
-        // create repo as required
-        if (createRepo) client._initialized = await client.createRepo();
+        const client = new RepositoryClient(resticEnv);
+        // Check if it exists first
+        const exists = await client.isRepoExist();
+        if (exists) {
+            client._initialized = true;
+            return client; // Early exit 1
+        }
+        // Try to create if requested
+        if (createRepo) {
+            client._initialized = await client.createRepo();
+        }
         return client;
+    }
+
+    public backup(path: string, logFile: string, errorFile: string): Task {
+        const process = executeStream(
+            `restic backup . --skip-if-unchanged --json`,
+            logFile,
+            errorFile, {
+            cwd: path,
+            env: this._env
+        });
+        const exitCode = (async (): Promise<ExitCode> => {
+            const result:Result = await process;
+            return parseExitCodeFromResult(result.exitCode)
+        })();
+        const progress: Progress = { totalBytes: 0, bytesDone: 0, percentDone: 0 };
+        // 2. Process the stream in the background (Immediate Execution)
+        // We don't 'await' this here so we can return the Task immediately
+        (async () => {
+            try {
+                // Execa v9+ yields lines automatically from the subprocess
+                for await (const line of process) {
+                    try {
+                        const data:{
+                            message_type: string,
+                            percent_done: number,
+                            total_bytes: number,
+                            bytes_done: number
+                        } = JSON.parse(line.toString());
+                        // Restic specific JSON logic (adjust based on actual restic output)
+                        if (data.message_type === 'status') {
+                            progress.totalBytes = data.total_bytes;
+                            progress.bytesDone = data.bytes_done;
+                            progress.percentDone = data.percent_done;
+                        }
+                    } catch {
+                        /* Ignore non-JSON lines or partial chunks */
+                    }
+                }
+            } catch (err) {
+                console.error("Stream processing error:", err);
+            }
+        })();
+        return {
+            uuid: crypto.randomUUID(),
+            command: `restic backup .`,
+            logFile: logFile,
+            errorFile: errorFile,
+            result: exitCode,
+            cancel: () => process.kill(),
+            getProgress: () => progress,
+        }
     }
 
     public async getSnapshotsByPath(path: string): Promise<Snapshot[]> {

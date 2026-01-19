@@ -1,5 +1,3 @@
-import type {Subprocess} from "execa";
-
 export enum ExitCode {
     Success = 0,
     Failure = 1,
@@ -12,9 +10,12 @@ export enum ExitCode {
     UNKNOWN = -1, // not recognized exit code
 }
 
-export type ResticResult =
-    | { success: true; exitCode: ExitCode.Success; stdout: string }
-    | { success: false; exitCode: ExitCode; stderr: string };
+export interface ResticResult {
+    success: boolean;
+    exitCode: ExitCode;
+    stdout: string;
+    stderr: string;
+}
 
 export interface ResticEnv {
     RESTIC_REPOSITORY: string; // restic -r <path>
@@ -74,16 +75,17 @@ export interface Node {
 }
 
 export interface Progress {
-    percent_done: number;
-    total_bytes: number;
-    bytes_done: number;
+    totalBytes?: number;
+    bytesDone?: number;
+    percentDone: number;
 }
 
-export interface Task extends Promise<ResticResult> {
+export interface Task {
     uuid: string;
     command: string;
-    subprocess: Subprocess;
     logFile: string;
     errorFile: string;
-    progress?: Progress;
+    result: Promise<ExitCode>;
+    cancel: () => void;
+    getProgress: () => Progress;
 }

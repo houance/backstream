@@ -1,5 +1,5 @@
 import {ExitCode, type ResticResult} from "./types.js";
-import {execa, type Options, type Result, type Subprocess} from "execa";
+import {execa, type Options, type Result, type ResultPromise} from "execa";
 
 export function parseExitCodeFromResult(input: number | undefined): ExitCode {
     // Check if the input exists as a value in the Enum
@@ -15,7 +15,7 @@ export function executeStream(
     errorFile: string,
     options: Options,
     commandPath?: string,
-):Subprocess {
+):ResultPromise {
     // Split command into arguments (e.g., "restic backup" -> ["restic", "backup"])
     let args = command.split(' ');
     // If commandPath is set, replace the executable (the first element)
@@ -33,7 +33,7 @@ export function executeStream(
         timeout: Math.max(options.timeout ?? 7200000, 7200000), // timout 2 hours
         env: {
             ...options.env,
-            RESTIC_PROGRESS_FPS: '0.5'
+            RESTIC_PROGRESS_FPS: '50'
         }
     });
 }
@@ -63,17 +63,10 @@ export async function execute(
             RESTIC_PROGRESS_FPS: '0.5'
         }
     });
-    if (!result.failed) {
-        return {
-            success: true,
-            exitCode: ExitCode.Success,
-            stdout: typeof result.stdout === 'string' ? result.stdout as string : ""
-        }
-    } else {
-        return {
-            success: false,
-            exitCode: parseExitCodeFromResult(result.exitCode),
-            stderr: typeof result.stderr === 'string' ? result.stderr as string : ""
-        }
+    return {
+        success: !result.failed,
+        exitCode: parseExitCodeFromResult(result.exitCode),
+        stdout: typeof result.stdout === 'string' ? result.stdout as string : "",
+        stderr: typeof result.stderr === 'string' ? result.stderr as string : ""
     }
 }
