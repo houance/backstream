@@ -1,18 +1,20 @@
-import {createTempDir, execute, executeStream, getParentPathFromNode, parseExitCodeFromResult} from "./utils.js";
+import {createTempDir, execute, executeStream, getParentPathFromNode, mapResticCode} from "./utils.js";
 import {
+    type CheckSummary,
     ExitCode,
     type Node,
     type Progress,
     type ResticEnv,
+    ResticResult,
     type Snapshot,
-    type Task
+    type Task,
 } from "./types.js";
 import type {Result} from "execa";
 import {join} from "node:path";
 
 export class RepositoryClient {
     private readonly _env: Record<string, string>;
-    private _initialized = false;
+    private _repoDamaged:boolean = false;
 
     private constructor(resticEnv: ResticEnv) {
         // convert config data to env
@@ -29,21 +31,12 @@ export class RepositoryClient {
 
     public static async create(resticEnv: ResticEnv, createRepo?: boolean): Promise<RepositoryClient> {
         const client = new RepositoryClient(resticEnv);
-        // Check if it exists first
-        const exists = await client.isRepoExist();
-        if (exists) {
-            client._initialized = true;
-            return client; // Early exit 1
-        }
         // Try to create if requested
-        if (createRepo) {
-            await client.createRepo();
-            client._initialized = true;
-        }
+        if (createRepo) await client.createRepo();
         return client;
     }
 
-    public backup(path: string, logFile: string, errorFile: string): Task {
+    public backup(path: string, logFile: string, errorFile: string): Task<ResticResult<ExitCode>> {
         const process = executeStream(
             `restic backup . --skip-if-unchanged --json`,
             logFile,
@@ -78,22 +71,27 @@ export class RepositoryClient {
                 console.error("Stream processing error:", err);
             }
         })();
-        const exitCode = (async (): Promise<ExitCode> => {
+        const result = (async (): Promise<ResticResult<ExitCode>> => {
             const result:Result = await process;
-            return parseExitCodeFromResult(result.exitCode)
+            const exitCode = mapResticCode(result.exitCode);
+            switch (exitCode) {
+                case ExitCode.Success:
+                case ExitCode.BackupReadError: return ResticResult.ok(result, exitCode);
+                default: return ResticResult.error(result);
+            }
         })();
         return {
             uuid: crypto.randomUUID(),
             command: `restic backup ${path}(set as cwd) --skip-if-unchanged --json`,
             logFile: logFile,
             errorFile: errorFile,
-            getResult: () => exitCode,
+            result: result,
             cancel: () => process.kill(),
             getProgress: () => progress,
         }
     }
 
-    public restore(snapshotId: string, node: Node, logFile: string, errorFile: string): Task {
+    public restore(snapshotId: string, node: Node, logFile: string, errorFile: string): Task<ResticResult<string>> {
         const dir = createTempDir();
         const command = `restic restore ${snapshotId}:${getParentPathFromNode(node)} ` +
             `--target ${dir} --include /${node.name} --json`
@@ -132,24 +130,23 @@ export class RepositoryClient {
             }
         })();
         // 处理结果
-        const restoreFile = join(dir, node.name)
-        const exitCode = (async (): Promise<ExitCode> => {
+        const result = (async (): Promise<ResticResult<string>> => {
             const result:Result = await process;
-            return parseExitCodeFromResult(result.exitCode)
+            if (result.failed) return ResticResult.error(result);
+            return ResticResult.ok(result, join(dir, node.name));
         })();
         return {
             uuid: crypto.randomUUID(),
             command: command,
             logFile: logFile,
             errorFile: errorFile,
-            getResult: () => exitCode,
+            result: result,
             cancel: () => process.kill(),
             getProgress: () => progress,
-            restoreFile: restoreFile,
         }
     }
 
-    public prune(type: 'local' | 'cloud', logFile: string, errorFile: string): Task {
+    public prune(type: 'local' | 'cloud', logFile: string, errorFile: string): Task<ResticResult<boolean>> {
         const command = type === "local" ?
             `restic prune --max-unused 0 --repack-cacheable-only --verbose` :
             `restic prune --max-unused unlimited --verbose`;
@@ -173,83 +170,120 @@ export class RepositoryClient {
             }
         })();
         // 处理结果
-        const exitCode = (async (): Promise<ExitCode> => {
+        const result = (async (): Promise<ResticResult<boolean>> => {
             const result:Result = await process;
-            return parseExitCodeFromResult(result.exitCode)
+            if (result.failed) return ResticResult.error(result);
+            return ResticResult.ok(result, true);
         })();
         return {
             uuid: crypto.randomUUID(),
             command: command,
             logFile: logFile,
             errorFile: errorFile,
-            getResult: () => exitCode,
+            result: result,
             cancel: () => process.kill(),
             getProgress: () => progress,
         }
     }
 
-    public async forgetBySnapId(snapshotId: string): Promise<void> {
-        const result = await execute(`restic forget ${snapshotId} --json`, { env: this._env });
-        if (!result.success) throw new Error(
-            `Restic snapshots failed (Exit Code: ${result.exitCode}): ${result.stderr || 'Unknown error'}`
+    public check(logFile: string, errorFile: string, percentage?:number): Task<ResticResult<CheckSummary>> {
+        const command = percentage ?
+            `restic check --read-data-subset=${percentage}% --json` :
+            `restic check --json`
+        const process = executeStream(
+            command,
+            logFile,
+            errorFile,
+            { env: this._env }
         );
-    }
-
-    public async getSnapshotsByPath(path: string): Promise<Snapshot[]> {
-        const result = await execute(`restic snapshots --path ${path} --json`, { env: this._env });
-        if (!result.success) throw new Error(
-            `Restic snapshots failed (Exit Code: ${result.exitCode}): ${result.stderr || 'Unknown error'}`
-        );
-        if (result.stdout === '') return [];
-        return JSON.parse(result.stdout);
-    }
-
-    public async getSnapshotFilesByPath(snapshotId: string, path: string='/'): Promise<Node[]> {
-        const result = await execute(`restic ls ${snapshotId} ${path} --json`, { env: this._env });
-        if (!result.success) throw new Error(
-            `Restic ls failed (Exit Code: ${result.exitCode}): ${result.stderr || 'Unknown error'}`
-        );
-        if (result.stdout === '') return [];
-        let nodes: Node[] = [];
-        result.stdout.split('\n').forEach((line) => {
-            const trimLine: string = line.trim();
-            const data: { message_type: string, path: string[] } = JSON.parse(trimLine);
-            if (data.message_type === 'node') {
-                const node: Node = JSON.parse(trimLine);
-                if (node.path !== path) {
-                    nodes.push(node);
+        // 不支持 progress
+        const progress: Progress = { percentDone: -1 };
+        // 处理结果
+        const result = (async (): Promise<ResticResult<CheckSummary>> => {
+            let lastLine:string = "";
+            try {
+                for await (const line of process) {
+                    lastLine = line as string;
                 }
+            } catch (err) {
+                lastLine = err instanceof Error ? err.message : String(err);
             }
-        })
-        return nodes;
+            const result:Result = await process;
+            if (result.failed) return ResticResult.error(result);
+            try {
+                return ResticResult.ok(result, JSON.parse(lastLine));
+            } catch (e:any) {
+                return ResticResult.parseError(result, e);
+            }
+        })();
+        return {
+            uuid: crypto.randomUUID(),
+            command: command,
+            logFile: logFile,
+            errorFile: errorFile,
+            result: result,
+            cancel: () => process.kill(),
+            getProgress: () => progress,
+        }
     }
 
-    private async isRepoExist(): Promise<boolean> {
+    public async forgetBySnapId(snapshotId: string): Promise<ResticResult<boolean>> {
+        const result = await execute(`restic forget ${snapshotId} --json`, { env: this._env });
+        return result.failed ?
+            ResticResult.error(result) :
+            ResticResult.ok(result, true);
+    }
+
+    public async getSnapshotsByPath(path: string): Promise<ResticResult<Snapshot[]>> {
+        const result = await execute(`restic snapshots --path ${path} --json`, { env: this._env });
+        if (result.failed) return ResticResult.error(result);
+        try {
+            const snapshots:Snapshot[] = JSON.parse(result.stdout as string)
+            return ResticResult.ok(result, snapshots);
+        } catch (error:any) {
+            return ResticResult.parseError(result, error);
+        }
+    }
+
+    public async getSnapshotFilesByPath(snapshotId: string, path: string='/'): Promise<ResticResult<Node[]>> {
+        const result = await execute(`restic ls ${snapshotId} ${path} --json`, { env: this._env });
+        if (result.failed) return ResticResult.error(result)
+        let nodes: Node[] = [];
+        try {
+            const stdout: string = result.stdout as string
+            stdout.split('\n').forEach((line) => {
+                const trimLine: string = line.trim();
+                const data: { message_type: string, path: string[] } = JSON.parse(trimLine);
+                if (data.message_type === 'node') {
+                    const node: Node = JSON.parse(trimLine);
+                    if (node.path !== path) {
+                        nodes.push(node);
+                    }
+                }
+            })
+        } catch (error:any) {
+            return ResticResult.parseError(result, error);
+        }
+        return ResticResult.ok(result, nodes);
+    }
+
+    public async isRepoExist(): Promise<ResticResult<boolean>> {
         const result = await execute('restic cat config', { env: this._env });
-        if (result.success) {
-            return true;
+        switch (mapResticCode(result.exitCode)) {
+            case ExitCode.Success: return ResticResult.ok(result, true);
+            case ExitCode.RepositoryDoesNotExist: return ResticResult.ok(result, false);
+            default: return ResticResult.error(result);
         }
-        if (result.exitCode === ExitCode.RepositoryDoesNotExist) {
-            return false;
-        }
-        throw new Error(
-            `Restic cat config failed (Exit Code: ${result.exitCode}): ${result.stderr || 'Unknown error'}`
-        );
     }
 
-    public async createRepo(): Promise<void> {
-        if (this._initialized) return;
+    public async createRepo(): Promise<ResticResult<boolean>> {
+        const initResult = await this.isRepoExist();
+        if (!initResult.success) return initResult; // cat config 失败
+        if (initResult.result) return initResult; // cat config 成功且 repo 已初始化
         const result = await execute(`restic init`, { env: this._env });
-        if (result.success) {
-            this._initialized = true
-            return;
+        switch (mapResticCode(result.exitCode)) {
+            case ExitCode.Success: return ResticResult.ok(result, true);
+            default: return ResticResult.error(result);
         }
-        throw new Error(
-            `Restic init failed (Exit Code: ${result.exitCode}): ${result.stderr || 'Unknown error'}`
-        );
-    }
-
-    public isInitialized(): Readonly<boolean> {
-        return this._initialized;
     }
 }

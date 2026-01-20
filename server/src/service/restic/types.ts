@@ -1,3 +1,5 @@
+import type {Result} from "execa";
+
 export enum ExitCode {
     Success = 0,
     Failure = 1,
@@ -10,11 +12,43 @@ export enum ExitCode {
     UNKNOWN = -1, // not recognized exit code
 }
 
-export interface ResticResult {
-    success: boolean;
-    exitCode: ExitCode;
-    stdout: string;
-    stderr: string;
+export class ResticResult<T> {
+    public success: boolean;
+    public lock: boolean;
+    public readonly rawExecResult: Result;
+    public result?: T;
+    public errorMsg?: string;
+
+    private constructor(execaResult: Result, result?: T, parseError?: any) {
+        this.rawExecResult = execaResult;
+        if (result) { // exec success
+            this.success = true;
+            this.lock = false;
+            this.result = result;
+        } else if (parseError) { // exec success, result parse fail
+            this.success = false;
+            this.lock = false;
+            this.errorMsg = parseError instanceof Error ? parseError.message : String(parseError);
+        } else { // // exec failed
+            this.success = false;
+            this.lock = execaResult.exitCode === ExitCode.FailedToLockRepository;
+            this.errorMsg = `Cmd: ${execaResult.command}. ` +
+                `Exit Code: ${execaResult.exitCode}. ` +
+                `Stderr: ${execaResult.stderr}`
+        }
+    }
+
+    public static ok<T>(execaResult: Result, result: T): ResticResult<T> {
+        return new ResticResult<T>(execaResult, result);
+    }
+
+    public static error<T>(execaResult: Result): ResticResult<T> {
+        return new ResticResult<T>(execaResult);
+    }
+
+    public static parseError<T>(execaResult: Result, exception: string): ResticResult<T> {
+        return new ResticResult<T>(execaResult, undefined, exception);
+    }
 }
 
 export interface ResticEnv {
@@ -73,19 +107,26 @@ export interface Node {
     inode: number;
 }
 
+export interface CheckSummary {
+    messageType: string;
+    numErrors: number;
+    brokenPacks: string[] | null;
+    suggestRepairIndex: boolean;
+    suggestPrune: boolean;
+}
+
 export interface Progress {
     totalBytes?: number;
     bytesDone?: number;
     percentDone: number;
 }
 
-export interface Task {
+export interface Task<T> {
     uuid: string;
     command: string;
     logFile: string;
     errorFile: string;
-    getResult: () => Promise<ExitCode>;
+    result: Promise<T>;
     cancel: () => void;
-    getProgress: () => Progress;
-    restoreFile?: string
+    getProgress?: () => Progress;
 }

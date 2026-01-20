@@ -1,10 +1,10 @@
-import {ExitCode, type ResticResult, type Node} from "./types.js";
+import {ExitCode, type Node} from "./types.js";
 import {execa, type Options, type Result, type ResultPromise} from "execa";
 import {tmpdir} from "node:os";
 import {mkdtempSync} from "node:fs";
 import {join} from "node:path";
 
-export function parseExitCodeFromResult(input: number | undefined): ExitCode {
+export function mapResticCode(input: number | undefined): ExitCode {
     // Check if the input exists as a value in the Enum
     if (input !== undefined && input in ExitCode) {
         return input as ExitCode;
@@ -59,7 +59,7 @@ export async function execute(
     command: string,
     options: Options,
     commandPath?: string,
-):Promise<ResticResult> {
+):Promise<Result> {
     // Split command into arguments (e.g., "restic backup" -> ["restic", "backup"])
     let args = command.split(' ');
     // If commandPath is set, replace the executable (the first element)
@@ -67,7 +67,7 @@ export async function execute(
         args[0] = commandPath;
     }
     // run command
-    const result: Result = await execa(args[0], args.slice(1), {
+    return execa(args[0], args.slice(1), {
         ...options,
         reject: false,
         buffer: true,
@@ -79,10 +79,4 @@ export async function execute(
             RESTIC_PROGRESS_FPS: '0.5'
         }
     });
-    return {
-        success: !result.failed,
-        exitCode: parseExitCodeFromResult(result.exitCode),
-        stdout: typeof result.stdout === 'string' ? result.stdout as string : "",
-        stderr: typeof result.stderr === 'string' ? result.stderr as string : ""
-    }
 }
