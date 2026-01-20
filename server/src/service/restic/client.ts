@@ -14,7 +14,6 @@ import {join} from "node:path";
 
 export class RepositoryClient {
     private readonly _env: Record<string, string>;
-    private _repoDamaged:boolean = false;
 
     private constructor(resticEnv: ResticEnv) {
         // convert config data to env
