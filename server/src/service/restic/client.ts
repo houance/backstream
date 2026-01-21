@@ -3,7 +3,9 @@ import {
     type CheckSummary,
     ExitCode,
     type Node,
-    type Progress, type RepoConfig, RepoType,
+    type Progress,
+    type RepoConfig,
+    RepoType,
     type ResticEnv,
     ResticResult,
     type Snapshot,
@@ -35,6 +37,60 @@ export class RepositoryClient {
         // Try to create if requested
         if (createRepo) await client.createRepo();
         return client;
+    }
+
+    public copyTo(
+        targetClient: RepositoryClient,
+        snapshotIds: string[],
+        logFie:string,
+        errorFile: string): Task<ResticResult<boolean>> {
+        if (this.repoType !== RepoType.LOCAL && this.repoType === targetClient.repoType) {
+            throw new Error('copying between two remote repositories is not supported');
+        }
+        const command = `restic copy ${snapshotIds.join(' ')}`;
+        const process = executeStream(
+            command,
+            logFie,
+            errorFile,
+            {
+                env: {
+                    ...this._env,
+                    ...targetClient._env,
+                    RESTIC_REPOSITORY: targetClient._env.RESTIC_REPOSITORY,
+                    RESTIC_PASSWORD: targetClient._env.RESTIC_PASSWORD,
+                    RESTIC_FROM_REPOSITORY: this._env.RESTIC_REPOSITORY,
+                    RESTIC_FROM_PASSWORD: this._env.RESTIC_PASSWORD,
+                }
+            }
+        )
+        // 更新 progress
+        const progress: Progress = { totalBytes: 0, bytesDone: 0, percentDone: 0 };
+        // 2. Process the stream in the background (Immediate Execution)
+        (async () => {
+            try {
+                // Execa v9+ yields lines automatically from the subprocess
+                for await (const line of process) {
+                    // todo: regex from stdout
+                }
+            } catch (err) {
+                console.error("Stream processing error:", err);
+            }
+        })();
+        // 处理结果
+        const result = (async (): Promise<ResticResult<boolean>> => {
+            const result:Result = await process;
+            if (result.failed) return ResticResult.error(result);
+            return ResticResult.ok(result, true);
+        })();
+        return {
+            uuid: crypto.randomUUID(),
+            command: command,
+            logFile: logFie,
+            errorFile: errorFile,
+            result: result,
+            cancel: () => process.kill(),
+            getProgress: () => progress,
+        }
     }
 
     public backup(path: string, logFile: string, errorFile: string): Task<ResticResult<ExitCode>> {
@@ -296,9 +352,37 @@ export class RepositoryClient {
         if (!initResult.success) return initResult; // cat config 失败
         if (initResult.result) return initResult; // cat config 成功且 repo 已初始化
         const result = await execute(`restic init`, { env: this._env });
-        switch (mapResticCode(result.exitCode)) {
-            case ExitCode.Success: return ResticResult.ok(result, true);
-            default: return ResticResult.error(result);
+        return mapResticCode(result.exitCode) === ExitCode.Success ?
+            ResticResult.ok(result, true) :
+            ResticResult.error(result);
+    }
+
+    public async createRepoWithSameChunker(fromClient: RepositoryClient): Promise<ResticResult<boolean>> {
+        if (this.repoType !== RepoType.LOCAL && this.repoType === fromClient.repoType) {
+            throw new Error('init repository from same type is not supported');
         }
+        // todo: fromClient 没有初始化
+        const repoExistResult = await this.isRepoExist();
+        if (!repoExistResult.success || repoExistResult.result) { // cat config 失败, 或仓库已经初始化
+            return ResticResult.error(repoExistResult.rawExecResult)
+        }
+        // todo: from client 已初始化
+        const command = `restic init --copy-chunker-param`;
+        const result = await execute(
+            command,
+            {
+                env: {
+                    ...this._env,
+                    ...fromClient._env,
+                    RESTIC_REPOSITORY: this._env.RESTIC_REPOSITORY,
+                    RESTIC_PASSWORD: this._env.RESTIC_PASSWORD,
+                    RESTIC_FROM_REPOSITORY: fromClient._env.RESTIC_REPOSITORY,
+                    RESTIC_FROM_PASSWORD: fromClient._env.RESTIC_PASSWORD,
+                }
+            }
+        )
+        return mapResticCode(result.exitCode) === ExitCode.Success ?
+            ResticResult.ok(result, true) :
+            ResticResult.error(result);
     }
 }
