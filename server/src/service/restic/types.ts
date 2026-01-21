@@ -39,10 +39,12 @@ export class ResticResult<T> {
             this.success = true;
             this.lock = false;
             this.result = result;
+            return;
         } else if (parseError !== undefined) { // exec success, result parse fail
             this.success = false;
             this.lock = false;
             this.errorMsg = parseError instanceof Error ? parseError.message : String(parseError);
+            return;
         } else { // // exec failed
             this.success = false;
             this.lock = execaResult.exitCode === ExitCode.FailedToLockRepository;
