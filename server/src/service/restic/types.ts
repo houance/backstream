@@ -35,11 +35,11 @@ export class ResticResult<T> {
 
     private constructor(execaResult: Result, result?: T, parseError?: any) {
         this.rawExecResult = execaResult;
-        if (result) { // exec success
+        if (result !== undefined) { // exec success
             this.success = true;
             this.lock = false;
             this.result = result;
-        } else if (parseError) { // exec success, result parse fail
+        } else if (parseError !== undefined) { // exec success, result parse fail
             this.success = false;
             this.lock = false;
             this.errorMsg = parseError instanceof Error ? parseError.message : String(parseError);

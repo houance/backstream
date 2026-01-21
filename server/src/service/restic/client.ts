@@ -326,21 +326,21 @@ export class RepositoryClient {
 
     public async getRepoConfig(): Promise<ResticResult<RepoConfig>> {
         const result = await execute('restic cat config', { env: this._env });
-        switch (mapResticCode(result.exitCode)) {
-            case ExitCode.Success:
-                try {
-                    const repoConfig:RepoConfig = JSON.parse(result.stdout as string)
-                    return ResticResult.ok(result, repoConfig);
-                } catch (e:any) {
-                    return ResticResult.parseError(result, e);
-                }
-            default: return ResticResult.error(result);
+        if (mapResticCode(result.exitCode) !== ExitCode.Success) {
+            return ResticResult.error(result);
+        }
+        try {
+            const repoConfig:RepoConfig = JSON.parse(result.stdout as string)
+            return ResticResult.ok(result, repoConfig);
+        } catch (e:any) {
+            return ResticResult.parseError(result, e);
         }
     }
 
     public async isRepoExist(): Promise<ResticResult<boolean>> {
         const result = await execute('restic cat config', { env: this._env });
-        switch (mapResticCode(result.exitCode)) {
+        const code:ExitCode = mapResticCode(result.exitCode)
+        switch (code) {
             case ExitCode.Success: return ResticResult.ok(result, true);
             case ExitCode.RepositoryDoesNotExist: return ResticResult.ok(result, false);
             default: return ResticResult.error(result);
@@ -348,9 +348,10 @@ export class RepositoryClient {
     }
 
     public async createRepo(): Promise<ResticResult<boolean>> {
-        const initResult = await this.isRepoExist();
-        if (!initResult.success) return initResult; // cat config 失败
-        if (initResult.result) return initResult; // cat config 成功且 repo 已初始化
+        const repoExistResult = await this.isRepoExist();
+        if (!repoExistResult.success) return repoExistResult; // cat config 失败
+        // cat config 成功且 repo 已初始化
+        if (repoExistResult.result) return ResticResult.ok(repoExistResult.rawExecResult, true);
         const result = await execute(`restic init`, { env: this._env });
         return mapResticCode(result.exitCode) === ExitCode.Success ?
             ResticResult.ok(result, true) :
@@ -361,13 +362,7 @@ export class RepositoryClient {
         if (this.repoType !== RepoType.LOCAL && this.repoType === fromClient.repoType) {
             throw new Error('init repository from same type is not supported');
         }
-        // todo: fromClient 没有初始化
-        const repoExistResult = await this.isRepoExist();
-        if (!repoExistResult.success || repoExistResult.result) { // cat config 失败, 或仓库已经初始化
-            return ResticResult.error(repoExistResult.rawExecResult)
-        }
-        // todo: from client 已初始化
-        const command = `restic init --copy-chunker-param`;
+        const command = `restic init --copy-chunker-params`;
         const result = await execute(
             command,
             {
