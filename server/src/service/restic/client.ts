@@ -3,7 +3,7 @@ import {
     type CheckSummary,
     ExitCode,
     type Node,
-    type Progress,
+    type Progress, type RepoConfig, RepoType,
     type ResticEnv,
     ResticResult,
     type Snapshot,
@@ -14,8 +14,10 @@ import {join} from "node:path";
 
 export class RepositoryClient {
     private readonly _env: Record<string, string>;
+    public readonly repoType: RepoType;
 
-    private constructor(resticEnv: ResticEnv) {
+    private constructor(resticEnv: ResticEnv, repoType: RepoType) {
+        this.repoType = repoType;
         // convert config data to env
         this._env = {
             RESTIC_REPOSITORY: resticEnv.RESTIC_REPOSITORY,
@@ -28,8 +30,8 @@ export class RepositoryClient {
         }
     }
 
-    public static async create(resticEnv: ResticEnv, createRepo?: boolean): Promise<RepositoryClient> {
-        const client = new RepositoryClient(resticEnv);
+    public static async create(resticEnv: ResticEnv, repoType: RepoType, createRepo?: boolean): Promise<RepositoryClient> {
+        const client = new RepositoryClient(resticEnv, repoType);
         // Try to create if requested
         if (createRepo) await client.createRepo();
         return client;
@@ -264,6 +266,20 @@ export class RepositoryClient {
             return ResticResult.parseError(result, error);
         }
         return ResticResult.ok(result, nodes);
+    }
+
+    public async getRepoConfig(): Promise<ResticResult<RepoConfig>> {
+        const result = await execute('restic cat config', { env: this._env });
+        switch (mapResticCode(result.exitCode)) {
+            case ExitCode.Success:
+                try {
+                    const repoConfig:RepoConfig = JSON.parse(result.stdout as string)
+                    return ResticResult.ok(result, repoConfig);
+                } catch (e:any) {
+                    return ResticResult.parseError(result, e);
+                }
+            default: return ResticResult.error(result);
+        }
     }
 
     public async isRepoExist(): Promise<ResticResult<boolean>> {

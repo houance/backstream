@@ -12,6 +12,20 @@ export enum ExitCode {
     UNKNOWN = -1, // not recognized exit code
 }
 
+export enum RepoType {
+    LOCAL = "LOCAL",
+    SFTP = "SFTP",
+    BACKBLAZE_B2 = "BACKBLAZE_B2",
+    ALIYUN_OSS = "ALIYUN_OSS",
+    S3 = "S3",
+}
+
+export interface RepoConfig {
+    version: number;
+    id: string;
+    chunkerPolynomial: string;
+}
+
 export class ResticResult<T> {
     public success: boolean;
     public lock: boolean;
