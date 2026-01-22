@@ -8,39 +8,36 @@ const DashboardPage: React.FC = () => {
             {/* Storage Overview Card */}
             <Card shadow="sm" p="lg" radius="md" withBorder mb="xl">
                 <Title order={3} mb="md">Total Storage Used</Title>
-                {/* 1. Changed weight to fw and color to c */}
                 <Text size="xl" fw={700}>
                     8.4 TB <Text span size="sm" c="dimmed">of 15 TB</Text>
                 </Text>
 
-                {/* 2. Updated Progress to v7 compound component structure */}
+                {/* usage bar */}
                 <Progress.Root size="xl" mt="md">
-                    <Progress.Section value={56} animated>
+                    <Progress.Section value={56}>
                         <Progress.Label>56%</Progress.Label>
                     </Progress.Section>
                 </Progress.Root>
             </Card>
 
             <Grid gutter="xl">
-                {/* 3. Changed md={8} to span={{ md: 8 }} */}
+                {/* backup policy status */}
                 <Grid.Col span={{ md: 8 }}>
                     <Grid gutter="md">
-                        {/* Changed sm={4} to span={{ sm: 4 }} */}
-                        <Grid.Col span={{ sm: 4 }}><ServerStatusPanel title="Production Database" lastBackup="2 min" nextRun="11:00" /></Grid.Col>
-                        <Grid.Col span={{ sm: 4 }}><ServerStatusPanel title="File Server" lastBackup="1 hour" nextRun="2:00" /></Grid.Col>
-                        <Grid.Col span={{ sm: 4 }}><ServerStatusPanel title="Email Archive" lastBackup="3 hours" nextRun="6:00" /></Grid.Col>
-                        <Grid.Col span={{ sm: 4 }}><ServerStatusPanel title="Development Server" lastBackup="5 hours" nextRun="8:00" /></Grid.Col>
-                        <Grid.Col span={{ sm: 4 }}><ServerStatusPanel title="Customer Data" lastBackup="6 hours" nextRun="1:00" /></Grid.Col>
-                        <Grid.Col span={{ sm: 4 }}><ServerStatusPanel title="Application Logs" lastBackup="4 hours" nextRun="10:00" /></Grid.Col>
+                        <Grid.Col span={{ sm: 4 }}><ServerStatusPanel title="Production Database" type="3-2-1" lastBackup="2 min" nextRun="11:00" /></Grid.Col>
+                        <Grid.Col span={{ sm: 4 }}><ServerStatusPanel title="File Server" type="local-backup" lastBackup="1 hour" nextRun="2:00" /></Grid.Col>
+                        <Grid.Col span={{ sm: 4 }}><ServerStatusPanel title="Email Archive" type="local-mirror" lastBackup="3 hours" nextRun="6:00" /></Grid.Col>
+                        <Grid.Col span={{ sm: 4 }}><ServerStatusPanel title="Development Server" type="remote-mirror" lastBackup="5 hours" nextRun="8:00" /></Grid.Col>
+                        <Grid.Col span={{ sm: 4 }}><ServerStatusPanel title="Customer Data" type="remote-backup" lastBackup="6 hours" nextRun="1:00" /></Grid.Col>
+                        <Grid.Col span={{ sm: 4 }}><ServerStatusPanel title="Application Logs" type="3-2-1" lastBackup="4 hours" nextRun="10:00" /></Grid.Col>
                     </Grid>
                 </Grid.Col>
 
-                {/* 3. Changed md={4} to span={{ md: 4 }} */}
+                {/* 3. recent activity */}
                 <Grid.Col span={{ md: 4 }}>
                     <Card shadow="sm" p="lg" radius="md" withBorder>
                         <Title order={3} mb="md">Recent Activity</Title>
                         <List spacing="xs" size="sm" center>
-                            {/* Changed color to c */}
                             <List.Item><b>Production Database</b> Backup completed successfully <Text size="xs" c="dimmed">2 minutes ago</Text></List.Item>
                             <List.Item><b>File Server</b> 1.2 TB transferred <Text size="xs" c="dimmed">1 hour ago</Text></List.Item>
                             <List.Item><b>Email Archive</b> Backup completed successfully <Text size="xs" c="dimmed">3 hours ago</Text></List.Item>

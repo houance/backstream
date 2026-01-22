@@ -5,9 +5,8 @@ import { IconLayoutDashboard, IconFolder, IconSettings, IconPlus } from '@tabler
 const SideNavigation: React.FC = () => {
     return (
         <Box h="100%" display="flex" style={{ flexDirection: 'column' }}>
-            <Title order={3} mb="xl">BackupVault</Title>
+            <Title order={3} mb="xl">BackStream</Title>
 
-            {/* Changed 'icon' prop to 'leftSection' */}
             <NavLink
                 label="Overview"
                 leftSection={<IconLayoutDashboard size="1rem" stroke={1.5} />}
@@ -29,9 +28,9 @@ const SideNavigation: React.FC = () => {
             {/* User Profile Section */}
             <Box mt="auto" pt="md" style={{ borderTop: '1px solid var(--mantine-color-gray-3)' }}>
                 <NavLink
-                    label="John Doe"
+                    label="User"
                     description="Admin"
-                    leftSection={<Avatar name="JD" radius="xl" color="blue" size="sm" />}
+                    leftSection={<Avatar name="U" radius="xl" color="blue" size="sm" />}
                 />
             </Box>
         </Box>
