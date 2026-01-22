@@ -1,26 +1,13 @@
-import {useEffect, useState} from 'react'
-import './App.css'
-import {client} from "./api/api.ts";
+import '@mantine/core/styles.css'; // Add this import
+import { MantineProvider } from '@mantine/core';
+import DashboardLayout from './layouts/DashboardLayout';
 
 function App() {
-    const [health, setHealth] = useState<string>('Not Healthy')
-
-    useEffect(() => {
-        const fetchData = async () => {
-            // health
-            const healthRes = await client.api.info.health.$get()
-            const healthData = await healthRes.json()
-            setHealth(healthData.message + healthRes.status)
-        }
-        fetchData()
-    }, [])
-
     return (
-        <div>
-            <h1>NAS Backup Manager</h1>
-            <div>Health: {health}</div>
-        </div>
-    )
+        <MantineProvider>
+            <DashboardLayout />
+        </MantineProvider>
+    );
 }
 
-export default App
+export default App;
