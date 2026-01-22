@@ -64,7 +64,7 @@ export class RepositoryClient {
             }
         )
         // 更新 progress
-        const progress: Progress = { totalBytes: 0, bytesDone: 0, percentDone: 0 };
+        const progress: Progress = { percentDone: -1 };
         // 2. Process the stream in the background (Immediate Execution)
         (async () => {
             try {
@@ -214,7 +214,7 @@ export class RepositoryClient {
             { env: this._env }
         );
         // 更新 progress
-        const progress: Progress = { totalBytes: 0, bytesDone: 0, percentDone: 0 };
+        const progress: Progress = { percentDone: -1 };
         // 2. Process the stream in the background (Immediate Execution)
         (async () => {
             try {
