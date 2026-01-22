@@ -1,12 +1,15 @@
-import '@mantine/core/styles.css'; // Add this import
+import '@mantine/core/styles.css';
 import { MantineProvider } from '@mantine/core';
+import { BrowserRouter } from 'react-router-dom'; // Import BrowserRouter
 import DashboardLayout from './layouts/DashboardLayout';
 
 function App() {
     return (
-        <MantineProvider>
-            <DashboardLayout />
-        </MantineProvider>
+        <BrowserRouter> {/* Wrap the application */}
+            <MantineProvider>
+                <DashboardLayout />
+            </MantineProvider>
+        </BrowserRouter>
     );
 }
 

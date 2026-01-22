@@ -1,10 +1,15 @@
 import React from 'react';
-import { Grid, Card, Title, Text, Progress, List, Badge, Container } from '@mantine/core';
+import { Grid, Card, Title, Text, Progress, List, Badge, Container, Box } from '@mantine/core';
 import ServerStatusPanel from './components/ServerStatusPanel';
 
 const DashboardPage: React.FC = () => {
     return (
         <Container fluid p={0}>
+            {/* Add a specific header/title section at the top of the page */}
+            <Box mb="xl" h="60" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Title order={1}>Overview</Title>
+            </Box>
+
             {/* Storage Overview Card */}
             <Card shadow="sm" p="lg" radius="md" withBorder mb="xl">
                 <Title order={3} mb="md">Total Storage Used</Title>
