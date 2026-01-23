@@ -1,5 +1,5 @@
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
-import type {ResticEnv} from "../restic/types.js";
+import type {ResticCert} from "../restic/types.js";
 
 // 1. Repository Table
 export const repository = sqliteTable("repository_table", {
@@ -8,8 +8,8 @@ export const repository = sqliteTable("repository_table", {
     providerType: text("provider_type", {enum: ["local", "backblaze b2", "aliyun oss"]}).notNull(),
     usage: integer("size").default(0),
     capacity: integer("capacity").notNull().default(0),
-    configData: text("config_data", { mode: "json" })
-        .$type<ResticEnv>()
+    certification: text("certification", { mode: "json" })
+        .$type<ResticCert>()
         .notNull()
 });
 
@@ -46,16 +46,20 @@ export const snapshotsMetadata = sqliteTable("snapshots_metadata_table", {
 
 // 5. Execution Table
 export const execution = sqliteTable("execution_table", {
-    id: integer("execution_id"),
-    uuid: integer("uuid"),
+    id: integer("execution_id").primaryKey({ autoIncrement: true }),
+    uuid: text("uuid"),
     logFile: text("log_file"),
     errorFile: text("error_file"),
-    commandType: text("command_type", { enum: ["backup", "prune", "check", "forget", "restore", "copy"]}),
+    commandType: text("command_type", { enum: ["backup", "prune", "check", "restore", "copy"]}),
     fullCommand: text("full_command"),
+    exitCode: integer("exit_code"),
+    scheduledAt: integer("scheduled_at", { mode: "timestamp" }),
     startedAt: integer("started_at", { mode: "timestamp" }),
+    finishedAt: integer("finished_at", { mode: "timestamp" }),
     executeStatus: text("execute_status", { enum: ["success", "fail", "running"] }),
-    foreignSource: text("foreign_source", { enum: ["repository_id", "backup_target_id"] }),
-    foreignId: integer("foreign_id").notNull().default(-1), // 关联 ID, 空的说明这次执行没有登记 ID
+    repositoryId: integer("repository_id").references(() => repository.id),
+    strategyId: integer("strategy_id").references(() => strategy.id),
+    backupTargetId: integer("backup_target_id").references(() => backupTargets.id),
 })
 
 // For selecting (reading)

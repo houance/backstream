@@ -71,7 +71,7 @@ export class ResticResult<T> {
     }
 }
 
-export interface ResticEnv {
+export interface ResticCert {
     RESTIC_REPOSITORY: string; // restic -r <path>
     RESTIC_PASSWORD: string;
     certificate?: Record<string, string>[];

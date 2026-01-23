@@ -6,7 +6,7 @@ import {
     type Progress,
     type RepoConfig,
     RepoType,
-    type ResticEnv,
+    type ResticCert,
     ResticResult,
     type Snapshot,
     type Task,
@@ -18,7 +18,7 @@ export class RepositoryClient {
     private readonly _env: Record<string, string>;
     public readonly repoType: RepoType;
 
-    private constructor(resticEnv: ResticEnv, repoType: RepoType) {
+    private constructor(resticEnv: ResticCert, repoType: RepoType) {
         this.repoType = repoType;
         // convert config data to env
         this._env = {
@@ -32,7 +32,7 @@ export class RepositoryClient {
         }
     }
 
-    public static async create(resticEnv: ResticEnv, repoType: RepoType, createRepo?: boolean): Promise<RepositoryClient> {
+    public static async create(resticEnv: ResticCert, repoType: RepoType, createRepo?: boolean): Promise<RepositoryClient> {
         const client = new RepositoryClient(resticEnv, repoType);
         // Try to create if requested
         if (createRepo) await client.createRepo();
