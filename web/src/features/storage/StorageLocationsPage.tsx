@@ -1,16 +1,16 @@
 import React from 'react';
-import { Card, Title, Button, Table, Box } from '@mantine/core';
+import {Card, Title, Button, Table, Box, Container} from '@mantine/core';
 import { IconPlus } from '@tabler/icons-react';
 import StorageLocationRow from './components/StorageLocationRow';
 
 const StorageLocationsPage: React.FC = () => {
     return (
         // Use w="100%" and remove maxWidth to override any inherited restrictions
-        <Box p={0} w="100%" style={{ minWidth: '100%' }}>
+        <Container fluid p={0}>
             {/* Header Box */}
             <Box
                 h="60"
-                mb="xl"           // Bottom margin as you had before
+                mb="xl"
                 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Title order={1}>Storage Locations</Title>
                 <Button leftSection={<IconPlus size="1rem" />} variant="filled">
@@ -46,7 +46,7 @@ const StorageLocationsPage: React.FC = () => {
                     </Table.Tbody>
                 </Table>
             </Card>
-        </Box>
+        </Container>
     );
 };
 

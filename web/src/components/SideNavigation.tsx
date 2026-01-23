@@ -26,6 +26,8 @@ const SideNavigation: React.FC = () => {
                 active={location.pathname === '/storage-locations'} // Set active based on path
             />
             <NavLink
+                component={Link}
+                to="/settings"
                 label="Settings"
                 leftSection={<IconSettings size="1rem" stroke={1.5} />}
                 active={location.pathname === '/settings'} // Set active based on path
