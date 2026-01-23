@@ -1,6 +1,6 @@
 import React from 'react';
 import { Grid, Card, Title, Text, Progress, List, Badge, Container } from '@mantine/core';
-import ServerStatusPanel from './components/ServerStatusPanel';
+import {BackupStrategyCard} from "./components/BackupStrategyCard.tsx";
 
 const OverviewPage: React.FC = () => {
     return (
@@ -24,12 +24,29 @@ const OverviewPage: React.FC = () => {
                 {/* backup policy status */}
                 <Grid.Col span={{ md: 8 }}>
                     <Grid gutter="md">
-                        <Grid.Col span={{ sm: 4 }}><ServerStatusPanel title="Production Database" type="3-2-1" lastBackup="2 min" nextRun="11:00" /></Grid.Col>
-                        <Grid.Col span={{ sm: 4 }}><ServerStatusPanel title="File Server" type="local-backup" lastBackup="1 hour" nextRun="2:00" /></Grid.Col>
-                        <Grid.Col span={{ sm: 4 }}><ServerStatusPanel title="Email Archive" type="local-mirror" lastBackup="3 hours" nextRun="6:00" /></Grid.Col>
-                        <Grid.Col span={{ sm: 4 }}><ServerStatusPanel title="Development Server" type="remote-mirror" lastBackup="5 hours" nextRun="8:00" /></Grid.Col>
-                        <Grid.Col span={{ sm: 4 }}><ServerStatusPanel title="Customer Data" type="remote-backup" lastBackup="6 hours" nextRun="1:00" /></Grid.Col>
-                        <Grid.Col span={{ sm: 4 }}><ServerStatusPanel title="Application Logs" type="3-2-1" lastBackup="4 hours" nextRun="10:00" /></Grid.Col>
+                        <Grid.Col span={{ sm: 4 }}>
+                            <BackupStrategyCard strategy={{
+                                name: 'Music Collection',
+                                strategyType: '3-2-1',
+                                targets: [
+                                    {
+                                        repositoryName: 'local',
+                                        providerType: 'local',
+                                        usage: 500,
+                                        capacity: 1000,
+                                        repositoryId: 1
+                                    },
+                                    {
+                                        repositoryName: 's3',
+                                        providerType: 'backblaze b2',
+                                        usage: 91,
+                                        capacity: 100,
+                                        repositoryId: 2
+                                    }
+                                ]
+                            }}
+                            />
+                        </Grid.Col>
                     </Grid>
                 </Grid.Col>
 
