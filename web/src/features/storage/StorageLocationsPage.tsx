@@ -1,9 +1,41 @@
-import React from 'react';
+import React, {useRef} from 'react';
 import {Card, Button, Table, Container, Group} from '@mantine/core';
-import { IconPlus } from '@tabler/icons-react';
+import { notifications } from '@mantine/notifications';
+import {IconCheck, IconPlus, IconX} from '@tabler/icons-react';
 import StorageLocationRow from './components/StorageLocationRow';
+import AddLocationModal, {type AddLocationModalRef } from './components/AddStorageLocationsModal';
 
 const StorageLocationsPage: React.FC = () => {
+    const modalRef = useRef<AddLocationModalRef>(null);
+
+    const handleOpenModal = () => {
+        modalRef.current?.open(); // Call the exposed 'open' method
+    };
+
+    // This function receives the status and data back from the modal
+    const handleSubmissionComplete = (success: boolean, data?: any) => {
+        if (success) {
+            // Show success notification
+            notifications.show({
+                title: 'Success!',
+                message: `Location "${data?.locationName}" added successfully.`,
+                color: 'teal',
+                icon: <IconCheck size={18} />,
+                autoClose: 3000,
+            });
+        } else {
+            // Show error notification
+            notifications.show({
+                title: 'Submission Failed',
+                message: 'There was an issue saving the location. Please try again.',
+                color: 'red',
+                icon: <IconX size={18} />,
+                autoClose: 5000,
+            });
+        }
+    };
+
+
     return (
         // Use w="100%" and remove maxWidth to override any inherited restrictions
         <Container fluid p={0}>
@@ -16,7 +48,7 @@ const StorageLocationsPage: React.FC = () => {
                     layout="fixed" // Forces columns to distribute across 100% width
                 >
                     <Table.Thead>
-                        <Table.Tr>
+                        <Table.Tr fz="lg">
                             <Table.Th>Location Name</Table.Th>
                             <Table.Th>Path</Table.Th>
                             <Table.Th>Type</Table.Th>
@@ -37,10 +69,16 @@ const StorageLocationsPage: React.FC = () => {
 
             {/* Add Storage Location Button */}
             <Group justify="flex-end" mt="xl" pt="md" style={{ borderTop: '1px solid var(--mantine-color-gray-3)' }}>
-                <Button leftSection={<IconPlus size="1rem" />} variant="filled">
+                <Button leftSection={<IconPlus size="1rem" />} variant="filled" onClick={handleOpenModal}>
                     Add Location
                 </Button>
             </Group>
+
+            {/* The modal component instance */}
+            <AddLocationModal
+                ref={modalRef}
+                onSubmissionComplete={handleSubmissionComplete}
+            />
         </Container>
     );
 };
