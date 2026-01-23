@@ -1,64 +1,64 @@
-import {
-    AppShell, Title, useComputedColorScheme, useMantineTheme,
-} from '@mantine/core';
-import { Routes, Route, useLocation } from 'react-router-dom';
-import {useDisclosure} from "@mantine/hooks";
+import { AppShell, Title, NavLink, Avatar, Box, useMantineTheme, useComputedColorScheme } from '@mantine/core';
+import { Routes, Route, useLocation, Link } from 'react-router-dom';
+import { APP_ROUTES } from '../router/config';
 
-// Import the components/pages we need
-import SideNavigation, { NAVIGATION_ITEMS } from '../components/SideNavigation';
-import DashboardPage from '../features/dashboard/DashboardPage';
-import StorageLocationsPage from '../features/storage/StorageLocationsPage.tsx';
-import SettingsPage from "../features/settings/SettingsPage.tsx";
-import CreatePolicyPage from "../features/create-policy/CreatePolicyPage.tsx";
-
-function DashboardLayout() {
-    // Find the label directly from the config based on current path
+export default function DashboardLayout() {
     const location = useLocation();
-    const activeItem = NAVIGATION_ITEMS.find(item => item.to === location.pathname);
-    const headerTitle = activeItem ? activeItem.label : 'BackupVault';
-
-    // Hook to manage the navbar open/closed state
-    const [opened] = useDisclosure();
     const theme = useMantineTheme();
-    const computedColorScheme = useComputedColorScheme('light', { getInitialValueInEffect: true });
-    const isDarkMode = computedColorScheme === 'dark';
+    const colorScheme = useComputedColorScheme();
+
+    // SSoT: Find current page metadata
+    const activeRoute = APP_ROUTES.find(route => route.path === location.pathname);
 
     return (
         <AppShell
             layout="alt"
             header={{ height: 60 }}
-            navbar={{
-                width: 300,
-                breakpoint: 'sm', // Collapse navbar below the 'sm' breakpoint
-                collapsed: { mobile: !opened }, // Link collapsed state to 'opened' variable on mobile
-            }}
-            padding="md" // Padding for the main content area
+            navbar={{ width: 280, breakpoint: 'sm' }}
+            padding="md"
         >
-            <AppShell.Header p="md">
-                <Title order={2}>{headerTitle}</Title>
+            {/* Header: Title is derived from SSoT */}
+            <AppShell.Header p="md" style={{ display: 'flex', alignItems: 'center' }}>
+                <Title order={3}>{activeRoute?.label || 'BackupVault'}</Title>
             </AppShell.Header>
 
+            {/* Navbar: Navigation is generated from SSoT */}
             <AppShell.Navbar p="md">
-                {/* Render the navigation component */}
-                <SideNavigation />
+                <Title order={4} mb="xl" px="sm" c="blue">BackStream</Title>
+
+                <Box component="nav">
+                    {APP_ROUTES.map((item) => (
+                        <NavLink
+                            key={item.path}
+                            component={Link}
+                            to={item.path}
+                            label={item.label}
+                            leftSection={<item.icon size="1.1rem" stroke={1.5} />}
+                            active={location.pathname === item.path}
+                            variant="light"
+                            radius="md"
+                            mb={4}
+                        />
+                    ))}
+                </Box>
+
+                <Box mt="auto" pt="md" style={{ borderTop: `1px solid var(--mantine-color-gray-3)` }}>
+                    <NavLink
+                        label="User Admin"
+                        description="Professional Plan"
+                        leftSection={<Avatar radius="xl" color="blue" size="sm">UA</Avatar>}
+                    />
+                </Box>
             </AppShell.Navbar>
 
-            <AppShell.Main
-                style={{
-                    backgroundColor: isDarkMode ? theme.colors.dark[8] : theme.colors.gray[0],
-                }}
-            >
-                {/* Define the routes here */}
+            {/* Main Content: Routes are mapped from SSoT */}
+            <AppShell.Main bg={colorScheme === 'dark' ? theme.colors.dark[8] : theme.colors.gray[0]}>
                 <Routes>
-                    <Route path="/" element={<DashboardPage />} />
-                    <Route path="/storage-locations" element={<StorageLocationsPage />} />
-                    <Route path="/settings" element={<SettingsPage />} />
-                    <Route path="/create-policy" element={<CreatePolicyPage />} />
-                    {/* Add more routes here as needed */}
+                    {APP_ROUTES.map((route) => (
+                        <Route key={route.path} path={route.path} element={route.element} />
+                    ))}
                 </Routes>
             </AppShell.Main>
         </AppShell>
     );
 }
-
-export default DashboardLayout;
