@@ -2,7 +2,7 @@ import React from 'react';
 import { Grid, Card, Title, Text, Progress, List, Badge, Container } from '@mantine/core';
 import ServerStatusPanel from './components/ServerStatusPanel';
 
-const DashboardPage: React.FC = () => {
+const OverviewPage: React.FC = () => {
     return (
         <Container fluid p={0}>
             {/* Storage Overview Card */}
@@ -50,4 +50,4 @@ const DashboardPage: React.FC = () => {
     );
 };
 
-export default DashboardPage;
+export default OverviewPage;
