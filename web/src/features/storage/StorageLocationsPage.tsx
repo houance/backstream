@@ -1,5 +1,5 @@
 import React from 'react';
-import {Card, Title, Button, Table, Box, Container} from '@mantine/core';
+import {Card, Button, Table, Container, Group} from '@mantine/core';
 import { IconPlus } from '@tabler/icons-react';
 import StorageLocationRow from './components/StorageLocationRow';
 
@@ -7,24 +7,12 @@ const StorageLocationsPage: React.FC = () => {
     return (
         // Use w="100%" and remove maxWidth to override any inherited restrictions
         <Container fluid p={0}>
-            {/* Header Box */}
-            <Box
-                h="60"
-                mb="xl"
-                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Title order={1}>Storage Locations</Title>
-                <Button leftSection={<IconPlus size="1rem" />} variant="filled">
-                    Add Location
-                </Button>
-            </Box>
-
             {/* Added w="100%" to Card and Table */}
-            <Card shadow="sm" p="lg" radius="md" withBorder mb="xl" w="100%">
+            <Card shadow="sm" p="lg" radius="md" withBorder mb="xl">
                 <Table
                     striped
                     highlightOnHover
                     verticalSpacing="md"
-                    w="100%"
                     layout="fixed" // Forces columns to distribute across 100% width
                 >
                     <Table.Thead>
@@ -46,6 +34,13 @@ const StorageLocationsPage: React.FC = () => {
                     </Table.Tbody>
                 </Table>
             </Card>
+
+            {/* Add Storage Location Button */}
+            <Group justify="flex-end" mt="xl" pt="md" style={{ borderTop: '1px solid var(--mantine-color-gray-3)' }}>
+                <Button leftSection={<IconPlus size="1rem" />} variant="filled">
+                    Add Location
+                </Button>
+            </Group>
         </Container>
     );
 };

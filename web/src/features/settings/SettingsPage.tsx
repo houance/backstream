@@ -51,11 +51,6 @@ function SettingsPage() {
     return (
         // We link the form hook to the handler function and ensure it is an HTML form element
         <Container fluid p={0}>
-            {/* Add a specific header/title section at the top of the page */}
-            <Box mb="xl" h="60" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Title order={1}>Settings</Title>
-            </Box>
-
             <Stack gap="lg" justify="space-around" align="stretch">
                 {/* General Settings Section */}
                 <Box>
