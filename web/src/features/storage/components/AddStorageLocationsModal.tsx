@@ -76,7 +76,7 @@ const AddLocationModal = forwardRef<AddLocationModalRef, AddLocationModalProps>(
         }, [close, form, onSubmissionComplete]);
 
         return (
-            <Modal opened={opened} onClose={close} title="Add New Storage Location" centered>
+            <Modal opened={opened} onClose={close} title="Add New Storage Location" centered size="xl">
                 <form onSubmit={form.onSubmit(handleSubmit)}>
                     <Stack>
                         <TextInput label="Location Name" placeholder="e.g., Primary NAS Storage" {...form.getInputProps('locationName')} withAsterisk />

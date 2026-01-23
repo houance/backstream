@@ -2,13 +2,14 @@ import {
     AppShell, Title, useComputedColorScheme, useMantineTheme,
 } from '@mantine/core';
 import { Routes, Route, useLocation } from 'react-router-dom';
+import {useDisclosure} from "@mantine/hooks";
 
 // Import the components/pages we need
 import SideNavigation, { NAVIGATION_ITEMS } from '../components/SideNavigation';
 import DashboardPage from '../features/dashboard/DashboardPage';
 import StorageLocationsPage from '../features/storage/StorageLocationsPage.tsx';
 import SettingsPage from "../features/settings/SettingsPage.tsx";
-import {useDisclosure} from "@mantine/hooks";
+import CreatePolicyPage from "../features/create-policy/CreatePolicyPage.tsx";
 
 function DashboardLayout() {
     // Find the label directly from the config based on current path
@@ -52,6 +53,7 @@ function DashboardLayout() {
                     <Route path="/" element={<DashboardPage />} />
                     <Route path="/storage-locations" element={<StorageLocationsPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="/create-policy" element={<CreatePolicyPage />} />
                     {/* Add more routes here as needed */}
                 </Routes>
             </AppShell.Main>
