@@ -1,17 +1,19 @@
-import {Card, Text, Badge, Group, Stack, Progress, Tooltip, ActionIcon} from '@mantine/core';
+import {Card, Text, Badge, Group, Stack, Progress, Tooltip} from '@mantine/core';
 import {IconAlertTriangle, IconCloud, IconDeviceSdCard} from '@tabler/icons-react';
 
 // This represents the joined data of a Strategy + its Backup Targets & Repositories
 interface BackupStrategyProps {
     strategy: {
         name: string;
-        strategyType: "3-2-1" | "localCopy";
+        strategyType: string;
+        dataSource: string;
         targets: {
             repositoryId: number;
             repositoryName: string;
-            providerType: "local" | "backblaze b2" | "aliyun oss";
+            targetType: string;
             usage: number;
             capacity: number;
+            lastBackupTimestamp: number;
         }[];
     };
 }
@@ -22,17 +24,21 @@ export function BackupStrategyCard({ strategy }: BackupStrategyProps) {
 
     return (
         <Card shadow="sm" padding="lg" radius="md" withBorder>
+            {/* 备份计划名称和类型  */}
             <Group justify="space-between" mb="md">
                 <div>
-                    <Text fw={700} size="lg">{strategy.name}</Text>
+                    <Tooltip label={strategy.dataSource}>
+                        <Text fw={700} size="lg">{strategy.name}</Text>
+                    </Tooltip>
                 </div>
                 <Badge color={isCritical ? "red" : "blue"} variant="light">
                     {strategy.strategyType}
                 </Badge>
             </Group>
 
-            <Text size="sm" fw={500} mb="xs" c="dimmed">Repository Health</Text>
-
+            {/* 备份目标健康度 */}
+            <Text size="sm" fw={500} mb="xs" c="dimmed">Backup Target Health</Text>
+            {/* by 备份目标展示 progress 和 backup time */}
             <Stack gap="sm">
                 {strategy.targets.map((target) => {
                     const ratio = target.usage / target.capacity;
@@ -42,11 +48,14 @@ export function BackupStrategyCard({ strategy }: BackupStrategyProps) {
                     return (
                         <div key={target.repositoryId}>
                             <Group justify="space-between" mb={4}>
+                                {/* 空间条上方文字和 icon: target name + target type */}
                                 <Group gap="xs">
-                                    {target.providerType === 'local' ?
-                                        <IconDeviceSdCard size={14} /> : <IconCloud size={14} />}
+                                    {target.targetType === 'local' ?
+                                        <IconDeviceSdCard size={14} /> :
+                                        <IconCloud size={14} />}
                                     <Text size="xs" fw={600}>{target.repositoryName}</Text>
                                 </Group>
+                                {/* 空间条上方, 当空间不足的时候展示三角形警告 icon */}
                                 <Group gap={4}>
                                     <Text size="xs" c={color}>{percent}%</Text>
                                     {ratio > 0.9 && (
@@ -56,18 +65,18 @@ export function BackupStrategyCard({ strategy }: BackupStrategyProps) {
                                     )}
                                 </Group>
                             </Group>
+                            {/* 空间条 */}
                             <Progress value={percent} color={color} size="sm" radius="xl" />
+                            {/* 空间条下方的 lastBackupTime */}
+                            <Text size="xs" c="dimmed" mb={4}>
+                                Last backup: {target.lastBackupTimestamp ?
+                                new Date(target.lastBackupTimestamp).toLocaleString() :
+                                'Never'}
+                            </Text>
                         </div>
                     );
                 })}
             </Stack>
-
-            <Group justify="space-between" mt="xl">
-                <Text size="xs" c="dimmed">Last Backup: 2 hours ago</Text>
-                <ActionIcon variant="subtle" size="sm" color="gray">
-                    {/* Action icon for details */}
-                </ActionIcon>
-            </Group>
         </Card>
     );
 }

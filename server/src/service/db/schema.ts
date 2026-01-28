@@ -5,7 +5,7 @@ import type {ResticCert} from "../restic/types.js";
 export const repository = sqliteTable("repository_table", {
     id: integer("repository_id").primaryKey({ autoIncrement: true }),
     name: text("name").notNull(),
-    providerType: text("provider_type", {enum: ["local", "backblaze b2", "aliyun oss"]}).notNull(),
+    repositoryType: text("repository_type", {enum: ["local", "backblaze b2", "aliyun oss"]}).notNull(),
     usage: integer("size").default(0),
     capacity: integer("capacity").notNull().default(0),
     certification: text("certification", { mode: "json" })
@@ -18,6 +18,7 @@ export const strategy = sqliteTable("strategy_table", {
     id: integer("strategy_id").primaryKey({ autoIncrement: true }),
     name: text("name").notNull(),
     dataSource: text("data_source").notNull(),
+    dataSourceSize: integer("data_source_size").notNull().default(0),
     strategyType: text("strategy_type", {enum: ["3-2-1", "localCopy"]}).notNull().default("3-2-1"),
 });
 
@@ -29,6 +30,7 @@ export const backupTargets = sqliteTable("backup_target_table", {
     retentionPolicy: text("retention_policy", { mode: "json"}),
     schedulePolicy: text("schedule_policy"),
     index: integer("index").notNull().default(1),
+    target_type: text("target_type"),
 });
 
 // 4. Snapshots Metadata Table
