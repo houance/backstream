@@ -9,4 +9,8 @@ export interface StorageLocation {
     usage: number;
     capacity: number;
     status: 'Active' | 'Warning';
+    certification?: {
+        password: string;
+        certificate?: Record<string, string>[];
+    }
 }

@@ -5,6 +5,7 @@ import type {ResticCert} from "../restic/types.js";
 export const repository = sqliteTable("repository_table", {
     id: integer("repository_id").primaryKey({ autoIncrement: true }),
     name: text("name").notNull(),
+    path: text("path").notNull(),
     repositoryType: text("repository_type").notNull().default("Local"),
     usage: integer("size").default(0),
     capacity: integer("capacity").notNull().default(0),

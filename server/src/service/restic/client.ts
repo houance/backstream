@@ -18,22 +18,22 @@ export class RepositoryClient {
     private readonly _env: Record<string, string>;
     public readonly repoType: RepoType;
 
-    private constructor(resticEnv: ResticCert, repoType: RepoType) {
+    private constructor(path: string, resticCert: ResticCert, repoType: RepoType) {
         this.repoType = repoType;
         // convert config data to env
         this._env = {
-            RESTIC_REPOSITORY: resticEnv.RESTIC_REPOSITORY,
-            RESTIC_PASSWORD: resticEnv.RESTIC_PASSWORD,
+            RESTIC_REPOSITORY: path,
+            RESTIC_PASSWORD: resticCert.RESTIC_PASSWORD,
         }
-        if (resticEnv.certificate) {
-            resticEnv.certificate.forEach((cert) => {
+        if (resticCert.certificate) {
+            resticCert.certificate.forEach((cert) => {
                 Object.assign(this._env, cert)
             })
         }
     }
 
-    public static async create(resticEnv: ResticCert, repoType: RepoType, createRepo?: boolean): Promise<RepositoryClient> {
-        const client = new RepositoryClient(resticEnv, repoType);
+    public static async create(path: string, resticEnv: ResticCert, repoType: RepoType, createRepo?: boolean): Promise<RepositoryClient> {
+        const client = new RepositoryClient(path, resticEnv, repoType);
         // Try to create if requested
         if (createRepo) await client.createRepo();
         return client;
