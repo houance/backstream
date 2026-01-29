@@ -45,7 +45,7 @@ export function BackupStrategyCard({ strategy }: BackupStrategyProps) {
                     const { percentage } = getRepositoryStats(target.usage, target.capacity);
 
                     return (
-                        <Box >
+                        <Box key={target.repositoryId}>
                             <Group justify="space-between" mb={4}>
                                 {/* 空间条上方文字和 icon: target name + target type */}
                                 <Group gap="xs">

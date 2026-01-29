@@ -75,6 +75,7 @@ const OverviewPage: React.FC = () => {
                     <Grid.Col span={{ md: 4 }}>
                         <RecentActivityCard activitiesList={[
                             {
+                                id: 1,
                                 title: "Backup Up",
                                 description: 'DB Backup Up',
                                 completeAt: 1769573950000,

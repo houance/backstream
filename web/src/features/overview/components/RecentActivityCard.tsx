@@ -1,6 +1,7 @@
 import {Badge, Card, List, Text, Title} from "@mantine/core";
 
 interface Activity {
+    id: number;
     title: string;
     description: string;
     completeAt: number;
@@ -38,7 +39,7 @@ export function RecentActivityCard( { activitiesList }: RecentActivityProps) {
             <Title order={3} mb="md">Recent Activity</Title>
             <List spacing="xs" size="sm" center>
                 {activitiesList.map((activity) => (
-                    <List.Item>
+                    <List.Item key={activity.id}>
                         <b>{activity.title}</b> {activity.description}
                         <Text size="xs" c="dimmed">{formatRelativeTime(activity.completeAt)}</Text>
                         {activity.level === "WARN" && (
