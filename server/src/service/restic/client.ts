@@ -25,10 +25,21 @@ export class RepositoryClient {
             RESTIC_REPOSITORY: path,
             RESTIC_PASSWORD: resticCert.RESTIC_PASSWORD,
         }
-        if (resticCert.certificate) {
-            resticCert.certificate.forEach((cert) => {
-                Object.assign(this._env, cert)
-            })
+        switch (repoType) {
+            case "ALIYUN_OSS":
+                this._env = {...this._env, ...resticCert.oss};
+                break;
+            case "AWS_S3":
+            case "S3":
+                this._env = {...this._env, ...resticCert.s3};
+                break;
+            case "BACKBLAZE_B2":
+                this._env = {...this._env, ...resticCert.b2};
+                break;
+            case "SFTP":
+                this._env = {...this._env, ...resticCert.sftp};
+                break;
+            default: break
         }
     }
 
