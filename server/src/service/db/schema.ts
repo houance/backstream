@@ -5,12 +5,13 @@ import type {ResticCert} from "../restic/types.js";
 export const repository = sqliteTable("repository_table", {
     id: integer("repository_id").primaryKey({ autoIncrement: true }),
     name: text("name").notNull(),
-    repositoryType: text("repository_type", {enum: ["local", "backblaze b2", "aliyun oss"]}).notNull(),
+    repositoryType: text("repository_type").notNull().default("Local"),
     usage: integer("size").default(0),
     capacity: integer("capacity").notNull().default(0),
     certification: text("certification", { mode: "json" })
         .$type<ResticCert>()
-        .notNull()
+        .notNull(),
+    repositoryStatus: text("repository_status").notNull().default("Active"),
 });
 
 // 2. Strategy Table
