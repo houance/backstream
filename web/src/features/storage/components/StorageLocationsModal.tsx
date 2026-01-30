@@ -2,7 +2,8 @@ import { forwardRef, useImperativeHandle } from 'react';
 import { useDisclosure } from '@mantine/hooks';
 import { Modal, Button, TextInput, Select, Group, Stack } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import {STORAGE_TYPES, type StorageLocation} from "../type/types.ts";
+import {type StorageLocation} from "../type/types.ts";
+import { RepoType } from '@backstream/shared'
 
 export interface ModalRef {
     open: () => void;
@@ -26,7 +27,7 @@ const StorageLocationModal = forwardRef<ModalRef, ModalProps>(
                 id: -1,
                 name: '',
                 path: '',
-                type: "Local",
+                type: "LOCAL",
                 status: 'Active',
                 usage: -1,
                 capacity: -1
@@ -75,7 +76,7 @@ const StorageLocationModal = forwardRef<ModalRef, ModalProps>(
                         />
                         <Select
                             label="Type"
-                            data={[...STORAGE_TYPES]}
+                            data={Object.values(RepoType)}
                             {...form.getInputProps('type')}
                             disabled={isEditing}
                             withAsterisk

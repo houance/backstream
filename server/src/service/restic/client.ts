@@ -5,12 +5,12 @@ import {
     type Node,
     type Progress,
     type RepoConfig,
-    RepoType,
     type ResticCert,
     ResticResult,
     type Snapshot,
     type Task,
 } from "./types";
+import { RepoType } from "@backstream/shared"
 import type {Result} from "execa";
 import {join} from "node:path";
 

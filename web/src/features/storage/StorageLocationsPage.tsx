@@ -31,7 +31,7 @@ const StorageLocationsPage: React.FC = () => {
             id: 3,
             name: "Cloud Storage (Backblaze B2)",
             path: "s3://backup-1-prod",
-            type: "Backblaze B2",
+            type: "BACKBLAZE_B2",
             usage: 1200000000000,
             capacity: 5000000000000,
             status: "Warning"
