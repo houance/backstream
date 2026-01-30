@@ -22,5 +22,10 @@
       "@backstream/server": ["../server/src/index.ts"]
     }
   },
-  "include": ["src"],
+  "include": [
+    "src",
+    "../server/src",
+    "../shared/src"
+  ],
+  "references": []
 }
