@@ -11,8 +11,8 @@
   "main": "index.js",
   "scripts": {
     "dev": "concurrently -n \"SERVER,WEB\" -c \"cyan,magenta\" \"npm run dev -w @backstream/server\" \"npm run dev -w @backstream/web\"",
-    "build": "npm run build -w @backstream/server -w @backstream/web",
-    "start": "npm run start -w @backstream/server"
+    "build": "npm run build -w @backstream/web -w @backstream/server",
+    "start": "NODE_ENV=production npm run start -w @backstream/server"
   },
   "keywords": [],
   "author": "",
