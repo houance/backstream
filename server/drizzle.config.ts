@@ -3,7 +3,7 @@ import { defineConfig } from "drizzle-kit";
 
 export default defineConfig({
     // Path relative to THIS file
-    schema: "./src/service/db/schema.ts",
+    schema: "../shared/src/schema.ts",
     out: "./drizzle", // Migrations will go into server/drizzle/
     dialect: "sqlite",
     dbCredentials: {

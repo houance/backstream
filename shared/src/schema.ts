@@ -1,5 +1,5 @@
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
-import type {ResticCert} from "../restic/types";
+import type {ResticCert} from "./index";
 
 // 1. Repository Table
 export const repository = sqliteTable("repository_table", {
