@@ -1,26 +1,27 @@
 {
-  "name": "server",
+  "name": "@backstream/server",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "dev": "vite",
+    "build": "vite build",
     "start": "node dist/index.js",
     "db": "npx drizzle-kit generate --name create_table"
   },
   "dependencies": {
+    "@backstream/shared": "^1.0.0",
     "@hono/node-server": "^1.19.8",
+    "@hono/vite-dev-server": "^0.24.1",
     "@hono/zod-validator": "^0.7.6",
     "better-sqlite3": "^12.6.0",
     "drizzle-orm": "^0.45.1",
-    "execa": "^9.6.1",
-    "hono": "^4.11.4",
-    "zod": "^4.3.5"
+    "execa": "^9.6.1"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.11.17",
     "drizzle-kit": "^0.31.8",
     "tsx": "^4.7.1",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vite-tsconfig-paths": "^6.0.5"
   }
 }

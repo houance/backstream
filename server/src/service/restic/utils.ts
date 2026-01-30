@@ -1,4 +1,4 @@
-import {ExitCode, type Node} from "./types.js";
+import {ExitCode, type Node} from "./types";
 import {execa, type Options, type Result, type ResultPromise} from "execa";
 import {tmpdir} from "node:os";
 import {mkdtempSync} from "node:fs";

@@ -2,20 +2,29 @@
   "name": "backstream",
   "private": true,
   "workspaces": [
-    "./*"
+    "server",
+    "web",
+    "shared"
   ],
   "version": "1.0.0",
   "description": "backup solution come with ready to use 3-2-1 rule",
   "main": "index.js",
   "scripts": {
-    "dev": "concurrently -n \"SERVER,WEB\" -c \"cyan,magenta\" \"npm run dev -w ./server\" \"npm run dev -w ./web\"",
-    "build": "npm run build --workspaces",
-    "start": "npm run start -w ./server"
+    "dev": "concurrently -n \"SERVER,WEB\" -c \"cyan,magenta\" \"npm run dev -w @backstream/server\" \"npm run dev -w @backstream/web\"",
+    "build": "npm run build -w @backstream/server -w @backstream/web",
+    "start": "npm run start -w @backstream/server"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "concurrently": "^9.2.1"
-  }
+  },
+  "dependencies": {
+    "hono": "^4.11.7",
+    "zod": "^4.3.6"
+  },
+  "bundleDependencies": [
+    "hono"
+  ]
 }

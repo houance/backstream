@@ -1,6 +1,6 @@
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import Database from 'better-sqlite3';
-import * as schema from './schema.js';
+import * as schema from './schema';
 
 // Creates the sqlite file if it doesn't exist
 const sqlite = new Database('./db/backup_app.db');

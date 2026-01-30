@@ -1,5 +1,5 @@
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
-import { db } from './client.js';
+import { db } from './client';
 
 // This logic executes the SQL files in /drizzle folder
 // It ensures tables exist before the app starts handling requests
@@ -10,5 +10,5 @@ try {
     console.error("Migration failed:", error);
 }
 
-export * from './client.js';
-export * from './schema.js';
+export * from './client';
+export * from './schema';

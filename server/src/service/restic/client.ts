@@ -1,4 +1,4 @@
-import {createTempDir, execute, executeStream, getParentPathFromNode, mapResticCode} from "./utils.js";
+import {createTempDir, execute, executeStream, getParentPathFromNode, mapResticCode} from "./utils";
 import {
     type CheckSummary,
     ExitCode,
@@ -10,7 +10,7 @@ import {
     ResticResult,
     type Snapshot,
     type Task,
-} from "./types.js";
+} from "./types";
 import type {Result} from "execa";
 import {join} from "node:path";
 

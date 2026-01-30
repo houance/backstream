@@ -1,16 +1,15 @@
 {
+  "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "target": "ESNext",
-    "module": "NodeNext",
-    "strict": true,
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
     "verbatimModuleSyntax": true,
-    "skipLibCheck": true,
-    "types": [
-      "node"
-    ],
+    "types": ["node"],
     "jsx": "react-jsx",
     "jsxImportSource": "hono/jsx",
     "outDir": "./dist"
   },
-  "exclude": ["node_modules", "**/*.test.ts"]
+  "include": ["src"],
+  "exclude": ["node_modules", "src/test", "src/**/*.test.ts"]
 }
