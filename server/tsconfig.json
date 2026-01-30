@@ -1,14 +1,16 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "composite": true,
+    "composite": false,
     "declaration": true,
     "declarationMap": true,
     "verbatimModuleSyntax": true,
     "types": ["node"],
     "jsx": "react-jsx",
     "jsxImportSource": "hono/jsx",
-    "outDir": "./dist"
+    "outDir": "./dist",
+    /* rootDir is removed to allow ../shared/src imports */
+    "rootDirs": [".", "../shared"]
   },
   "include": [
     "src",
