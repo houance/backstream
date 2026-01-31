@@ -234,7 +234,7 @@ const StorageLocationModal = forwardRef<ModalRef, ModalProps>(
 
                         <Group justify="flex-end" mt="xl">
                             <Button variant="subtle" color="gray" onClick={close}>Cancel</Button>
-                            <Button type="submit">Save Location</Button>
+                            <Button type="submit" onClick={() => handleFormSubmit(form.values)}>Save Location</Button>
                         </Group>
                     </Stack>
                 </form>
