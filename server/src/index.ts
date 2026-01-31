@@ -38,10 +38,12 @@ const routes = app.basePath('/api')
 export default app
 export type AppType = typeof routes
 
-serve({
-  fetch: app.fetch,
-  port: 3000,
-  hostname: '0.0.0.0',
-}, (info) => {
-  console.log(`Server is running on http://${info.address}:${info.port}`)
-})
+if (process.env.NODE_ENV === 'production') {
+  serve({
+    fetch: app.fetch,
+    port: 3000,
+    hostname: '0.0.0.0',
+  }, (info) => {
+    console.log(`Server is running on http://${info.address}:${info.port}`)
+  })
+}

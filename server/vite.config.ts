@@ -7,6 +7,9 @@ export default defineConfig({
         tsconfigPaths(),
         devServer({ entry: 'src/index.ts' })
     ],
+    server: {
+        port: 3000,
+    },
     build: {
         outDir: 'dist',
         rollupOptions: {
