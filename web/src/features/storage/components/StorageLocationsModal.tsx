@@ -2,7 +2,7 @@ import { forwardRef, useImperativeHandle } from 'react';
 import { useDisclosure } from '@mantine/hooks';
 import {Modal, Button, TextInput, Select, Group, Stack, PasswordInput, Divider} from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { zodResolver } from 'mantine-form-zod-resolver';
+import { zod4Resolver } from 'mantine-form-zod-resolver';
 import { RepoType, insertOrUpdateRepository, type RepositorySchema, type InsertOrUpdateRepository } from '@backstream/shared'
 
 export interface ModalRef {
@@ -53,7 +53,7 @@ const StorageLocationModal = forwardRef<ModalRef, ModalProps>(
                     }
                 }
             },
-            validate: zodResolver(insertOrUpdateRepository),
+            validate: zod4Resolver(insertOrUpdateRepository),
         });
 
         useImperativeHandle(ref, () => ({
