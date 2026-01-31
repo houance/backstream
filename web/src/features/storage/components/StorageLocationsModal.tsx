@@ -126,6 +126,7 @@ const StorageLocationModal = forwardRef<ModalRef, ModalProps>(
                             withAsterisk
                         />
                         <PasswordInput
+                            variant={isEditing ? "filled" : "default"}
                             label="Password"
                             placeholder="Enter restic password"
                             {...form.getInputProps('certification.RESTIC_PASSWORD')} // Use dot notation
@@ -155,9 +156,10 @@ const StorageLocationModal = forwardRef<ModalRef, ModalProps>(
                                     disabled={isEditing}
                                     withAsterisk
                                 />
-                                <TextInput
+                                <PasswordInput
+                                    variant={isEditing ? "filled" : "default"}
                                     label="B2 ACCOUNT KEY"
-                                    type="password"
+                                    placeholder="Enter B2 account key"
                                     {...form.getInputProps('certification.b2.B2_ACCOUNT_KEY')}
                                     readOnly={isEditing}
                                     withAsterisk
@@ -172,7 +174,8 @@ const StorageLocationModal = forwardRef<ModalRef, ModalProps>(
                                     disabled={isEditing}
                                     withAsterisk
                                 />
-                                <TextInput
+                                <PasswordInput
+                                    variant={isEditing ? "filled" : "default"}
                                     label="SECRET ACCESS KEY"
                                     type="password"
                                     {...form.getInputProps('certification.s3.AWS_SECRET_ACCESS_KEY')}
@@ -204,7 +207,8 @@ const StorageLocationModal = forwardRef<ModalRef, ModalProps>(
                                     disabled={isEditing}
                                     withAsterisk
                                 />
-                                <TextInput
+                                <PasswordInput
+                                    variant={isEditing ? "filled" : "default"}
                                     label="SECRET ACCESS KEY"
                                     type="password"
                                     {...form.getInputProps('certification.oss.OSS_SECRET_ACCESS_KEY')}
