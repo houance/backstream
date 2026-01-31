@@ -1,13 +1,13 @@
 import React from 'react';
 import {Table, Badge, ActionIcon, Group, Card, Box, Text, Progress, Tooltip} from '@mantine/core';
 import {IconAlertTriangle, IconSettings, IconTrash} from '@tabler/icons-react';
-import type {StorageLocation} from "../type/types.ts";
 import {getRepositoryStats} from "../../../util/FormatUtil.ts";
+import { type Repository } from '@backstream/shared'
 
 interface StorageTableProps {
-    data: StorageLocation[];
-    onEdit: (item: StorageLocation) => void;
-    onDelete: (item: StorageLocation) => void;
+    data: Repository[];
+    onEdit: (item: Repository) => void;
+    onDelete: (item: Repository) => void;
 }
 
 const StorageLocationTable: React.FC<StorageTableProps> = ({ data,
@@ -21,7 +21,7 @@ const StorageLocationTable: React.FC<StorageTableProps> = ({ data,
         <Table.Tr key={item.id}>
             <Table.Td><b>{item.name}</b></Table.Td>
             <Table.Td>{item.path}</Table.Td>
-            <Table.Td>{item.type}</Table.Td>
+            <Table.Td>{item.repositoryType}</Table.Td>
             <Table.Td>
                 <Box maw={180}>
                     <Group justify="space-between" mb={4}>
@@ -48,8 +48,8 @@ const StorageLocationTable: React.FC<StorageTableProps> = ({ data,
                 </Box>
             </Table.Td>
             <Table.Td>
-                <Badge color={item.status === 'Active' ? 'green' : 'yellow'} variant="light">
-                    {item.status}
+                <Badge color={item.repositoryStatus === 'Active' ? 'green' : 'yellow'} variant="light">
+                    {item.repositoryStatus}
                 </Badge>
             </Table.Td>
             <Table.Td>

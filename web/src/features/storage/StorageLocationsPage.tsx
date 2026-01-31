@@ -4,37 +4,46 @@ import { notifications } from '@mantine/notifications';
 import {IconCheck, IconPlus, IconX} from '@tabler/icons-react';
 import StorageLocationModal, {type ModalRef} from './components/StorageLocationsModal.tsx';
 import StorageLocationTable from "./components/StorageLocationTable.tsx";
-import type {StorageLocation} from "./type/types.ts";
+import type {RepositorySchema} from "@backstream/shared";
 
 const StorageLocationsPage: React.FC = () => {
     const [modalTitle, setModalTitle] = useState("Add New Storage Location"); // New state
-    const [data] = useState<StorageLocation[]>([
+    const [data] = useState<RepositorySchema[]>([
         {
             id: 1,
             name: "Primary NAS Storage",
             path: "/mnt/nas/backup01",
-            type: "SFTP",
+            repositoryType: "SFTP",
             usage: 3400000000000,
             capacity: 5000000000000,
-            status: "Active"
+            repositoryStatus: "Active",
+            certification: {
+                RESTIC_PASSWORD: "123456",
+            }
         },
         {
             id: 2,
             name: "Cloud Storage (AWS S3)",
             path: "s3://backup-vault-prod",
-            type: "S3",
+            repositoryType: "S3",
             usage: 4900000000000,
             capacity: 5000000000000,
-            status: "Active"
+            repositoryStatus: "Active",
+            certification: {
+                RESTIC_PASSWORD: "990608",
+            }
         },
         {
             id: 3,
             name: "Cloud Storage (Backblaze B2)",
             path: "s3://backup-1-prod",
-            type: "BACKBLAZE_B2",
+            repositoryType: "BACKBLAZE_B2",
             usage: 1200000000000,
             capacity: 5000000000000,
-            status: "Warning"
+            repositoryStatus: "Disconnected",
+            certification: {
+                RESTIC_PASSWORD: "159357",
+            }
         }
     ]);
 
@@ -64,15 +73,15 @@ const StorageLocationsPage: React.FC = () => {
         modalRef.current?.reset();
         modalRef.current?.open();
     }
-    const editStorageLocation = (item: StorageLocation) => {
+    const editStorageLocation = (item: RepositorySchema) => {
         setModalTitle("Edit Storage Location");
         modalRef.current?.setData(item); // Pre-fill modal with row data
         modalRef.current?.open();
     };
-    const deleteStorageLocation = (item: StorageLocation) => {
+    const deleteStorageLocation = (item: RepositorySchema) => {
         notice(true, `delete item ${item.name}`)
     };
-    const addOrUpdateStorageLocation = (item: StorageLocation) => {
+    const addOrUpdateStorageLocation = (item: RepositorySchema) => {
         if (item.id) {
             // EDIT: Update existing item
             notice(true, `update storage location ${item.name}`);

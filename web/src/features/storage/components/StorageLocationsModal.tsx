@@ -1,20 +1,20 @@
 import { forwardRef, useImperativeHandle } from 'react';
 import { useDisclosure } from '@mantine/hooks';
-import { Modal, Button, TextInput, Select, Group, Stack } from '@mantine/core';
+import {Modal, Button, TextInput, Select, Group, Stack, PasswordInput, Divider} from '@mantine/core';
 import { useForm } from '@mantine/form';
-import {type StorageLocation} from "../type/types.ts";
-import { RepoType } from '@backstream/shared'
+import { zodResolver } from 'mantine-form-zod-resolver';
+import { RepoType, insertOrUpdateRepository, type RepositorySchema, type InsertOrUpdateRepository } from '@backstream/shared'
 
 export interface ModalRef {
     open: () => void;
     close: () => void;
-    setData: (data: StorageLocation) => void; // Useful for Editing
+    setData: (data: RepositorySchema) => void; // Useful for Editing
     reset: () => void;
 }
 
 interface ModalProps {
     // Parent handles the actual logic (API calls, state updates)
-    onSubmit: (values: StorageLocation) => Promise<void> | void;
+    onSubmit: (values: InsertOrUpdateRepository) => Promise<void> | void;
     title: string;
 }
 
@@ -22,21 +22,38 @@ const StorageLocationModal = forwardRef<ModalRef, ModalProps>(
     ({ onSubmit, title }, ref) => {
         const [opened, { open, close }] = useDisclosure(false);
 
-        const form = useForm<StorageLocation>({
+        const form = useForm<InsertOrUpdateRepository>({
             initialValues: {
-                id: -1,
                 name: '',
                 path: '',
-                type: "LOCAL",
-                status: 'Active',
-                usage: -1,
-                capacity: -1
+                repositoryType: "LOCAL",
+                repositoryStatus: 'Active',
+                usage: 0,
+                capacity: 1,
+                certification: {
+                    RESTIC_PASSWORD: '',
+                    b2: {
+                        B2_ACCOUNT_ID: "",
+                        B2_ACCOUNT_KEY: ""
+                    },
+                    oss: {
+                        OSS_ACCESS_KEY_ID: "",
+                        OSS_SECRET_ACCESS_KEY: "",
+                        OSS_ENDPOINT: ""
+                    },
+                    sftp: {
+                        SSH_AUTH_SOCK: ""
+                    },
+                    s3: {
+                        AWS_ACCESS_KEY_ID: "",
+                        AWS_SECRET_ACCESS_KEY: "",
+                        AWS_DEFAULT_REGION: "",
+                        AWS_ENDPOINT: "",
+                        AWS_PROFILE: ""
+                    }
+                }
             },
-            validate: {
-                name: (v) => (v.length < 2 ? 'Too short' : null),
-                path: (v) => (v.length === 0 ? 'Required' : null),
-                type: (v) => (v === null ? 'Required' : null),
-            },
+            validate: zodResolver(insertOrUpdateRepository),
         });
 
         useImperativeHandle(ref, () => ({
@@ -46,7 +63,7 @@ const StorageLocationModal = forwardRef<ModalRef, ModalProps>(
             reset: () => form.reset(),
         }));
 
-        const handleFormSubmit = async (values: StorageLocation) => {
+        const handleFormSubmit = async (values: InsertOrUpdateRepository) => {
             // Parent handles the 'save' logic
             await onSubmit(values);
             // Cleanup
@@ -54,8 +71,42 @@ const StorageLocationModal = forwardRef<ModalRef, ModalProps>(
             form.reset();
         };
 
+        const handleTypeChange = (newType: string | null) => {
+            const type = newType as RepoType || 'LOCAL';
+
+            // 1. Update the top-level repositoryType
+            form.setFieldValue('repositoryType', type);
+
+            // 2. Initialize the nested object for the active provider
+            // This prevents the "Cannot set properties of undefined" error
+            form.setFieldValue('certification', {
+                // Preserve the password during the switch
+                RESTIC_PASSWORD: form.values.certification.RESTIC_PASSWORD,
+                b2: {
+                    B2_ACCOUNT_ID: "",
+                    B2_ACCOUNT_KEY: ""
+                },
+                oss: {
+                    OSS_ACCESS_KEY_ID: "",
+                    OSS_SECRET_ACCESS_KEY: "",
+                    OSS_ENDPOINT: ""
+                },
+                sftp: {
+                    SSH_AUTH_SOCK: ""
+                },
+                s3: {
+                    AWS_ACCESS_KEY_ID: "",
+                    AWS_SECRET_ACCESS_KEY: "",
+                    AWS_DEFAULT_REGION: "",
+                    AWS_ENDPOINT: "",
+                    AWS_PROFILE: ""
+                }
+            });
+        };
+
+
         // Determine if editing
-        const isEditing = form.values.id !== -1;
+        const isEditing = form.values.id !== undefined;
 
         return (
             <Modal opened={opened} onClose={close} title={title} centered size="lg">
@@ -63,7 +114,7 @@ const StorageLocationModal = forwardRef<ModalRef, ModalProps>(
                     <Stack>
                         <TextInput
                             label="Location Name"
-                            placeholder="Local"
+                            placeholder="Location Name"
                             {...form.getInputProps('name')}
                             withAsterisk
                         />
@@ -74,13 +125,108 @@ const StorageLocationModal = forwardRef<ModalRef, ModalProps>(
                             disabled={isEditing}
                             withAsterisk
                         />
+                        <PasswordInput
+                            label="Password"
+                            placeholder="Enter restic password"
+                            {...form.getInputProps('certification.RESTIC_PASSWORD')} // Use dot notation
+                            readOnly={isEditing}
+                            withAsterisk
+                            description="Required to encrypt/decrypt your backups"
+                            autoComplete="new-password"
+                        />
                         <Select
                             label="Type"
                             data={Object.values(RepoType)}
-                            {...form.getInputProps('type')}
+                            value={form.values.repositoryType}
+                            onChange={handleTypeChange}
                             disabled={isEditing}
                             withAsterisk
+                            required
                         />
+
+                        {form.values.repositoryType !== 'LOCAL' && <Divider label="Authentication Details" labelPosition="center" />}
+
+                        {/* Render fields based on the selected Type */}
+                        {form.values.repositoryType === "BACKBLAZE_B2" && (
+                            <>
+                                <TextInput
+                                    label="B2 ACCOUNT ID"
+                                    {...form.getInputProps('certification.b2.B2_ACCOUNT_ID')}
+                                    disabled={isEditing}
+                                    withAsterisk
+                                />
+                                <TextInput
+                                    label="B2 ACCOUNT KEY"
+                                    type="password"
+                                    {...form.getInputProps('certification.b2.B2_ACCOUNT_KEY')}
+                                    readOnly={isEditing}
+                                    withAsterisk
+                                />
+                            </>
+                        )}
+                        {(form.values.repositoryType === "AWS_S3" || form.values.repositoryType === "S3") && (
+                            <>
+                                <TextInput
+                                    label="ACCESS KEY ID"
+                                    {...form.getInputProps('certification.s3.AWS_ACCESS_KEY_ID')}
+                                    disabled={isEditing}
+                                    withAsterisk
+                                />
+                                <TextInput
+                                    label="SECRET ACCESS KEY"
+                                    type="password"
+                                    {...form.getInputProps('certification.s3.AWS_SECRET_ACCESS_KEY')}
+                                    readOnly={isEditing}
+                                    withAsterisk
+                                />
+                                <TextInput
+                                    label="DEFAULT REGION"
+                                    {...form.getInputProps('certification.s3.AWS_DEFAULT_REGION')}
+                                    disabled={isEditing}
+                                />
+                                <TextInput
+                                    label="ENDPOINT"
+                                    {...form.getInputProps('certification.s3.AWS_ENDPOINT')}
+                                    disabled={isEditing}
+                                />
+                                <TextInput
+                                    label="PROFILE"
+                                    {...form.getInputProps('certification.s3.AWS_PROFILE')}
+                                    disabled={isEditing}
+                                />
+                            </>
+                        )}
+                        {form.values.repositoryType === "ALIYUN_OSS" && (
+                            <>
+                                <TextInput
+                                    label="ACCESS KEY ID"
+                                    {...form.getInputProps('certification.oss.OSS_ACCESS_KEY_ID')}
+                                    disabled={isEditing}
+                                    withAsterisk
+                                />
+                                <TextInput
+                                    label="SECRET ACCESS KEY"
+                                    type="password"
+                                    {...form.getInputProps('certification.oss.OSS_SECRET_ACCESS_KEY')}
+                                    readOnly={isEditing}
+                                    withAsterisk
+                                />
+                                <TextInput
+                                    label="ENDPOINT"
+                                    {...form.getInputProps('certification.oss.OSS_ENDPOINT')}
+                                    disabled={isEditing}
+                                />
+                            </>
+                        )}
+                        {form.values.repositoryType === "SFTP" && (
+                            <>
+                                <TextInput
+                                    label="SSH_AUTH_SOCK"
+                                    {...form.getInputProps('certification.sftp.SSH_AUTH_SOCK')}
+                                    disabled={isEditing}
+                                />
+                            </>
+                        )}
 
                         <Group justify="flex-end" mt="xl">
                             <Button variant="subtle" color="gray" onClick={close}>Cancel</Button>

@@ -58,13 +58,13 @@ function SettingsPage() {
                     <Stack gap="lg">
                         <SettingRow label="Enable automatic backups" description="Run scheduled backups automatically">
                             {/* Mantine v7 handles type inference correctly */}
-                            <Switch {...form.getInputProps('automaticBackups', { type: 'checkbox' })} />
+                            <Switch {...form.getInputProps('automaticBackups', { repositoryType: 'checkbox' })} />
                         </SettingRow>
                         <SettingRow label="Email notifications" description="Receive email alerts for backup events">
-                            <Switch {...form.getInputProps('emailNotifications', { type: 'checkbox' })} />
+                            <Switch {...form.getInputProps('emailNotifications', { repositoryType: 'checkbox' })} />
                         </SettingRow>
                         <SettingRow label="Compression" description="Compress backup data to save storage">
-                            <Switch {...form.getInputProps('compression', { type: 'checkbox' })} />
+                            <Switch {...form.getInputProps('compression', { repositoryType: 'checkbox' })} />
                         </SettingRow>
                         <SettingRow label="Retention period" description="How long to keep backup snapshots">
                             <Select
@@ -98,7 +98,7 @@ function SettingsPage() {
                             />
                         </SettingRow>
                         <SettingRow label="Deduplication" description="Remove duplicate data blocks">
-                            <Switch {...form.getInputProps('deduplication', { type: 'checkbox' })} />
+                            <Switch {...form.getInputProps('deduplication', { repositoryType: 'checkbox' })} />
                         </SettingRow>
                     </Stack>
                 </Box>
@@ -110,7 +110,7 @@ function SettingsPage() {
                     <Title order={3} mb="md">Security</Title>
                     <Stack gap="lg">
                         <SettingRow label="Encryption" description="Encrypt backup data at rest">
-                            <Switch {...form.getInputProps('encryption', { type: 'checkbox' })} />
+                            <Switch {...form.getInputProps('encryption', { repositoryType: 'checkbox' })} />
                         </SettingRow>
                         <SettingRow label="Encryption algorithm" description="Algorithm used for encryption">
                             <Select
@@ -120,7 +120,7 @@ function SettingsPage() {
                             />
                         </SettingRow>
                         <SettingRow label="Two-factor authentication" description="">
-                            <Switch {...form.getInputProps('twoFactorAuth', { type: 'checkbox' })} disabled />
+                            <Switch {...form.getInputProps('twoFactorAuth', { repositoryType: 'checkbox' })} disabled />
                         </SettingRow>
                     </Stack>
                 </Box>

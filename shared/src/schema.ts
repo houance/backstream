@@ -1,18 +1,15 @@
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
-import type {ResticCert} from "./index";
 
 // 1. Repository Table
 export const repository = sqliteTable("repository_table", {
     id: integer("repository_id").primaryKey({ autoIncrement: true }),
     name: text("name").notNull(),
     path: text("path").notNull(),
-    repositoryType: text("repository_type").notNull().default("Local"),
-    usage: integer("size").default(0),
-    capacity: integer("capacity").notNull().default(0),
-    certification: text("certification", { mode: "json" })
-        .$type<ResticCert>()
-        .notNull(),
-    repositoryStatus: text("repository_status").notNull().default("Active"),
+    repositoryType: text("repository_type").notNull(),
+    usage: integer("size").notNull().default(0),
+    capacity: integer("capacity").notNull().default(1),
+    certification: text("certification", { mode: "json" }).notNull(),
+    repositoryStatus: text("repository_status").notNull(),
 });
 
 // 2. Strategy Table
@@ -65,17 +62,3 @@ export const execution = sqliteTable("execution_table", {
     strategyId: integer("strategy_id").references(() => strategy.id),
     backupTargetId: integer("backup_target_id").references(() => backupTargets.id),
 })
-
-// For selecting (reading)
-export type Repository = typeof repository.$inferSelect;
-export type Strategy = typeof strategy.$inferSelect;
-export type BackupTarget = typeof backupTargets.$inferSelect;
-export type SnapshotMetadata = typeof snapshotsMetadata.$inferSelect;
-export type Execution = typeof execution.$inferSelect;
-
-// For inserting (creating) - These allow 'id' to be optional/omitted
-export type NewRepository = typeof repository.$inferInsert;
-export type NewStrategy = typeof strategy.$inferInsert;
-export type NewBackupTarget = typeof backupTargets.$inferInsert;
-export type NewSnapshotMetadata = typeof snapshotsMetadata.$inferInsert;
-export type NewExecution = typeof execution.$inferInsert;
