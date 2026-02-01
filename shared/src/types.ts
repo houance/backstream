@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { createInsertSchema } from 'drizzle-zod';
-import { repository } from './schema';
+import {createInsertSchema, createUpdateSchema} from 'drizzle-zod';
+import {repository, setting} from './schema';
 
 export const RepoType = {
     LOCAL: "LOCAL",
@@ -85,11 +85,10 @@ export const EMPTY_REPOSITORY_SCHEMA: InsertRepositorySchema = {
     }
 }
 
-export const systemSettings = z.object({
+export const systemSettings = createUpdateSchema(setting ,{
     ioPriority: z.enum(['low', 'normal']),
     minDiskSpaceGB: z.number().min(1, 'Minimum 1GB required').max(500),
-    notificationEmail: z.email('Invalid email format').or(z.literal('')),
-    alertOnFailureOnly: z.boolean(),
+    email: z.email('Invalid email format').or(z.literal('')),
     logRetentionDays: z.number().min(1, 'Keep at least 1 day').max(365, 'Max 1 year'),
 });
 

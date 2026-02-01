@@ -1,6 +1,6 @@
 import {
     Text, Card, Grid, Stack, TextInput,
-    NumberInput, Switch, Button, Group, Box, SegmentedControl,
+    NumberInput, Button, Group, Box, SegmentedControl,
     Title
 } from '@mantine/core';
 import { zod4Resolver } from "mantine-form-zod-resolver";
@@ -48,11 +48,7 @@ export function SettingsDualPane({ initialData, onSubmit }: SystemSettingsProps)
                                     <TextInput
                                         label="Admin Email"
                                         placeholder="admin@example.com"
-                                        {...form.getInputProps('notificationEmail')}
-                                    />
-                                    <Switch
-                                        label="Only notify on critical failure"
-                                        {...form.getInputProps('alertOnFailureOnly', {type: 'checkbox'})}
+                                        {...form.getInputProps('email')}
                                     />
                                 </Stack>
                             </Card>
