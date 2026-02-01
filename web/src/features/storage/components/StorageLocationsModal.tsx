@@ -15,14 +15,16 @@ import {notice} from "../../../util/notification.tsx";
 interface ModalProps {
     opened: boolean;
     onClose: () => void;
+    onSubmit: (values: InsertRepositorySchema | UpdateRepositorySchema) => Promise<void> | void;
+    onTestConnection: (values: InsertRepositorySchema | UpdateRepositorySchema) => Promise<void>;
     // data is null for "Create", and populated for "Edit"
     data: UpdateRepositorySchema | null;
-    onSubmit: (values: InsertRepositorySchema | UpdateRepositorySchema) => Promise<void> | void;
     title: string;
 }
 
-function StorageLocationModal({ opened, onClose, data, onSubmit, title }: ModalProps) {
-    const [loading, setLoading] = useState(false);
+function StorageLocationModal({ opened, onClose, data, onSubmit, onTestConnection, title }: ModalProps) {
+    const [isSubmitting, setSubmitting] = useState(false);
+    const [isConnecting, setConnecting] = useState(false);
     // remove provider specify certification
     const { b2, oss, sftp, s3, ...restCertification } = EMPTY_REPOSITORY_SCHEMA.certification;
     const form = useForm<InsertRepositorySchema | UpdateRepositorySchema>({
@@ -35,7 +37,7 @@ function StorageLocationModal({ opened, onClose, data, onSubmit, title }: ModalP
     console.log('Current Form Values:', form.values);
 
     const handleFormSubmit = async (values: InsertRepositorySchema | UpdateRepositorySchema) => {
-        setLoading(true)
+        setSubmitting(true)
         try {
             // Parent handles the 'save' logic
             await onSubmit(values);
@@ -46,9 +48,21 @@ function StorageLocationModal({ opened, onClose, data, onSubmit, title }: ModalP
         } catch (e) {
             notice(false, data ? `update` : `create` + " storage location failed");
         } finally {
-            setLoading(false)
+            setSubmitting(false)
         }
     };
+
+    const handleTestConnection = async (values: InsertRepositorySchema | UpdateRepositorySchema) => {
+        setConnecting(true)
+        try {
+            await onTestConnection(values);
+            notice(true, `connection success`);
+        } catch (e) {
+            notice(false, `connection failed: ${e}`);
+        } finally {
+            setConnecting(false)
+        }
+    }
 
     const handleTypeChange = (newType: string | null) => {
         if (data) return;
@@ -205,7 +219,8 @@ function StorageLocationModal({ opened, onClose, data, onSubmit, title }: ModalP
 
                     <Group justify="flex-end" mt="xl">
                         <Button variant="subtle" color="gray" onClick={onClose}>Cancel</Button>
-                        <Button type="submit" loading={loading}>{data ? 'Update' : 'Save'} Location</Button>
+                        <Button variant="outline" loading={isConnecting} onClick={() => handleTestConnection(form.values)}>Test</Button>
+                        <Button type="submit" loading={isSubmitting}>{data ? 'Update' : 'Save'} Location</Button>
                     </Group>
                 </Stack>
             </form>

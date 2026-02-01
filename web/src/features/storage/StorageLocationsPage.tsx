@@ -69,6 +69,9 @@ const StorageLocationsPage: React.FC = () => {
             notice(true, `create storage location ${item.name}`);
         }
     };
+    const handleTestConnection = async (item: InsertRepositorySchema | UpdateRepositorySchema) => {
+        notice(true, `connection ${item.name} success`)
+    }
 
     return (
         <Container fluid p={0}>
@@ -87,6 +90,7 @@ const StorageLocationsPage: React.FC = () => {
             <StorageLocationModal
                 key={editingItem?.id ?? 'create-storage-location'}
                 onSubmit={(item) => submitCreateOrUpdate(item)}
+                onTestConnection={(item) => handleTestConnection(item)}
                 title={editingItem ? "Edit storage location" : "Create storage location"}
                 opened={opened}
                 onClose={close}
