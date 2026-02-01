@@ -4,14 +4,14 @@ import {IconPlus} from '@tabler/icons-react';
 import { notice } from "../../util/notification.tsx";
 import StorageLocationModal from './components/StorageLocationsModal.tsx';
 import StorageLocationTable from "./components/StorageLocationTable.tsx";
-import type {InsertRepositorySchema} from "@backstream/shared";
+import type {InsertRepositorySchema, UpdateRepositorySchema} from "@backstream/shared";
 import {useDisclosure} from "@mantine/hooks";
 
 const StorageLocationsPage: React.FC = () => {
     // 1. Manage state for opening/closing and the data to edit
     const [opened, { open, close }] = useDisclosure(false);
-    const [editingItem, setEditingItem] = useState<InsertRepositorySchema | null>(null);
-    const data: InsertRepositorySchema[] = [
+    const [editingItem, setEditingItem] = useState<UpdateRepositorySchema | null>(null);
+    const data: UpdateRepositorySchema[] = [
         {
             id: 1,
             name: "Primary NAS Storage",
@@ -54,14 +54,14 @@ const StorageLocationsPage: React.FC = () => {
         setEditingItem(null);
         open();
     }
-    const handleEdit = (item: InsertRepositorySchema) => {
+    const handleEdit = (item: UpdateRepositorySchema) => {
         setEditingItem(item);
         open();
     };
-    const deleteStorageLocation = async (item: InsertRepositorySchema) => {
+    const deleteStorageLocation = async (item: UpdateRepositorySchema) => {
         notice(true, `delete item ${item.name}`)
     };
-    const submitCreateOrUpdate = async (item: InsertRepositorySchema) => {
+    const submitCreateOrUpdate = async (item: InsertRepositorySchema | UpdateRepositorySchema) => {
         if (item.id) {
             // EDIT: Update existing item
             notice(true, `update storage location ${item.name}`);

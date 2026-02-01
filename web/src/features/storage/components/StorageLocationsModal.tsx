@@ -2,15 +2,22 @@ import {useState} from 'react';
 import {Modal, Button, TextInput, Select, Group, Stack, PasswordInput, Divider} from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { zod4Resolver } from 'mantine-form-zod-resolver';
-import { RepoType, insertRepositorySchema, type InsertRepositorySchema, EMPTY_REPOSITORY_SCHEMA } from '@backstream/shared'
+import {
+    RepoType,
+    insertRepositorySchema,
+    type InsertRepositorySchema,
+    updateRepositorySchema,
+    type UpdateRepositorySchema,
+    EMPTY_REPOSITORY_SCHEMA,
+} from '@backstream/shared'
 import {notice} from "../../../util/notification.tsx";
 
 interface ModalProps {
     opened: boolean;
     onClose: () => void;
     // data is null for "Create", and populated for "Edit"
-    data: InsertRepositorySchema | null;
-    onSubmit: (values: InsertRepositorySchema) => Promise<void> | void;
+    data: UpdateRepositorySchema | null;
+    onSubmit: (values: InsertRepositorySchema | UpdateRepositorySchema) => Promise<void> | void;
     title: string;
 }
 
@@ -18,16 +25,16 @@ function StorageLocationModal({ opened, onClose, data, onSubmit, title }: ModalP
     const [loading, setLoading] = useState(false);
     // remove provider specify certification
     const { b2, oss, sftp, s3, ...restCertification } = EMPTY_REPOSITORY_SCHEMA.certification;
-    const form = useForm<InsertRepositorySchema>({
+    const form = useForm<InsertRepositorySchema | UpdateRepositorySchema>({
         initialValues: data ?? {...EMPTY_REPOSITORY_SCHEMA, certification: restCertification},
-        validate: zod4Resolver(insertRepositorySchema),
+        validate: zod4Resolver(data ? updateRepositorySchema : insertRepositorySchema),
     });
 
     // --- ADD IT HERE ---
     console.log('Current Form Errors:', form.errors);
     console.log('Current Form Values:', form.values);
 
-    const handleFormSubmit = async (values: InsertRepositorySchema) => {
+    const handleFormSubmit = async (values: InsertRepositorySchema | UpdateRepositorySchema) => {
         setLoading(true)
         try {
             // Parent handles the 'save' logic
@@ -44,38 +51,30 @@ function StorageLocationModal({ opened, onClose, data, onSubmit, title }: ModalP
     };
 
     const handleTypeChange = (newType: string | null) => {
+        if (data) return;
         // 1. Update the top-level repositoryType
         const repoType: RepoType = newType as RepoType;
         form.setFieldValue('repositoryType', repoType);
         // 2. keep RESTIC_PASSWORD and subfield correspond to repoType
-        const password: string = form.values.certification.RESTIC_PASSWORD
+        let newCert: any = { RESTIC_PASSWORD: form.values.certification.RESTIC_PASSWORD }
+        // 3. Add the specific sub-object from your constants
         switch (repoType) {
             case "AWS_S3":
             case "S3":
-                form.setFieldValue('certification', {
-                    RESTIC_PASSWORD: password,
-                    s3: s3
-                });break;
+                newCert.s3 = EMPTY_REPOSITORY_SCHEMA.certification.s3;
+                break;
             case "ALIYUN_OSS":
-                form.setFieldValue('certification', {
-                    RESTIC_PASSWORD: password,
-                    oss: oss
-                });break;
+                newCert.oss = EMPTY_REPOSITORY_SCHEMA.certification.oss;
+                break;
             case "BACKBLAZE_B2":
-                form.setFieldValue('certification', {
-                    RESTIC_PASSWORD: password,
-                    b2: b2
-                });break;
+                newCert.b2 = EMPTY_REPOSITORY_SCHEMA.certification.b2;
+                break;
             case "SFTP":
-                form.setFieldValue('certification', {
-                    RESTIC_PASSWORD: password,
-                    sftp: sftp
-                });break;
-            case "LOCAL":
-                form.setFieldValue('certification', {
-                    RESTIC_PASSWORD: password,
-                })
+                newCert.sftp = EMPTY_REPOSITORY_SCHEMA.certification.sftp;
+                break;
+            // LOCAL needs no extra fields
         }
+        form.setFieldValue('certification', newCert);
     };
 
     return (

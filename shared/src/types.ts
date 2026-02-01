@@ -46,8 +46,14 @@ export const insertRepositorySchema = createInsertSchema(repository, {
         sftp: sftpSchema.partial().optional(),
     }),
 });
-// Query and Update Repository
+// Insert Repository
 export type InsertRepositorySchema = z.infer<typeof insertRepositorySchema>
+// query or update repository
+export const updateRepositorySchema = z.object({
+    ...insertRepositorySchema.shape,
+    id: z.number().positive()
+})
+export type UpdateRepositorySchema = z.infer<typeof updateRepositorySchema>
 export const EMPTY_REPOSITORY_SCHEMA: InsertRepositorySchema = {
     name: '',
     path: '',

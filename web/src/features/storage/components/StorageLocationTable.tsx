@@ -2,12 +2,12 @@ import React from 'react';
 import {Table, Badge, ActionIcon, Group, Card, Box, Text, Progress, Tooltip} from '@mantine/core';
 import {IconAlertTriangle, IconSettings, IconTrash} from '@tabler/icons-react';
 import {getRepositoryStats} from "../../../util/format.ts";
-import { type InsertRepositorySchema } from '@backstream/shared'
+import { type UpdateRepositorySchema } from '@backstream/shared'
 
 interface StorageTableProps {
-    data: InsertRepositorySchema[];
-    onEdit: (item: InsertRepositorySchema) => void;
-    onDelete: (item: InsertRepositorySchema) => void;
+    data: UpdateRepositorySchema[];
+    onEdit: (item: UpdateRepositorySchema) => void;
+    onDelete: (item: UpdateRepositorySchema) => void;
 }
 
 const StorageLocationTable: React.FC<StorageTableProps> = ({ data,
