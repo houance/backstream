@@ -1,6 +1,6 @@
 import {Card, Text, Badge, Group, Stack, Progress, Tooltip, Box} from '@mantine/core';
 import {IconAlertTriangle, IconCloud, IconDeviceSdCard} from '@tabler/icons-react';
-import {getRepositoryStats} from "../../../util/FormatUtil.ts";
+import {getRepositoryStats} from "../../../util/format.ts";
 
 // This represents the joined data of a Strategy + its Backup Targets & Repositories
 interface BackupStrategyProps {

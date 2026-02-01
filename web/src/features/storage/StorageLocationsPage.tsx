@@ -1,14 +1,17 @@
-import React, {useRef, useState} from 'react';
+import React, {useState} from 'react';
 import {Button, Container, Group} from '@mantine/core';
-import { notifications } from '@mantine/notifications';
-import {IconCheck, IconPlus, IconX} from '@tabler/icons-react';
-import StorageLocationModal, {type ModalRef} from './components/StorageLocationsModal.tsx';
+import {IconPlus} from '@tabler/icons-react';
+import { notice } from "../../util/notification.tsx";
+import StorageLocationModal from './components/StorageLocationsModal.tsx';
 import StorageLocationTable from "./components/StorageLocationTable.tsx";
-import type {RepositorySchema} from "@backstream/shared";
+import type {InsertRepositorySchema} from "@backstream/shared";
+import {useDisclosure} from "@mantine/hooks";
 
 const StorageLocationsPage: React.FC = () => {
-    const [modalTitle, setModalTitle] = useState("Add New Storage Location"); // New state
-    const [data] = useState<RepositorySchema[]>([
+    // 1. Manage state for opening/closing and the data to edit
+    const [opened, { open, close }] = useDisclosure(false);
+    const [editingItem, setEditingItem] = useState<InsertRepositorySchema | null>(null);
+    const data: InsertRepositorySchema[] = [
         {
             id: 1,
             name: "Primary NAS Storage",
@@ -45,43 +48,20 @@ const StorageLocationsPage: React.FC = () => {
                 RESTIC_PASSWORD: "159357",
             }
         }
-    ]);
+    ];
 
-    const notice = (success: boolean, msg: string) => {
-        if (success) {
-            notifications.show({
-                title: 'Success!',
-                message: msg,
-                color: 'teal',
-                icon: <IconCheck size={18}/>,
-                autoClose: 3000,
-            });
-        } else {
-            notifications.show({
-                title: 'Submission Failed',
-                message: msg,
-                color: 'red',
-                icon: <IconX size={18}/>,
-                autoClose: 5000,
-            });
-        }
+    const handleCreate = () => {
+        setEditingItem(null);
+        open();
     }
-
-    const modalRef = useRef<ModalRef>(null);
-    const openModalAsBlank = () => {
-        setModalTitle("Add New Storage Location");
-        modalRef.current?.reset();
-        modalRef.current?.open();
-    }
-    const editStorageLocation = (item: RepositorySchema) => {
-        setModalTitle("Edit Storage Location");
-        modalRef.current?.setData(item); // Pre-fill modal with row data
-        modalRef.current?.open();
+    const handleEdit = (item: InsertRepositorySchema) => {
+        setEditingItem(item);
+        open();
     };
-    const deleteStorageLocation = (item: RepositorySchema) => {
+    const deleteStorageLocation = async (item: InsertRepositorySchema) => {
         notice(true, `delete item ${item.name}`)
     };
-    const addOrUpdateStorageLocation = (item: RepositorySchema) => {
+    const submitCreateOrUpdate = async (item: InsertRepositorySchema) => {
         if (item.id) {
             // EDIT: Update existing item
             notice(true, `update storage location ${item.name}`);
@@ -95,19 +75,22 @@ const StorageLocationsPage: React.FC = () => {
             {/* Storage Location 数据展示 */}
             <StorageLocationTable
                 data={data}
-                onEdit={(item) => editStorageLocation(item)}
+                onEdit={(item) => handleEdit(item)}
                 onDelete={(item) => deleteStorageLocation(item)}/>
             {/* Add Storage Location Button */}
             <Group justify="flex-end" mt="xl" pt="md" style={{borderTop: '1px solid var(--mantine-color-gray-3)'}}>
-                <Button leftSection={<IconPlus size="1rem"/>} variant="filled" onClick={openModalAsBlank}>
+                <Button leftSection={<IconPlus size="1rem"/>} variant="filled" onClick={handleCreate}>
                     Add Location
                 </Button>
             </Group>
             {/* The modal component instance */}
             <StorageLocationModal
-                ref={modalRef}
-                onSubmit={(item) => addOrUpdateStorageLocation(item)}
-                title={modalTitle} />
+                key={editingItem?.id ?? 'create-storage-location'}
+                onSubmit={(item) => submitCreateOrUpdate(item)}
+                title={editingItem ? "Edit storage location" : "Create storage location"}
+                opened={opened}
+                onClose={close}
+                data={editingItem} />
         </Container>
     );
 };
