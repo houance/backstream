@@ -95,7 +95,7 @@ export function CreatePolicyPage() {
                     {/* Right Panel: Strategy-Specific Form */}
                     <Grid.Col span={{base: 12, lg: 6}}>
                         <Card withBorder radius="md" p="lg" h="100%">
-                            <Title order={5} mb="md">3. Specific Details</Title>
+                            <Title order={5} mb="md">3. Target Configuration</Title>
                             {/* Strategy-Specific Section: Swapped dynamically */}
                             {strategyMeta.component && <strategyMeta.component form={form} />}
                         </Card>
