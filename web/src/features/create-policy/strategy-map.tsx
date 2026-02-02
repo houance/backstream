@@ -10,7 +10,7 @@ interface StrategyMeta {
     label: string,
     description: string,
     icon: React.ForwardRefExoticComponent<any>,
-    component: React.FC<{ form: UseFormReturnType<InsertBackupPolicySchema>}> | null,
+    component: React.FC<{ form: UseFormReturnType<InsertBackupPolicySchema>}>,
     initSubForm: InsertBackupTargetSchema[]
 }
 

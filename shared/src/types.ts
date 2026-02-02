@@ -30,19 +30,21 @@ const ossSchema = z.object({
     OSS_SECRET_ACCESS_KEY: z.string().min(1, 'SecretKey is required'),
     OSS_ENDPOINT: z.string().optional(),
 })
+export const certificateSchema = z.object({
+    s3: s3Schema.partial().optional(), // Fields are partial so they can be empty when hidden
+    b2: b2Schema.partial().optional(),
+    oss: ossSchema.partial().optional(),
+    sftp: sftpSchema.partial().optional(),
+})
+export type CertificateSchema = z.infer<typeof certificateSchema>;
 // The restic repository main schema
 export const insertRepositorySchema = createInsertSchema(repository, {
     name: z.string().min(1, 'Name is required'),
     path: z.string().min(1, 'Path is required'),
+    password: z.string().min(4, 'Password must be at least 4 characters'),
     repositoryType: z.enum(Object.values(RepoType)),
     repositoryStatus: z.enum(['Active', 'Disconnected']),
-    certification: z.object({
-        RESTIC_PASSWORD: z.string().min(4, 'Password must be at least 4 characters'),
-        s3: s3Schema.partial().optional(), // Fields are partial so they can be empty when hidden
-        b2: b2Schema.partial().optional(),
-        oss: ossSchema.partial().optional(),
-        sftp: sftpSchema.partial().optional(),
-    }),
+    certification: certificateSchema.optional(),
 }).omit({ id: true });
 // Insert Repository
 export type InsertRepositorySchema = z.infer<typeof insertRepositorySchema>
@@ -55,32 +57,11 @@ export type UpdateRepositorySchema = z.infer<typeof updateRepositorySchema>
 export const EMPTY_REPOSITORY_SCHEMA: InsertRepositorySchema = {
     name: '',
     path: '',
+    password: '',
     repositoryType: "LOCAL",
     repositoryStatus: 'Disconnected',
     usage: 0,
-    capacity: 1,
-    certification: {
-        RESTIC_PASSWORD: '',
-        b2: {
-            B2_ACCOUNT_ID: "",
-            B2_ACCOUNT_KEY: ""
-        },
-        oss: {
-            OSS_ACCESS_KEY_ID: "",
-            OSS_SECRET_ACCESS_KEY: "",
-            OSS_ENDPOINT: ""
-        },
-        sftp: {
-            SSH_AUTH_SOCK: ""
-        },
-        s3: {
-            AWS_ACCESS_KEY_ID: "",
-            AWS_SECRET_ACCESS_KEY: "",
-            AWS_DEFAULT_REGION: "",
-            AWS_ENDPOINT: "",
-            AWS_PROFILE: ""
-        }
-    }
+    capacity: 1
 }
 // system settings schema, only update schema since it always have only on record in db
 export const systemSettings = createUpdateSchema(setting, {

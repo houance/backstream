@@ -9,7 +9,7 @@ import {
     type Snapshot,
     type Task,
 } from "./types";
-import { RepoType, type ResticCert } from "@backstream/shared"
+import { RepoType, type CertificateSchema } from "@backstream/shared"
 import type {Result} from "execa";
 import {join} from "node:path";
 
@@ -17,12 +17,12 @@ export class RepositoryClient {
     private readonly _env: Record<string, string>;
     public readonly repoType: RepoType;
 
-    private constructor(path: string, resticCert: ResticCert, repoType: RepoType) {
+    private constructor(path: string, password: string, repoType: RepoType, resticCert: CertificateSchema) {
         this.repoType = repoType;
         // convert config data to env
         this._env = {
             RESTIC_REPOSITORY: path,
-            RESTIC_PASSWORD: resticCert.RESTIC_PASSWORD,
+            RESTIC_PASSWORD: password,
         }
         switch (repoType) {
             case "ALIYUN_OSS":
@@ -42,8 +42,14 @@ export class RepositoryClient {
         }
     }
 
-    public static async create(path: string, resticEnv: ResticCert, repoType: RepoType, createRepo?: boolean): Promise<RepositoryClient> {
-        const client = new RepositoryClient(path, resticEnv, repoType);
+    public static async create(
+        path: string,
+        password: string,
+        repoType: RepoType,
+        resticCert: CertificateSchema,
+        createRepo?: boolean
+    ): Promise<RepositoryClient> {
+        const client = new RepositoryClient(path, password, repoType, resticCert);
         // Try to create if requested
         if (createRepo) await client.createRepo();
         return client;

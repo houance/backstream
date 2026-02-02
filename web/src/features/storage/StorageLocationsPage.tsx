@@ -20,8 +20,11 @@ const StorageLocationsPage: React.FC = () => {
             usage: 3400000000000,
             capacity: 5000000000000,
             repositoryStatus: "Active",
+            password: "fdsa",
             certification: {
-                RESTIC_PASSWORD: "123456",
+                sftp: {
+
+                }
             }
         },
         {
@@ -32,8 +35,11 @@ const StorageLocationsPage: React.FC = () => {
             usage: 4900000000000,
             capacity: 5000000000000,
             repositoryStatus: "Active",
+            password: "fdsa",
             certification: {
-                RESTIC_PASSWORD: "990608",
+                s3: {
+
+                }
             }
         },
         {
@@ -44,8 +50,11 @@ const StorageLocationsPage: React.FC = () => {
             usage: 1200000000000,
             capacity: 5000000000000,
             repositoryStatus: "Disconnected",
+            password: "fdsa",
             certification: {
-                RESTIC_PASSWORD: "159357",
+                b2: {
+
+                }
             }
         }
     ];

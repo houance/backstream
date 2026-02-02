@@ -5,6 +5,7 @@ export const repository = sqliteTable("repository_table", {
     id: integer("repository_id").primaryKey({ autoIncrement: true }),
     name: text("name").notNull(),
     path: text("path").notNull(),
+    password: text("password").notNull(),
     repositoryType: text("repository_type").notNull(),
     usage: integer("size").notNull(),
     capacity: integer("capacity").notNull(),

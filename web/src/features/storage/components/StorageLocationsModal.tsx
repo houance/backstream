@@ -11,6 +11,7 @@ import {
     EMPTY_REPOSITORY_SCHEMA,
 } from '@backstream/shared'
 import {notice} from "../../../util/notification.tsx";
+import {PROVIDER_MAP} from "../provider-map.tsx";
 
 interface ModalProps {
     opened: boolean;
@@ -25,16 +26,10 @@ interface ModalProps {
 function StorageLocationModal({ opened, onClose, data, onSubmit, onTestConnection, title }: ModalProps) {
     const [isSubmitting, setSubmitting] = useState(false);
     const [isConnecting, setConnecting] = useState(false);
-    // remove provider specify certification
-    const { b2, oss, sftp, s3, ...restCertification } = EMPTY_REPOSITORY_SCHEMA.certification;
     const form = useForm<InsertRepositorySchema | UpdateRepositorySchema>({
-        initialValues: data ?? {...EMPTY_REPOSITORY_SCHEMA, certification: restCertification},
+        initialValues: data ?? EMPTY_REPOSITORY_SCHEMA,
         validate: zod4Resolver(data ? updateRepositorySchema : insertRepositorySchema),
     });
-
-    // --- ADD IT HERE ---
-    console.log('Current Form Errors:', form.errors);
-    console.log('Current Form Values:', form.values);
 
     const handleFormSubmit = async (values: InsertRepositorySchema | UpdateRepositorySchema) => {
         setSubmitting(true)
@@ -67,29 +62,14 @@ function StorageLocationModal({ opened, onClose, data, onSubmit, onTestConnectio
     const handleTypeChange = (newType: string | null) => {
         if (data) return;
         // 1. Update the top-level repositoryType
-        const repoType: RepoType = newType as RepoType;
+        const repoType: RepoType = newType === null ? RepoType.LOCAL : newType as RepoType;
         form.setFieldValue('repositoryType', repoType);
-        // 2. keep RESTIC_PASSWORD and subfield correspond to repoType
-        let newCert: any = { RESTIC_PASSWORD: form.values.certification.RESTIC_PASSWORD }
-        // 3. Add the specific sub-object from your constants
-        switch (repoType) {
-            case "AWS_S3":
-            case "S3":
-                newCert.s3 = EMPTY_REPOSITORY_SCHEMA.certification.s3;
-                break;
-            case "ALIYUN_OSS":
-                newCert.oss = EMPTY_REPOSITORY_SCHEMA.certification.oss;
-                break;
-            case "BACKBLAZE_B2":
-                newCert.b2 = EMPTY_REPOSITORY_SCHEMA.certification.b2;
-                break;
-            case "SFTP":
-                newCert.sftp = EMPTY_REPOSITORY_SCHEMA.certification.sftp;
-                break;
-            // LOCAL needs no extra fields
-        }
-        form.setFieldValue('certification', newCert);
+        const newConfig = PROVIDER_MAP[repoType];
+        form.setFieldValue('certification', newConfig.initSubForm);
     };
+
+    // Dynamically select the component based on repo type
+    const providerMeta = PROVIDER_MAP[form.values.repositoryType];
 
     return (
         <Modal opened={opened} onClose={onClose} title={title} centered size="xl">
@@ -112,7 +92,7 @@ function StorageLocationModal({ opened, onClose, data, onSubmit, onTestConnectio
                         variant={!!data ? "filled" : "default"}
                         label="Password"
                         placeholder="Enter restic password"
-                        {...form.getInputProps('certification.RESTIC_PASSWORD')} // Use dot notation
+                        {...form.getInputProps('password')} // Use dot notation
                         readOnly={!!data}
                         withAsterisk
                         description="Required to encrypt/decrypt your backups"
@@ -122,100 +102,16 @@ function StorageLocationModal({ opened, onClose, data, onSubmit, onTestConnectio
                         label="Type"
                         data={Object.values(RepoType)}
                         value={form.values.repositoryType}
+                        defaultValue={RepoType.LOCAL}
                         onChange={handleTypeChange}
                         disabled={!!data}
                         withAsterisk
-                        required
+                        allowDeselect={false}
                     />
 
                     {form.values.repositoryType !== 'LOCAL' &&
                         <Divider label="Authentication Details" labelPosition="center"/>}
-
-                    {/* Render fields based on the selected Type */}
-                    {form.values.repositoryType === "BACKBLAZE_B2" && (
-                        <>
-                            <TextInput
-                                label="B2 ACCOUNT ID"
-                                {...form.getInputProps('certification.b2.B2_ACCOUNT_ID')}
-                                placeholder="Enter B2 ACCOUNT ID"
-                                disabled={!!data}
-                                withAsterisk
-                            />
-                            <PasswordInput
-                                variant={!!data ? "filled" : "default"}
-                                label="B2 ACCOUNT KEY"
-                                placeholder="Enter B2 ACCOUNT KEY"
-                                {...form.getInputProps('certification.b2.B2_ACCOUNT_KEY')}
-                                readOnly={!!data}
-                                withAsterisk
-                            />
-                        </>
-                    )}
-                    {(form.values.repositoryType === "AWS_S3" || form.values.repositoryType === "S3") && (
-                        <>
-                            <TextInput
-                                label="ACCESS KEY ID"
-                                {...form.getInputProps('certification.s3.AWS_ACCESS_KEY_ID')}
-                                disabled={!!data}
-                                withAsterisk
-                            />
-                            <PasswordInput
-                                variant={!!data ? "filled" : "default"}
-                                label="SECRET ACCESS KEY"
-                                type="password"
-                                {...form.getInputProps('certification.s3.AWS_SECRET_ACCESS_KEY')}
-                                readOnly={!!data}
-                                withAsterisk
-                            />
-                            <TextInput
-                                label="DEFAULT REGION"
-                                {...form.getInputProps('certification.s3.AWS_DEFAULT_REGION')}
-                                disabled={!!data}
-                            />
-                            <TextInput
-                                label="ENDPOINT"
-                                {...form.getInputProps('certification.s3.AWS_ENDPOINT')}
-                                disabled={!!data}
-                            />
-                            <TextInput
-                                label="PROFILE"
-                                {...form.getInputProps('certification.s3.AWS_PROFILE')}
-                                disabled={!!data}
-                            />
-                        </>
-                    )}
-                    {form.values.repositoryType === "ALIYUN_OSS" && (
-                        <>
-                            <TextInput
-                                label="ACCESS KEY ID"
-                                {...form.getInputProps('certification.oss.OSS_ACCESS_KEY_ID')}
-                                disabled={!!data}
-                                withAsterisk
-                            />
-                            <PasswordInput
-                                variant={!!data ? "filled" : "default"}
-                                label="SECRET ACCESS KEY"
-                                type="password"
-                                {...form.getInputProps('certification.oss.OSS_SECRET_ACCESS_KEY')}
-                                readOnly={!!data}
-                                withAsterisk
-                            />
-                            <TextInput
-                                label="ENDPOINT"
-                                {...form.getInputProps('certification.oss.OSS_ENDPOINT')}
-                                disabled={!!data}
-                            />
-                        </>
-                    )}
-                    {form.values.repositoryType === "SFTP" && (
-                        <>
-                            <TextInput
-                                label="SSH_AUTH_SOCK"
-                                {...form.getInputProps('certification.sftp.SSH_AUTH_SOCK')}
-                                disabled={!!data}
-                            />
-                        </>
-                    )}
+                    {providerMeta.component !== null && <providerMeta.component form={form} data={data} />}
 
                     <Group justify="flex-end" mt="xl">
                         <Button variant="subtle" color="gray" onClick={onClose}>Cancel</Button>
