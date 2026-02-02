@@ -62,7 +62,7 @@ const StorageLocationsPage: React.FC = () => {
         notice(true, `delete item ${item.name}`)
     };
     const submitCreateOrUpdate = async (item: InsertRepositorySchema | UpdateRepositorySchema) => {
-        if (item.id) {
+        if ('id' in item && item.id) {
             // EDIT: Update existing item
             notice(true, `update storage location ${item.name}`);
         } else {

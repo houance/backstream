@@ -48,7 +48,7 @@ export const insertRepositorySchema = createInsertSchema(repository, {
 export type InsertRepositorySchema = z.infer<typeof insertRepositorySchema>
 // query or update repository
 export const updateRepositorySchema = insertRepositorySchema.safeExtend({
-    id: true
+    id: z.number().positive(),
 })
 export type UpdateRepositorySchema = z.infer<typeof updateRepositorySchema>
 // initial value for all field in repository schema
@@ -123,7 +123,9 @@ export const insertBackupTargetSchema = createInsertSchema(backupTarget, {
     index: z.number().positive(),
 }).omit({ id: true, backupStrategyId: true });
 export type InsertBackupTargetSchema = z.infer<typeof insertBackupTargetSchema>;
-export const updateBackupTargetSchema = insertBackupTargetSchema.safeExtend({ id: true });
+export const updateBackupTargetSchema = insertBackupTargetSchema.safeExtend({
+    id: z.number().positive(),
+});
 export type UpdateBackupTargetSchema = z.infer<typeof updateBackupTargetSchema>;
 // create backup strategy schema
 export const insertBackupStrategySchema = createInsertSchema(strategy, {
@@ -134,7 +136,9 @@ export const insertBackupStrategySchema = createInsertSchema(strategy, {
     strategyType: z.enum(Object.values(StrategyType)),
 }).omit({ id: true });
 export type InsertBackupStrategySchema = z.infer<typeof insertBackupStrategySchema>;
-export const updateBackupStrategySchema = insertBackupStrategySchema.safeExtend({ id: true });
+export const updateBackupStrategySchema = insertBackupStrategySchema.safeExtend({
+    id: z.number().positive(),
+})
 export type UpdateBackupStrategySchema = z.infer<typeof updateBackupStrategySchema>;
 // create backup policy schema
 export const insertBackupPolicySchema = z.object({
