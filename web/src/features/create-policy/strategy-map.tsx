@@ -17,7 +17,7 @@ interface StrategyMeta {
 export const STRATEGY_MAP: Record<StrategyType, StrategyMeta> = {
     STRATEGY_321: {
         label: '3-2-1 Strategy',
-        description: 'The gold standard: local + cloud redundancy.',
+        description: 'local + cloud redundancy.',
         icon: IconCloudUpload,
         component: Strategy321SubForm,
         initSubForm: [
@@ -45,7 +45,7 @@ export const STRATEGY_MAP: Record<StrategyType, StrategyMeta> = {
     },
     LOCAL_BACKUP: {
         label: 'Local Backup',
-        description: 'Versioned backup to local disk differ from data source.',
+        description: 'versioned backup to local disk',
         icon: IconDatabase,
         component: LocalBackupSubForm,
         initSubForm: [{

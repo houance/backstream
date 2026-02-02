@@ -1,5 +1,17 @@
 import { useForm } from '@mantine/form';
-import { TextInput, Stack, SegmentedControl, Button, Divider, Fieldset } from '@mantine/core';
+import {
+    Text,
+    TextInput,
+    Stack,
+    Button,
+    Card,
+    Title,
+    Container,
+    Radio,
+    SimpleGrid,
+    Group,
+    Grid, ThemeIcon
+} from '@mantine/core';
 import { STRATEGY_MAP } from './strategy-map.tsx'
 import {
     EMPTY_BACKUP_POLICY_SCHEMA,
@@ -26,34 +38,73 @@ export function CreatePolicyPage() {
     const strategyMeta = STRATEGY_MAP[form.values.strategy.strategyType];
 
     return (
-        <form onSubmit={form.onSubmit((values) => console.log(values))}>
-            <Stack gap="md">
-                {/* Common Section: Shared by ALL strategies */}
-                <Fieldset legend="Basic Configuration">
-                    <TextInput label="Plan Name" {...form.getInputProps('name')} required />
-                    <TextInput label="Source Path" placeholder="/data/mysql" {...form.getInputProps('dataSource')} />
-                </Fieldset>
+        <Container fluid>
+            <Stack gap="xl">
+                <Grid gutter="xl">
+                    {/* Left Column: Strategy Selection */}
+                    <Grid.Col span={{ base: 12, lg: 6}}>
+                        <Stack gap="md">
+                            <Card withBorder radius="md" p="lg">
+                                <Title order={5} mb="md">1. Select Backup Type</Title>
+                                <Radio.Group
+                                    value={form.values.strategy.strategyType}
+                                    onChange={handleStrategyTypeChange}
+                                >
+                                    <SimpleGrid cols={2} spacing="sm">
+                                        {Object.entries(STRATEGY_MAP).map(([key, meta]) => (
+                                            <Radio.Card
+                                                key={key}
+                                                value={key}
+                                                p="sm"
+                                                radius="md"
+                                                style={{
+                                                    borderColor: form.values.strategy.strategyType === key ? 'var(--mantine-color-blue-6)' : undefined,
+                                                }}
+                                            >
+                                                <Group wrap="nowrap" align="center" justify="space-between">
+                                                    <Group wrap="nowrap" align="center" gap="sm">
+                                                        <Radio.Indicator color="blue" />
+                                                        <div style={{ flex: 1 }}>
+                                                            <Text fw={600} fz="sm" lh={1}>
+                                                                {meta.label}
+                                                            </Text>
+                                                            <Text fz="xs" c="dimmed" mt={3} lh={1.2}>
+                                                                {meta.description}
+                                                            </Text>
+                                                        </div>
+                                                    </Group>
 
-                <Divider label="Strategy Selection" labelPosition="center" />
+                                                    <ThemeIcon variant="white">
+                                                        <meta.icon />
+                                                    </ThemeIcon>
+                                                </Group>
+                                            </Radio.Card>
+                                        ))}
+                                    </SimpleGrid>
+                                </Radio.Group>
+                            </Card>
+                            {/* Left Column: Basic/Shared Configuration */}
+                            <Card withBorder radius="md" p="lg">
+                                <Title order={5} mb="md">2. Basic Configuration</Title>
+                                <TextInput label="Plan Name" {...form.getInputProps('name')} required />
+                                <TextInput label="Source Path" placeholder="/data/mysql" {...form.getInputProps('dataSource')} />
+                            </Card>
+                        </Stack>
+                    </Grid.Col>
 
-                <SegmentedControl
-                    fullWidth
-                    data={Object.entries(STRATEGY_MAP).map(([key, meta]) => {
-                        return {
-                            label: meta.label,
-                            value: key,
-                        }
-                    })}
-                    {...form.getInputProps('strategy.strategyType')}
-                    onChange={handleStrategyTypeChange}
-                />
-
-                {/* Strategy-Specific Section: Swapped dynamically */}
-                {strategyMeta.component && <strategyMeta.component form={form} />}
-
+                    {/* Right Panel: Strategy-Specific Form */}
+                    <Grid.Col span={{base: 12, lg: 6}}>
+                        <Card withBorder radius="md" p="lg" h="100%">
+                            <Title order={5} mb="md">3. Specific Details</Title>
+                            {/* Strategy-Specific Section: Swapped dynamically */}
+                            {strategyMeta.component && <strategyMeta.component form={form} />}
+                        </Card>
+                    </Grid.Col>
+                </Grid>
+                {/* BOTTOM: creation */}
                 <Button type="submit" size="md">Create Backup Plan</Button>
             </Stack>
-        </form>
+        </Container>
     );
 }
 
