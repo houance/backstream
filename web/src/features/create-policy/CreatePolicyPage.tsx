@@ -1,51 +1,59 @@
-import {Group, Text, Box, Stepper, Button} from '@mantine/core';
-import React, {useState} from "react";
+import { useForm } from '@mantine/form';
+import { TextInput, Stack, SegmentedControl, Button, Divider, Fieldset } from '@mantine/core';
+import { STRATEGY_MAP } from './strategy-map.tsx'
+import {
+    EMPTY_BACKUP_POLICY_SCHEMA,
+    insertBackupPolicySchema,
+    type InsertBackupPolicySchema,
+    type StrategyType,
+} from '@backstream/shared'
+import {zod4Resolver} from "mantine-form-zod-resolver";
 
-import PolicyTypeSelection from "./components/PolicyTypeSelection.tsx";
-import {BACKUP_POLICIES, type PolicyType} from "./config.tsx";
+export function CreatePolicyPage() {
+    const form = useForm<InsertBackupPolicySchema>({
+        initialValues: EMPTY_BACKUP_POLICY_SCHEMA,
+        validate: zod4Resolver(insertBackupPolicySchema)
+    });
 
-const CreatePolicyPage: React.FC = () => {
-    const [active, setActive] = useState(0);
-    const [type, setType] = useState<PolicyType | null>(null);
+    const handleStrategyTypeChange = (value: string) => {
+        const strategyType = value as StrategyType;
+        form.setFieldValue('strategy.strategyType', strategyType);
+        const newConfig = STRATEGY_MAP[strategyType];
+        form.setFieldValue('targets', newConfig.initSubForm)
+    }
 
-    const nextStep = () => setActive((current) => (current < 3 ? current + 1 : current));
-    const prevStep = () => setActive((current) => (current > 0 ? current - 1 : current));
-
-    // Helper to render the dynamic config form
-    const SelectedForm = type ? BACKUP_POLICIES[type].component : null;
+    // Dynamically select the component based on strategy
+    const strategyMeta = STRATEGY_MAP[form.values.strategy.strategyType];
 
     return (
-        <Box p="md">
-            <Stepper active={active} onStepClick={setActive}>
-                {/* Step 1: Selection */}
-                <Stepper.Step label="Select Type" description="Choose backup logic">
-                    <PolicyTypeSelection value={type} onChange={(val) => setType(val as PolicyType)} />
-                </Stepper.Step>
+        <form onSubmit={form.onSubmit((values) => console.log(values))}>
+            <Stack gap="md">
+                {/* Common Section: Shared by ALL strategies */}
+                <Fieldset legend="Basic Configuration">
+                    <TextInput label="Plan Name" {...form.getInputProps('name')} required />
+                    <TextInput label="Source Path" placeholder="/data/mysql" {...form.getInputProps('dataSource')} />
+                </Fieldset>
 
-                {/* Step 2: Dynamic Configuration */}
-                <Stepper.Step label="Configure" description="Set source and destination">
-                    {SelectedForm && <SelectedForm />}
-                </Stepper.Step>
+                <Divider label="Strategy Selection" labelPosition="center" />
 
-                {/* Step 3: Scheduling */}
-                <Stepper.Step label="Schedule" description="When to run">
-                    <Text>Common Scheduling Component Here...</Text>
-                </Stepper.Step>
+                <SegmentedControl
+                    fullWidth
+                    data={Object.entries(STRATEGY_MAP).map(([key, meta]) => {
+                        return {
+                            label: meta.label,
+                            value: key,
+                        }
+                    })}
+                    {...form.getInputProps('strategy.strategyType')}
+                    onChange={handleStrategyTypeChange}
+                />
 
-                <Stepper.Completed>
-                    Completed! Policy is now active.
-                </Stepper.Completed>
-            </Stepper>
+                {/* Strategy-Specific Section: Swapped dynamically */}
+                {strategyMeta.component && <strategyMeta.component form={form} />}
 
-            <Group justify="center" mt="xl">
-                <Button variant="default" onClick={prevStep} disabled={active === 0}>
-                    Back
-                </Button>
-                <Button onClick={nextStep} disabled={active === 0 && !type}>
-                    {active === 2 ? 'Create Policy' : 'Next step'}
-                </Button>
-            </Group>
-        </Box>
+                <Button type="submit" size="md">Create Backup Plan</Button>
+            </Stack>
+        </form>
     );
 }
 

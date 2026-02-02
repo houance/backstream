@@ -16,20 +16,20 @@ export const repository = sqliteTable("repository_table", {
 export const strategy = sqliteTable("strategy_table", {
     id: integer("strategy_id").primaryKey({ autoIncrement: true }),
     name: text("name").notNull(),
+    hostname: text("hostname").notNull(),
     dataSource: text("data_source").notNull(),
-    dataSourceSize: integer("data_source_size").notNull().default(0),
-    strategyType: text("strategy_type", {enum: ["3-2-1", "localCopy"]}).notNull().default("3-2-1"),
+    dataSourceSize: integer("data_source_size").notNull(),
+    strategyType: text("strategy_type").notNull(),
 });
 
 // 3. Backup Target Table (Links strategy to Repository)
-export const backupTargets = sqliteTable("backup_target_table", {
+export const backupTarget = sqliteTable("backup_target_table", {
     id: integer("backup_target_id").primaryKey({ autoIncrement: true }),
-    backupStrategyId: integer("backup_strategy_id").references(() => strategy.id),
-    repositoryId: integer("repository_id").references(() => repository.id),
-    retentionPolicy: text("retention_policy", { mode: "json"}),
-    schedulePolicy: text("schedule_policy"),
-    index: integer("index").notNull().default(1),
-    target_type: text("target_type"),
+    backupStrategyId: integer("backup_strategy_id").references(() => strategy.id).notNull(),
+    repositoryId: integer("repository_id").references(() => repository.id).notNull(),
+    retentionPolicy: text("retention_policy", { mode: "json"}).notNull(),
+    schedulePolicy: text("schedule_policy").notNull(),
+    index: integer("index").notNull(),
 });
 
 // 4. Snapshots Metadata Table
@@ -60,7 +60,7 @@ export const execution = sqliteTable("execution_table", {
     executeStatus: text("execute_status", { enum: ["success", "fail", "running"] }),
     repositoryId: integer("repository_id").references(() => repository.id),
     strategyId: integer("strategy_id").references(() => strategy.id),
-    backupTargetId: integer("backup_target_id").references(() => backupTargets.id),
+    backupTargetId: integer("backup_target_id").references(() => backupTarget.id),
 })
 
 // 6. System Settings Table
