@@ -79,13 +79,29 @@ export const StrategyType = {
 export type StrategyType = typeof StrategyType[keyof typeof StrategyType];
 // cron format: sec min hour day month day-of-week
 const cronSecondRegex = /^(\*|[0-5]?\d)\s+(\*|[0-5]?\d)\s+(\*|[01]?\d|2[0-3])\s+(\*|[1-2]?\d|3[01])\s+(\*|[1-9]|1[0-2])\s+(\*|[0-6])$/;
+// retention enum
+export const RetentionType = {
+    count: "count",
+    duration: "duration",
+    tag: "tag",
+} as const;
+export type RetentionType = typeof RetentionType[keyof typeof RetentionType];
+export const WindowType = {
+    last: "last",
+    hourly: "hourly",
+    daily: "daily",
+    weekly: "weekly",
+    monthly: "monthly",
+    yearly: "yearly",
+} as const;
+export type WindowType = typeof WindowType[keyof typeof WindowType];
 // backup target schema
 export const insertBackupTargetSchema = createInsertSchema(backupTarget, {
     retentionPolicy: z.object({
         // 1. type: What kind of rule is this?
-        type: z.enum(["count", "duration", "tag"]),
+        type: z.enum(Object.values(RetentionType)),
         // 2. windowType: What time bucket does it apply to?
-        windowType: z.enum(["last", "hourly", "daily", "weekly", "monthly", "yearly"]),
+        windowType: z.enum(Object.values(WindowType)).optional(),
         // 3. Used for "count" types
         countValue: z.string()
             .regex(/^(unlimited|[0-9]+)$/, "Enter a number or 'unlimited'")

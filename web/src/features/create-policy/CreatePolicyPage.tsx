@@ -97,7 +97,16 @@ export function CreatePolicyPage() {
                         <Card withBorder radius="md" p="lg" h="100%">
                             <Title order={5} mb="md">3. Target Configuration</Title>
                             {/* Strategy-Specific Section: Swapped dynamically */}
-                            {strategyMeta.component && <strategyMeta.component form={form} />}
+                            {strategyMeta.component && <strategyMeta.component form={form} repoList={[{
+                                path: '/abc/d',
+                                name: 'test1',
+                                password: 'fdsa',
+                                repositoryType: 'LOCAL',
+                                usage: 0,
+                                capacity: 0,
+                                repositoryStatus: 'Active',
+                                id: 1
+                            }]} />}
                         </Card>
                     </Grid.Col>
                 </Grid>

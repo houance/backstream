@@ -1,5 +1,10 @@
 import { IconDatabase, IconCloudUpload } from '@tabler/icons-react';
-import {type InsertBackupPolicySchema, type InsertBackupTargetSchema, type StrategyType} from '@backstream/shared'
+import {
+    type InsertBackupPolicySchema,
+    type InsertBackupTargetSchema,
+    type StrategyType,
+    type UpdateRepositorySchema
+} from '@backstream/shared'
 import React from "react";
 import LocalBackupSubForm from "./components/LocalBackupSubForm.tsx";
 
@@ -10,7 +15,10 @@ interface StrategyMeta {
     label: string,
     description: string,
     icon: React.ForwardRefExoticComponent<any>,
-    component: React.FC<{ form: UseFormReturnType<InsertBackupPolicySchema>}>,
+    component: React.FC<{
+        form: UseFormReturnType<InsertBackupPolicySchema>,
+        repoList: UpdateRepositorySchema[]
+    }>,
     initSubForm: InsertBackupTargetSchema[]
 }
 
