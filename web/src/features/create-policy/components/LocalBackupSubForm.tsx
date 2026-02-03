@@ -1,5 +1,5 @@
 import {Card, Text, Paper, Select, Stack, TextInput, Title, Grid, TagsInput} from "@mantine/core";
-import {WindowType, type InsertBackupPolicySchema, type RetentionType, type UpdateRepositorySchema} from "@backstream/shared";
+import {WindowType, RetentionType as RetentionVal, type InsertBackupPolicySchema, type RetentionType, type UpdateRepositorySchema} from "@backstream/shared";
 import type {UseFormReturnType} from "@mantine/form";
 import {useState} from "react";
 
@@ -21,13 +21,13 @@ export function LocalBackupSubForm ({ form, repoList }: {
             form.setFieldValue("targets.0.retentionPolicy", {
                 type: type,
                 windowType: WindowType.last,
-                countValue: "100"
+                countValue: ""
             })
         } else {
             form.setFieldValue("targets.0.retentionPolicy", {
                 type: type,
                 windowType: WindowType.yearly,
-                durationValue: "1y"
+                durationValue: ""
             })
         }
     }
@@ -72,7 +72,6 @@ export function LocalBackupSubForm ({ form, repoList }: {
                             <TextInput
                                 label="Cron Expression"
                                 placeholder="* * * * *"
-                                description="Format: minute hour day-of-month month day-of-week"
                                 {...form.getInputProps('targets.0.schedulePolicy')}
                             />
                         )}
@@ -92,11 +91,10 @@ export function LocalBackupSubForm ({ form, repoList }: {
                         <Grid.Col span={{ base: 12, md: 4 }}>
                             <Select
                                 label="Rule Type"
-                                data={[
-                                    { value: 'count', label: 'By Count (Keep X)' },
-                                    { value: 'duration', label: 'By Duration (Within X)' },
-                                    { value: 'tag', label: 'By Tags' },
-                                ]}
+                                data={Object.values(RetentionVal).map((item) => ({
+                                    label: item,
+                                    value: item
+                                }))}
                                 value={form.values.targets[0].retentionPolicy.type}
                                 onChange={handleRetentionPolicyChange}
                             />
@@ -129,8 +127,7 @@ export function LocalBackupSubForm ({ form, repoList }: {
                             {policy.type === 'duration' && (
                                 <TextInput
                                     label="Duration"
-                                    placeholder="e.g. 2y5m"
-                                    description="Use: y, m, d, h"
+                                    placeholder="Use y, m, d, h. e.g. 2y5m"
                                     {...form.getInputProps('targets.0.retentionPolicy.durationValue')}
                                 />
                             )}
