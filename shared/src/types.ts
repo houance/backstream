@@ -78,7 +78,7 @@ export const StrategyType = {
 } as const;
 export type StrategyType = typeof StrategyType[keyof typeof StrategyType];
 // cron format: sec min hour day month day-of-week
-const cronSecondRegex = /^(\*|[0-5]?\d)\s+(\*|[0-5]?\d)\s+(\*|[01]?\d|2[0-3])\s+(\*|[1-2]?\d|3[01])\s+(\*|[1-9]|1[0-2])\s+(\*|[0-6])$/;
+const cronSecondRegex = /^(?:[0-9*,\/\-]+ ){5}[0-9*,\/\-]+$/;
 // retention enum
 export const RetentionType = {
     count: "count",
@@ -118,6 +118,7 @@ export const insertBackupTargetSchema = createInsertSchema(backupTarget, {
         .min(1, 'Schedule Policy is required')
         .regex(cronSecondRegex, 'Invalid cron format (requires 6 fields: s m h D M d)'),
     index: z.number().positive(),
+    repositoryId: z.coerce.number().min(1, "Please select a value"),
 }).omit({ id: true, backupStrategyId: true });
 export type InsertBackupTargetSchema = z.infer<typeof insertBackupTargetSchema>;
 export const updateBackupTargetSchema = insertBackupTargetSchema.safeExtend({
