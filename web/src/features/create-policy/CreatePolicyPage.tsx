@@ -70,7 +70,7 @@ export function CreatePolicyPage() {
         setLoading(true);
         try {
             // api
-
+            console.info(values)
             // clear state
             form.reset();
             setActive(0);

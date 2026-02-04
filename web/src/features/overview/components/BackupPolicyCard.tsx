@@ -1,14 +1,28 @@
 import {Card, Text, Badge, Group, Stack, Progress, Tooltip, Box} from '@mantine/core';
 import {IconAlertTriangle, IconCloud, IconDeviceSdCard} from '@tabler/icons-react';
-import {getRepositoryStats} from "../../../util/format.ts";
+import {formatTimestamp, getRepositoryStats} from "../../../util/format.ts";
 import {type UpdateBackupPolicySchema} from '@backstream/shared'
 
-export function BackupStrategyCard({ policy }: { policy: UpdateBackupPolicySchema }) {
+export function BackupPolicyCard({ policy, onDetail }: {
+    policy: UpdateBackupPolicySchema,
+    onDetail: () => void,
+}) {
     // Determine if ANY repository is near capacity
     const isCritical = policy.targets.some(t => (t.repository.usage / t.repository.capacity) > 0.8);
 
     return (
-        <Card shadow="sm" padding="lg" radius="md" withBorder>
+        <Card shadow="sm"
+              padding="lg"
+              radius="md"
+              withBorder
+              component="button" // Use button for accessibility
+              onClick={onDetail}
+              style={{
+                  width: '100%',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  backgroundColor: 'transparent' // Optional: use interactive colors
+              }}>
             {/* 备份计划名称和类型  */}
             <Group justify="space-between" mb="md">
                 <div>
@@ -62,7 +76,7 @@ export function BackupStrategyCard({ policy }: { policy: UpdateBackupPolicySchem
                             {/* 空间条下方的 lastBackupTime */}
                             <Text size="xs" c="dimmed" mb={4}>
                                 Last backup: {target.lastBackupTimestamp ?
-                                new Date(target.lastBackupTimestamp).toLocaleString() :
+                                formatTimestamp(target.lastBackupTimestamp) :
                                 'Never'}
                             </Text>
                         </Box>

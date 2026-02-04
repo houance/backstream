@@ -95,25 +95,29 @@ export const WindowType = {
     yearly: "yearly",
 } as const;
 export type WindowType = typeof WindowType[keyof typeof WindowType];
+// retention policy
+export const retentionPolicy = z.object({
+    // 1. type: What kind of rule is this?
+    type: z.enum(Object.values(RetentionType)),
+    // 2. windowType: What time bucket does it apply to?
+    windowType: z.enum(Object.values(WindowType)).optional(),
+    // 3. Used for "count" types
+    countValue: z.string()
+        .regex(/^(unlimited|[0-9]+)$/, "Enter a number or 'unlimited'")
+        .or(z.literal("unlimited"))
+        .optional(),
+    // 4. Used for "duration" types (keep-within)
+    durationValue: z.string()
+        .regex(/^(\d+y)?(\d+m)?(\d+d)?(\d+h)?$/, "Invalid duration (e.g. 2y5m)")
+        .or(z.literal("unlimited"))
+        .optional(),
+    // 5. Used for "tag" types
+    tagValue: z.array(z.string()).optional(),
+})
+export type RetentionPolicy = z.infer<typeof retentionPolicy>
 // backup target schema
 export const insertBackupTargetSchema = createInsertSchema(backupTarget, {
-    retentionPolicy: z.object({
-        // 1. type: What kind of rule is this?
-        type: z.enum(Object.values(RetentionType)),
-        // 2. windowType: What time bucket does it apply to?
-        windowType: z.enum(Object.values(WindowType)).optional(),
-        // 3. Used for "count" types
-        countValue: z.string()
-            .regex(/^(unlimited|[0-9]+)$/, "Enter a number or 'unlimited'")
-            .optional(),
-        // 4. Used for "duration" types (keep-within)
-        durationValue: z.string()
-            .regex(/^(\d+y)?(\d+m)?(\d+d)?(\d+h)?$/, "Invalid duration (e.g. 2y5m)")
-            .or(z.literal("unlimited"))
-            .optional(),
-        // 5. Used for "tag" types
-        tagValue: z.array(z.string()).optional(),
-    }),
+    retentionPolicy: retentionPolicy,
     schedulePolicy: z.string()
         .min(1, 'Schedule Policy is required')
         .regex(cronSecondRegex, 'Invalid cron format (requires 6 fields: s m h D M d)'),
@@ -171,3 +175,38 @@ export const updateBackupPolicySchema = z.object({
     }))
 })
 export type UpdateBackupPolicySchema = z.infer<typeof updateBackupPolicySchema>;
+export const snapshotFile = z.object({
+    name: z.string(),
+    type: z.enum(['file', 'dir']),
+    size: z.number().min(0),
+    path: z.string(),
+    mtime: z.number(),
+})
+export type SnapshotFile = z.infer<typeof snapshotFile>;
+export const snapshotsMetaSchema = z.object({
+    snapshotsId: z.string(),
+    status: z.enum(['complete', 'failed', 'partial']),
+    createdAtTimestamp: z.number().min(0),
+    files: z.array(snapshotFile),
+    size: z.number().positive(),
+})
+export type SnapshotsMetaSchema = z.infer<typeof snapshotsMetaSchema>;
+export const onGoingSnapshotsMetaSchema = z.object({
+    uuid: z.string(),
+    status: z.literal('backing up'),
+    createdAtTimestamp: z.number().min(0),
+    progress: z.object({
+        percent: z.string(),
+        bytesDone: z.number().optional(),
+        totalBytes: z.number().optional(),
+        logs: z.array(z.string())
+    }),
+    totalSize: z.number().positive(),
+})
+export type OnGoingSnapshotsMetaSchema = z.infer<typeof onGoingSnapshotsMetaSchema>;
+export const scheduledSnapshotsMetaSchema = z.object({
+    uuid: z.string(),
+    status: z.literal('scheduled'),
+    createdAtTimestamp: z.number().min(0)
+})
+export type ScheduledSnapshotsMetaSchema = z.infer<typeof scheduledSnapshotsMetaSchema>;

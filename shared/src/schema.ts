@@ -44,6 +44,7 @@ export const snapshotsMetadata = sqliteTable("snapshots_metadata_table", {
     backupStart: integer("backup_start", { mode: "timestamp" }),
     backupEnd: integer("backup_end", { mode: "timestamp" }),
     totalBytes: integer("total_bytes"),
+    snapshotStatus: text().notNull(),
 });
 
 // 5. Execution Table

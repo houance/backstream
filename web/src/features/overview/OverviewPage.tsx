@@ -1,12 +1,20 @@
-import React from 'react';
-import { Grid, Container, Stack } from '@mantine/core';
-import {BackupStrategyCard} from "./components/BackupStrategyCard.tsx";
+import React, {useState} from 'react';
+import {Grid, Container, Stack} from '@mantine/core';
+import {BackupPolicyCard} from "./components/BackupPolicyCard.tsx";
 import {StatsCardGroup} from "./components/StatsCardGroup.tsx";
 import {RecentActivityCard} from "./components/RecentActivityCard.tsx";
 import type { UpdateBackupPolicySchema } from '@backstream/shared';
+import {PolicyDetailModal} from "../policy-detail/PolicyDetailModal.tsx";
+import {useDisclosure} from "@mantine/hooks";
 
 const OverviewPage: React.FC = () => {
-    const policy: UpdateBackupPolicySchema[] = [
+    const [opened, { open, close }] = useDisclosure(false);
+    const [detailPolicy, setDetailPolicy] = useState<UpdateBackupPolicySchema | null>(null)
+    const openModal = (policy: UpdateBackupPolicySchema) => {
+        setDetailPolicy(policy);
+        open()
+    }
+    const backupPolicy: UpdateBackupPolicySchema[] = [
         {
         strategy: {
             name: 'Music Collection',
@@ -31,9 +39,11 @@ const OverviewPage: React.FC = () => {
                 repositoryId: 1,
                 lastBackupTimestamp: 1769573950000,
                 retentionPolicy: {
-                    type: 'duration'
+                    type: 'count',
+                    windowType: 'daily',
+                    countValue: 'unlimited'
                 },
-                schedulePolicy: '',
+                schedulePolicy: '* * * * * *',
                 index: 0,
                 id: 0
             },
@@ -51,9 +61,11 @@ const OverviewPage: React.FC = () => {
                 repositoryId: 2,
                 lastBackupTimestamp: 1769573950000,
                 retentionPolicy: {
-                    type: 'duration'
+                    type: 'duration',
+                    windowType: 'hourly',
+                    durationValue: "1y",
                 },
-                schedulePolicy: '',
+                schedulePolicy: '* * * * * *',
                 index: 0,
                 id: 0
             }
@@ -84,7 +96,7 @@ const OverviewPage: React.FC = () => {
                     retentionPolicy: {
                         type: 'duration'
                     },
-                    schedulePolicy: '',
+                    schedulePolicy: '* * * * * *',
                     index: 0,
                     id: 0
                 },
@@ -104,7 +116,7 @@ const OverviewPage: React.FC = () => {
                     retentionPolicy: {
                         type: 'duration'
                     },
-                    schedulePolicy: '',
+                    schedulePolicy: '* * * * * *',
                     index: 0,
                     id: 0
                 }
@@ -118,19 +130,16 @@ const OverviewPage: React.FC = () => {
                 {/* 三个卡片, 所有备份策略的 overview */}
                 <StatsCardGroup activeCount={1} totalSize={100} complianceRate={1} />
 
-                {/* by strategy 展示汇总信息 */}
+                {/* by backupPolicy 展示汇总信息 */}
                 <Grid gutter="xl">
-                    {/* backup policy status */}
+                    {/* backup backupPolicy status */}
                     <Grid.Col span={{ md: 8 }}>
                         <Grid gutter="md">
-                            <Grid.Col span={{ sm: 4 }}>
-                                <BackupStrategyCard policy={policy[0]}
-                                />
-                            </Grid.Col>
-                            <Grid.Col span={{ sm: 4 }}>
-                                <BackupStrategyCard policy={policy[1]}
-                                />
-                            </Grid.Col>
+                            {backupPolicy.map((policy: UpdateBackupPolicySchema) => (
+                                <Grid.Col span={{ sm: 4}}>
+                                    <BackupPolicyCard policy={policy} onDetail={() => openModal(policy)} />
+                                </Grid.Col>
+                            ))}
                         </Grid>
                     </Grid.Col>
 
@@ -148,6 +157,8 @@ const OverviewPage: React.FC = () => {
                     </Grid.Col>
                 </Grid>
             </Stack>
+            {/* Detail Modal */}
+            {detailPolicy && <PolicyDetailModal opened={opened} onClose={close} data={detailPolicy} />}
         </Container>
     );
 };
