@@ -3,8 +3,115 @@ import { Grid, Container, Stack } from '@mantine/core';
 import {BackupStrategyCard} from "./components/BackupStrategyCard.tsx";
 import {StatsCardGroup} from "./components/StatsCardGroup.tsx";
 import {RecentActivityCard} from "./components/RecentActivityCard.tsx";
+import type { UpdateBackupPolicySchema } from '@backstream/shared';
 
 const OverviewPage: React.FC = () => {
+    const policy: UpdateBackupPolicySchema[] = [
+        {
+        strategy: {
+            name: 'Music Collection',
+            strategyType: 'STRATEGY_321',
+            dataSource: '/music',
+            hostname: '',
+            dataSourceSize: 0,
+            id: 0
+        },
+        targets: [
+            {
+                repository: {
+                    path: '',
+                    name: 'local',
+                    password: '',
+                    repositoryType: 'LOCAL',
+                    usage: 500,
+                    capacity: 1000,
+                    repositoryStatus: 'Active',
+                    id: 0
+                },
+                repositoryId: 1,
+                lastBackupTimestamp: 1769573950000,
+                retentionPolicy: {
+                    type: 'duration'
+                },
+                schedulePolicy: '',
+                index: 0,
+                id: 0
+            },
+            {
+                repository: {
+                    name: 'b2',
+                    path: '',
+                    password: '',
+                    repositoryType: 'BACKBLAZE_B2',
+                    usage: 91,
+                    capacity: 100,
+                    repositoryStatus: 'Active',
+                    id: 0
+                },
+                repositoryId: 2,
+                lastBackupTimestamp: 1769573950000,
+                retentionPolicy: {
+                    type: 'duration'
+                },
+                schedulePolicy: '',
+                index: 0,
+                id: 0
+            }
+        ]},
+        {
+            strategy: {
+                name: 'Image Collection',
+                strategyType: 'STRATEGY_321',
+                dataSource: '/image',
+                hostname: '',
+                dataSourceSize: 0,
+                id: 0
+            },
+            targets: [
+                {
+                    repository: {
+                        path: '',
+                        name: 'local',
+                        password: '',
+                        repositoryType: 'LOCAL',
+                        usage: 500,
+                        capacity: 1000,
+                        repositoryStatus: 'Active',
+                        id: 0
+                    },
+                    repositoryId: 1,
+                    lastBackupTimestamp: 1769573950000,
+                    retentionPolicy: {
+                        type: 'duration'
+                    },
+                    schedulePolicy: '',
+                    index: 0,
+                    id: 0
+                },
+                {
+                    repository: {
+                        name: 's3',
+                        path: '',
+                        password: '',
+                        repositoryType: 'AWS_S3',
+                        usage: 50,
+                        capacity: 100,
+                        repositoryStatus: 'Active',
+                        id: 0
+                    },
+                    repositoryId: 2,
+                    lastBackupTimestamp: 1769573950000,
+                    retentionPolicy: {
+                        type: 'duration'
+                    },
+                    schedulePolicy: '',
+                    index: 0,
+                    id: 0
+                }
+            ]}
+    ]
+
+
     return (
         <Container fluid p={0}>
             <Stack gap="xl">
@@ -17,55 +124,11 @@ const OverviewPage: React.FC = () => {
                     <Grid.Col span={{ md: 8 }}>
                         <Grid gutter="md">
                             <Grid.Col span={{ sm: 4 }}>
-                                <BackupStrategyCard strategy={{
-                                    name: 'Music Collection',
-                                    strategyType: '3-2-1',
-                                    dataSource: '/music',
-                                    targets: [
-                                        {
-                                            repositoryName: 'local',
-                                            targetType: 'local',
-                                            usage: 500,
-                                            capacity: 1000,
-                                            repositoryId: 1,
-                                            lastBackupTimestamp: 1769573950000
-                                        },
-                                        {
-                                            repositoryName: 's3',
-                                            targetType: 'backblaze b2',
-                                            usage: 91,
-                                            capacity: 100,
-                                            repositoryId: 2,
-                                            lastBackupTimestamp: 1769573950000
-                                        }
-                                    ]
-                                }}
+                                <BackupStrategyCard policy={policy[0]}
                                 />
                             </Grid.Col>
                             <Grid.Col span={{ sm: 4 }}>
-                                <BackupStrategyCard strategy={{
-                                    name: 'Image Collection',
-                                    strategyType: '3-2-1',
-                                    dataSource: '/image',
-                                    targets: [
-                                        {
-                                            repositoryName: 'local',
-                                            targetType: 'local',
-                                            usage: 500,
-                                            capacity: 1000,
-                                            repositoryId: 1,
-                                            lastBackupTimestamp: 1769573950000
-                                        },
-                                        {
-                                            repositoryName: 's3',
-                                            targetType: 'backblaze b2',
-                                            usage: 20,
-                                            capacity: 100,
-                                            repositoryId: 2,
-                                            lastBackupTimestamp: 1769573950000
-                                        }
-                                    ]
-                                }}
+                                <BackupStrategyCard policy={policy[1]}
                                 />
                             </Grid.Col>
                         </Grid>

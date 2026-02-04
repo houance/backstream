@@ -163,3 +163,11 @@ export const EMPTY_BACKUP_POLICY_SCHEMA: InsertBackupPolicySchema = {
         index: 1
     }]
 }
+export const updateBackupPolicySchema = z.object({
+    strategy: updateBackupStrategySchema,
+    targets: z.array(updateBackupTargetSchema.safeExtend({
+        repository: updateRepositorySchema,
+        lastBackupTimestamp: z.number().int().min(0)
+    }))
+})
+export type UpdateBackupPolicySchema = z.infer<typeof updateBackupPolicySchema>;

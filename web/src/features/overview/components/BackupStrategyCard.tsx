@@ -1,39 +1,23 @@
 import {Card, Text, Badge, Group, Stack, Progress, Tooltip, Box} from '@mantine/core';
 import {IconAlertTriangle, IconCloud, IconDeviceSdCard} from '@tabler/icons-react';
 import {getRepositoryStats} from "../../../util/format.ts";
+import {type UpdateBackupPolicySchema} from '@backstream/shared'
 
-// This represents the joined data of a Strategy + its Backup Targets & Repositories
-interface BackupStrategyProps {
-    strategy: {
-        name: string;
-        strategyType: string;
-        dataSource: string;
-        targets: {
-            repositoryId: number;
-            repositoryName: string;
-            targetType: string;
-            usage: number;
-            capacity: number;
-            lastBackupTimestamp: number;
-        }[];
-    };
-}
-
-export function BackupStrategyCard({ strategy }: BackupStrategyProps) {
+export function BackupStrategyCard({ policy }: { policy: UpdateBackupPolicySchema }) {
     // Determine if ANY repository is near capacity
-    const isCritical = strategy.targets.some(t => (t.usage / t.capacity) > 0.8);
+    const isCritical = policy.targets.some(t => (t.repository.usage / t.repository.capacity) > 0.8);
 
     return (
         <Card shadow="sm" padding="lg" radius="md" withBorder>
             {/* 备份计划名称和类型  */}
             <Group justify="space-between" mb="md">
                 <div>
-                    <Tooltip label={strategy.dataSource}>
-                        <Text fw={700} size="lg">{strategy.name}</Text>
+                    <Tooltip label={policy.strategy.dataSource}>
+                        <Text fw={700} size="lg">{policy.strategy.name}</Text>
                     </Tooltip>
                 </div>
-                <Badge color={isCritical ? "red" : "blue"} variant="light">
-                    {strategy.strategyType}
+                <Badge color={isCritical ? "red" : "blue"} variant="light" size="sm">
+                    {policy.strategy.strategyType}
                 </Badge>
             </Group>
 
@@ -41,18 +25,18 @@ export function BackupStrategyCard({ strategy }: BackupStrategyProps) {
             <Text size="sm" fw={500} mb="xs" c="dimmed">Backup Target Health</Text>
             {/* by 备份目标展示 progress 和 backup time */}
             <Stack gap="sm">
-                {strategy.targets.map((target) => {
-                    const { percentage } = getRepositoryStats(target.usage, target.capacity);
+                {policy.targets.map((target) => {
+                    const { percentage } = getRepositoryStats(target.repository.usage, target.repository.capacity);
 
                     return (
                         <Box key={target.repositoryId}>
                             <Group justify="space-between" mb={4}>
                                 {/* 空间条上方文字和 icon: target name + target type */}
                                 <Group gap="xs">
-                                    {target.targetType === 'local' ?
+                                    {target.repository.repositoryType === 'LOCAL' ?
                                         <IconDeviceSdCard size={16} /> :
                                         <IconCloud size={16} />}
-                                    <Text size="xs" fw={600}>{target.repositoryName}</Text>
+                                    <Text size="xs" fw={600}>{target.repository.name}</Text>
                                 </Group>
                                 {/* 空间条上方, 当空间不足的时候展示三角形警告 icon */}
                                 <Group gap={4}>
