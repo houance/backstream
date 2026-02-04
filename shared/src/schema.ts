@@ -9,7 +9,7 @@ export const repository = sqliteTable("repository_table", {
     repositoryType: text("repository_type").notNull(),
     usage: integer("size").notNull(),
     capacity: integer("capacity").notNull(),
-    certification: text("certification", { mode: "json" }).notNull(),
+    certification: text("certification", { mode: "json" }),
     repositoryStatus: text("repository_status").notNull(),
 });
 

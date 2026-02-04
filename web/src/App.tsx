@@ -4,15 +4,29 @@ import { BrowserRouter } from 'react-router-dom'; // Import BrowserRouter
 import DashboardLayout from './layouts/DashboardLayout';
 import {Notifications} from "@mantine/notifications";
 import '@mantine/notifications/styles.css';
+import {QueryClient, QueryClientProvider} from "@tanstack/react-query";
+
+// 1. Create a client instance
+const queryClient = new QueryClient({
+    defaultOptions: {
+        queries: {
+            // Prevents aggressive refetching during development
+            refetchOnWindowFocus: false,
+            retry: 1,
+        },
+    },
+});
 
 function App() {
     return (
-        <BrowserRouter> {/* Wrap the application */}
-            <MantineProvider>
-                <Notifications position="top-right" />
-                <DashboardLayout />
-            </MantineProvider>
-        </BrowserRouter>
+        <QueryClientProvider client={queryClient}>
+            <BrowserRouter> {/* Wrap the application */}
+                <MantineProvider>
+                    <Notifications position="top-right" />
+                    <DashboardLayout />
+                </MantineProvider>
+            </BrowserRouter>
+        </QueryClientProvider>
     );
 }
 

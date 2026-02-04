@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import infoRoute from './routes/info'
+import storageRoute from "./routes/storage-location";
 import { db } from './service/db';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -33,6 +34,7 @@ if (process.env.NODE_ENV === 'production') {
 // Define prefix for all data routes
 const routes = app.basePath('/api')
     .route('/info', infoRoute)
+    .route('/storage', storageRoute)
 
 // Export the AppType for the frontend
 export default app
