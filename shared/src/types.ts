@@ -35,7 +35,7 @@ export const certificateSchema = z.object({
     b2: b2Schema.partial().optional(),
     oss: ossSchema.partial().optional(),
     sftp: sftpSchema.partial().optional(),
-})
+}).nullable()
 export type CertificateSchema = z.infer<typeof certificateSchema>;
 // The restic repository main schema
 export const insertRepositorySchema = createInsertSchema(repository, {
@@ -44,7 +44,7 @@ export const insertRepositorySchema = createInsertSchema(repository, {
     password: z.string().min(4, 'Password must be at least 4 characters'),
     repositoryType: z.enum(Object.values(RepoType)),
     repositoryStatus: z.enum(['Active', 'Disconnected']),
-    certification: certificateSchema.optional(),
+    certification: certificateSchema,
 }).omit({ id: true });
 // Insert Repository
 export type InsertRepositorySchema = z.infer<typeof insertRepositorySchema>
@@ -61,7 +61,8 @@ export const EMPTY_REPOSITORY_SCHEMA: InsertRepositorySchema = {
     repositoryType: "LOCAL",
     repositoryStatus: 'Disconnected',
     usage: 0,
-    capacity: 1
+    capacity: 1,
+    certification: null,
 }
 // system settings schema, only update schema since it always have only on record in db
 export const systemSettings = createUpdateSchema(setting, {

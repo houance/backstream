@@ -20,32 +20,16 @@ interface ModalProps {
     onTestConnection: (values: InsertRepositorySchema | UpdateRepositorySchema) => Promise<void>;
     // data is null for "Create", and populated for "Edit"
     data: UpdateRepositorySchema | null;
+    isSubmitting: boolean;
     title: string;
 }
 
-function StorageLocationModal({ opened, onClose, data, onSubmit, onTestConnection, title }: ModalProps) {
-    const [isSubmitting, setSubmitting] = useState(false);
+function StorageLocationModal({ opened, onClose, data, onSubmit, onTestConnection, title, isSubmitting }: ModalProps) {
     const [isConnecting, setConnecting] = useState(false);
     const form = useForm<InsertRepositorySchema | UpdateRepositorySchema>({
         initialValues: data ?? EMPTY_REPOSITORY_SCHEMA,
         validate: zod4Resolver(data ? updateRepositorySchema : insertRepositorySchema),
     });
-
-    const handleFormSubmit = async (values: InsertRepositorySchema | UpdateRepositorySchema) => {
-        setSubmitting(true)
-        try {
-            // Parent handles the 'save' logic
-            await onSubmit(values);
-            notice(true, data ? `update` : `create` + ` storage location`);
-            // Cleanup
-            onClose();
-            form.reset();
-        } catch (e) {
-            notice(false, data ? `update` : `create` + " storage location failed");
-        } finally {
-            setSubmitting(false)
-        }
-    };
 
     const handleTestConnection = async (values: InsertRepositorySchema | UpdateRepositorySchema) => {
         setConnecting(true)
@@ -73,7 +57,7 @@ function StorageLocationModal({ opened, onClose, data, onSubmit, onTestConnectio
 
     return (
         <Modal opened={opened} onClose={onClose} title={title} centered size="xl">
-            <form onSubmit={form.onSubmit((values) => handleFormSubmit(values))}>
+            <form onSubmit={form.onSubmit((values) => onSubmit(values))}>
                 <Stack>
                     <TextInput
                         label="Location Name"
@@ -89,7 +73,7 @@ function StorageLocationModal({ opened, onClose, data, onSubmit, onTestConnectio
                         withAsterisk
                     />
                     <PasswordInput
-                        variant={!!data ? "filled" : "default"}
+                        variant={data ? "filled" : "default"}
                         label="Password"
                         placeholder="Enter restic password"
                         {...form.getInputProps('password')} // Use dot notation

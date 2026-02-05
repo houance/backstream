@@ -8,15 +8,16 @@ import type {InsertRepositorySchema, UpdateRepositorySchema} from "@backstream/s
 import {useDisclosure} from "@mantine/hooks";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {client} from "../../api";
+import {ensureSuccess} from "../../util/api.ts";
 
 const StorageLocationsPage: React.FC = () => {
     // 1. Manage state for opening/closing and the data to edit
-    const [opened, { open, close }] = useDisclosure(false);
+    const [opened, {open, close}] = useDisclosure(false);
     const [editingItem, setEditingItem] = useState<UpdateRepositorySchema | null>(null);
 
     // --- 2. FETCH DATA ---
     const queryClient = useQueryClient();
-    const { data, isLoading } = useQuery({
+    const {data, isLoading} = useQuery({
         queryKey: ['storage-locations'],
         queryFn: async () => {
             const res = await client.api.storage['all-storage-location'].$get();
@@ -29,15 +30,19 @@ const StorageLocationsPage: React.FC = () => {
     const submitMutation = useMutation({
         mutationFn: async (item: InsertRepositorySchema | UpdateRepositorySchema) => {
             if ('id' in item && item.id) {
-                return await client.api.storage[':id'].$patch({
-                    param: { id: item.id.toString() },
-                    json: item
-                });
+                return ensureSuccess(
+                    client.api.storage[':id'].$patch({
+                        param: {id: item.id.toString()},
+                        json: item
+                    })
+                )
             }
-            return await client.api.storage.$post({ json: item });
+            return ensureSuccess(
+                client.api.storage.$post({json: item})
+            )
         },
         onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: ['storage-locations'] });
+            await queryClient.invalidateQueries({queryKey: ['storage-locations']});
             notice(true, "Storage location saved successfully");
             close();
         },
@@ -48,18 +53,24 @@ const StorageLocationsPage: React.FC = () => {
     const deleteMutation = useMutation({
         mutationFn: async (item: UpdateRepositorySchema) => {
             const res = await client.api.storage[':id'].$delete({
-                param: { id: item.id.toString() },
+                param: {id: item.id.toString()},
             });
             return res.json();
         },
         onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: ['storage-locations'] });
+            await queryClient.invalidateQueries({queryKey: ['storage-locations']});
             notice(true, "Item deleted");
         }
     });
+    // 5. OpenModal as empty
     const openCreateModal = () => {
         setEditingItem(null);
         open();
+    }
+    // 6. open modal as edit
+    const openEditModal = (item: UpdateRepositorySchema) => {
+        setEditingItem(item);
+        open()
     }
     const handleTestConnection = async (item: InsertRepositorySchema | UpdateRepositorySchema) => {
         notice(true, `connection ${item.name} success`)
@@ -68,7 +79,7 @@ const StorageLocationsPage: React.FC = () => {
     if (isLoading) {
         return (
             <Center h={400}>
-                <Loader size="xl" />
+                <Loader size="xl"/>
             </Center>
         );
     }
@@ -78,7 +89,7 @@ const StorageLocationsPage: React.FC = () => {
             {/* Storage Location 数据展示 */}
             <StorageLocationTable
                 data={data!}
-                onEdit={(item) => submitMutation.mutate(item)}
+                onEdit={(item) => openEditModal(item)}
                 onDelete={(item) => deleteMutation.mutate(item)}/>
             {/* Add Storage Location Button */}
             <Group justify="flex-end" mt="xl" pt="md" style={{borderTop: '1px solid var(--mantine-color-gray-3)'}}>
@@ -90,13 +101,15 @@ const StorageLocationsPage: React.FC = () => {
             <StorageLocationModal
                 key={editingItem?.id ?? 'create-storage-location'}
                 onSubmit={(item) => submitMutation.mutate(item)}
+                isSubmitting={isLoading}
                 onTestConnection={(item) => handleTestConnection(item)}
                 title={editingItem ? "Edit storage location" : "Create storage location"}
                 opened={opened}
                 onClose={close}
-                data={editingItem} />
+                data={editingItem}/>
         </Container>
     );
 };
 
 export default StorageLocationsPage;
+

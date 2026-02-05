@@ -7,35 +7,26 @@ import { updateRepositorySchema } from '@backstream/shared';
 import {zValidator} from "@hono/zod-validator";
 
 const storageRoute = new Hono()
-    // GET a single repository
+    // GET all repo
     .get('/all-storage-location', async (c) => {
         const locations = await db.select().from(repository);
-        if (!locations) return c.json({ error: 'db access error'}, 500);
+        if (!locations) return c.json({ error: 'not found'}, 404);
         // validate it through zod schema
         const validated = updateRepositorySchema.array().parse(locations)
         validated.push({
-            id: 1,
+            id: 100,
             name: "Primary NAS Storage",
             path: "/mnt/nas/backup01",
             repositoryType: "SFTP",
             usage: 3400000000000,
             capacity: 5000000000000,
             repositoryStatus: "Active",
-            password: "fdsa"
+            password: "fdsa",
+            certification: null
         })
         return c.json(validated);
     })
-    .patch('/storage-location/:id', async (c) => {
-        const id = Number(c.req.param('id'));
-        const body = await c.req.json();
-
-        const [updated] = await db.update(repository)
-            .set(body)
-            .where(eq(repository.id, id))
-            .returning();
-
-        return c.json(updateRepositorySchema.parse(updated));
-    })
+    // create repo
     .post('/',
         zValidator('json', insertRepositorySchema),
         async (c) => {
@@ -45,8 +36,9 @@ const storageRoute = new Hono()
                 .returning();
             return c.json(newRepo, 201);
         })
+    // update repo
     .patch('/:id',
-        zValidator('json', updateRepositorySchema),
+        zValidator('json', updateRepositorySchema.partial()),
         async (c) => {
             const id = Number(c.req.param('id'));
             const values = c.req.valid('json');
@@ -59,6 +51,7 @@ const storageRoute = new Hono()
             if (!updatedRepo) return c.json({ error: 'Not found' }, 404);
             return c.json(updatedRepo);
         })
+    // delete repo
     .delete('/:id', async (c) => {
         const id = Number(c.req.param('id'));
 
