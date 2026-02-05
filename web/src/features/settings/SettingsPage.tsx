@@ -9,8 +9,7 @@ export function SettingsPage() {
                 initialData={{
                     ioPriority: 'normal',
                     minDiskSpaceGB: 15,
-                    notificationEmail: '837507557@qq.com',
-                    alertOnFailureOnly: true,
+                    email: '837507557@qq.com',
                     logRetentionDays: 1
                 }}
                 onSubmit={() => console.log('Settings page')} />
