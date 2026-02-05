@@ -9,7 +9,6 @@
     "types": ["node"],
     "jsx": "react-jsx",
     "jsxImportSource": "hono/jsx",
-    "outDir": "./dist",
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "rootDirs": [".", "../shared"],
