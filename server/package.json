@@ -5,7 +5,8 @@
     "dev": "vite --configLoader runner",
     "build": "vite build",
     "start": "node dist/index.js",
-    "db": "npx drizzle-kit generate --name create_table"
+    "init": "npx drizzle-kit generate --name create_table",
+    "db": "npx drizzle-kit studio"
   },
   "dependencies": {
     "@backstream/shared": "^1.0.0",
