@@ -17,7 +17,7 @@ export class RepositoryClient {
     private readonly _env: Record<string, string>;
     public readonly repoType: RepoType;
 
-    private constructor(path: string, password: string, repoType: RepoType, resticCert: CertificateSchema) {
+    public constructor(path: string, password: string, repoType: RepoType, resticCert: CertificateSchema) {
         this.repoType = repoType;
         // convert config data to env
         this._env = {
@@ -26,33 +26,20 @@ export class RepositoryClient {
         }
         switch (repoType) {
             case "ALIYUN_OSS":
-                this._env = {...this._env, ...resticCert.oss};
+                this._env = {...this._env, ...resticCert?.oss};
                 break;
             case "AWS_S3":
             case "S3":
-                this._env = {...this._env, ...resticCert.s3};
+                this._env = {...this._env, ...resticCert?.s3};
                 break;
             case "BACKBLAZE_B2":
-                this._env = {...this._env, ...resticCert.b2};
+                this._env = {...this._env, ...resticCert?.b2};
                 break;
             case "SFTP":
-                this._env = {...this._env, ...resticCert.sftp};
+                this._env = {...this._env, ...resticCert?.sftp};
                 break;
             default: break
         }
-    }
-
-    public static async create(
-        path: string,
-        password: string,
-        repoType: RepoType,
-        resticCert: CertificateSchema,
-        createRepo?: boolean
-    ): Promise<RepositoryClient> {
-        const client = new RepositoryClient(path, password, repoType, resticCert);
-        // Try to create if requested
-        if (createRepo) await client.createRepo();
-        return client;
     }
 
     public copyTo(

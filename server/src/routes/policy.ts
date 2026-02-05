@@ -1,0 +1,44 @@
+import { Hono } from 'hono';
+import { db } from '../service/db';
+import { updateBackupPolicySchema } from "@backstream/shared";
+
+const policyRoute = new Hono()
+    .get('/all-policy', async (c) => {
+        const dbResult = await getStrategyData();
+        // validate with zod
+        const validated = updateBackupPolicySchema.array().parse(dbResult);
+        return c.json(validated);
+    })
+
+
+async function getStrategyData() {
+    const result = await db.query.strategy.findMany({
+        with: {
+            targets: {
+                with: {
+                    repository: true,
+                    // Fetch only the single latest backup execution
+                    executions: {
+                        columns: {
+                            startedAt: true,
+                        },
+                        where: (execution, { eq }) => eq(execution.commandType, 'backup'),
+                        orderBy: (execution, { desc }) => [desc(execution.startedAt)],
+                        limit: 1,
+                    },
+                },
+            },
+        },
+    });
+
+    // Small map to flatten 'executions[0].startedAt' into 'lastBackupAt'
+    return result.map(({ targets, ...strategyData }) => ({
+        strategy: strategyData,
+        targets: targets.map(({ executions, ...targetData }) => ({
+            ...targetData,
+            lastBackupAt: executions[0]?.startedAt ?? null,
+        })),
+    }));
+}
+
+export default policyRoute;

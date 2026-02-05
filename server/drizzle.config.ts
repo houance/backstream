@@ -7,6 +7,6 @@ export default defineConfig({
     out: "./drizzle", // Migrations will go into server/drizzle/
     dialect: "sqlite",
     dbCredentials: {
-        url: "sqlite.db", // DB file will be created in server/sqlite.db
+        url: "./db/backstream_app.db", // DB file will be created in server/sqlite.db
     },
 });

@@ -3,6 +3,7 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import infoRoute from './routes/info'
 import storageRoute from "./routes/storage-location";
+import policyRoute from "./routes/policy";
 import { db } from './service/db';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,6 +36,7 @@ if (process.env.NODE_ENV === 'production') {
 const routes = app.basePath('/api')
     .route('/info', infoRoute)
     .route('/storage', storageRoute)
+    .route('/policy', policyRoute)
 
 // Export the AppType for the frontend
 export default app

@@ -1,4 +1,5 @@
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import {relations} from "drizzle-orm";
 
 // 1. Repository Table
 export const repository = sqliteTable("repository_table", {
@@ -73,3 +74,27 @@ export const setting = sqliteTable("system_setting", {
     email: text("email").notNull(),
     logRetentionDays: integer("log_retention_days").notNull(),
 })
+
+// strategy => many targets
+export const strategyRelations = relations(strategy, ({ many }) => ({
+    targets: many(backupTarget),
+}));
+// target => 1 strategy, 1 repository, many execution
+export const backupTargetRelations = relations(backupTarget, ({ one, many }) => ({
+    strategy: one(strategy, {
+        fields: [backupTarget.backupStrategyId],
+        references: [strategy.id],
+    }),
+    repository: one(repository, {
+        fields: [backupTarget.repositoryId],
+        references: [repository.id],
+    }),
+    executions: many(execution),
+}));
+// execution => one target
+export const executionRelations = relations(execution, ({ one }) => ({
+    target: one(backupTarget, {
+        fields: [execution.backupTargetId],
+        references: [backupTarget.id],
+    }),
+}));

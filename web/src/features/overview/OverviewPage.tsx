@@ -1,11 +1,13 @@
 import React, {useState} from 'react';
-import {Grid, Container, Stack} from '@mantine/core';
+import {Grid, Container, Stack, Center, Loader} from '@mantine/core';
 import {BackupPolicyCard} from "./components/BackupPolicyCard.tsx";
 import {StatsCardGroup} from "./components/StatsCardGroup.tsx";
 import {RecentActivityCard} from "./components/RecentActivityCard.tsx";
 import type { UpdateBackupPolicySchema } from '@backstream/shared';
 import {PolicyDetailModal} from "../policy-detail/PolicyDetailModal.tsx";
 import {useDisclosure} from "@mantine/hooks";
+import {useQuery} from "@tanstack/react-query";
+import {client} from "../../api";
 
 const OverviewPage: React.FC = () => {
     const [opened, { open, close }] = useDisclosure(false);
@@ -14,6 +16,16 @@ const OverviewPage: React.FC = () => {
         setDetailPolicy(policy);
         open()
     }
+    // --- FETCH DATA ---
+    const {data, isLoading} = useQuery({
+        queryKey: ['policy'],
+        queryFn: async () => {
+            const res = await client.api.policy['all-policy'].$get();
+            if (!res.ok) throw new Error('Failed to fetch all policy');
+            return res.json();
+        },
+    });
+
     const backupPolicy: UpdateBackupPolicySchema[] = [
         {
         strategy: {
@@ -34,7 +46,8 @@ const OverviewPage: React.FC = () => {
                     usage: 500,
                     capacity: 1000,
                     repositoryStatus: 'Active',
-                    id: 0
+                    id: 0,
+                    certification: null
                 },
                 repositoryId: 1,
                 lastBackupTimestamp: 1769573950000,
@@ -56,7 +69,12 @@ const OverviewPage: React.FC = () => {
                     usage: 91,
                     capacity: 100,
                     repositoryStatus: 'Active',
-                    id: 0
+                    id: 0,
+                    certification: {
+                        b2: {
+
+                        }
+                    }
                 },
                 repositoryId: 2,
                 lastBackupTimestamp: 1769573950000,
@@ -134,13 +152,18 @@ const OverviewPage: React.FC = () => {
                 <Grid gutter="xl">
                     {/* backup backupPolicy status */}
                     <Grid.Col span={{ md: 8 }}>
-                        <Grid gutter="md">
-                            {backupPolicy.map((policy: UpdateBackupPolicySchema) => (
+                        {isLoading ? ((
+                            <Center h={400}>
+                                <Loader size="xl"/>
+                            </Center>
+                        )) :
+                            (<Grid gutter="md">
+                            {data!.map((policy: UpdateBackupPolicySchema) => (
                                 <Grid.Col span={{ sm: 4}}>
                                     <BackupPolicyCard policy={policy} onDetail={() => openModal(policy)} />
                                 </Grid.Col>
                             ))}
-                        </Grid>
+                        </Grid>)}
                     </Grid.Col>
 
                     {/* 3. recent activity */}

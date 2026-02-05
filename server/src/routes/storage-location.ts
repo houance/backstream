@@ -1,10 +1,10 @@
-// apps/api/src/routes/repos.ts
 import { Hono } from 'hono';
 import { eq } from 'drizzle-orm';
 import { db } from '../service/db'; // Your drizzle instance
-import {insertRepositorySchema, repository} from '@backstream/shared';
-import { updateRepositorySchema } from '@backstream/shared';
+import { updateRepositorySchema, insertRepositorySchema, repository } from '@backstream/shared';
 import {zValidator} from "@hono/zod-validator";
+import { RepositoryClient } from '../service/restic'
+
 
 const storageRoute = new Hono()
     // GET all repo
@@ -13,24 +13,48 @@ const storageRoute = new Hono()
         if (!locations) return c.json({ error: 'not found'}, 404);
         // validate it through zod schema
         const validated = updateRepositorySchema.array().parse(locations)
-        validated.push({
-            id: 100,
-            name: "Primary NAS Storage",
-            path: "/mnt/nas/backup01",
-            repositoryType: "SFTP",
-            usage: 3400000000000,
-            capacity: 5000000000000,
-            repositoryStatus: "Active",
-            password: "fdsa",
-            certification: null
-        })
         return c.json(validated);
     })
+    .post('/test-connection',
+        zValidator('json', insertRepositorySchema),
+        async (c) => {
+        // todo
+            const values = c.req.valid('json');
+            // 创建 client 并连接
+            const repoClient = new RepositoryClient(
+                values.path,
+                values.password,
+                values.repositoryType,
+                values.certification
+            );
+        }
+    )
     // create repo
     .post('/',
         zValidator('json', insertRepositorySchema),
         async (c) => {
+        // todo
             const values = c.req.valid('json');
+            // 校验重复 repo
+            const dbResult = await db.select()
+                .from(repository)
+                .where(eq(repository.path, values.path));
+            if (dbResult) {
+                return c.json({ error: `duplicate path` }, 400);
+            }
+            // 初始化 repo
+            const repoClient = new RepositoryClient(
+                values.path,
+                values.password,
+                values.repositoryType,
+                values.certification
+            );
+            const createRepoResult = await repoClient.createRepo();
+            if (!createRepoResult.success) return c.json({ error: `init repo failed ${createRepoResult.errorMsg}`}, 500);
+            // 更新 repo status, usage, capacity
+            values.repositoryStatus = 'Active'
+
+            // 创建 repo
             const [newRepo] = await db.insert(repository)
                 .values(values)
                 .returning();
@@ -53,6 +77,7 @@ const storageRoute = new Hono()
         })
     // delete repo
     .delete('/:id', async (c) => {
+        // todo
         const id = Number(c.req.param('id'));
 
         const [deletedRepo] = await db.delete(repository)
