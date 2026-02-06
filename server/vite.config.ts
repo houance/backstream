@@ -19,5 +19,11 @@ export default defineConfig({
             },
         },
         ssr: true, // Necessary for Node.js environments
+    },
+    ssr: {
+        noExternal: ['hono']
+    },
+    optimizeDeps: {
+        exclude: ['hono', 'unicorn-magic']
     }
 });

@@ -1,6 +1,7 @@
 {
   "name": "backstream",
   "private": true,
+  "type": "module",
   "workspaces": [
     "server",
     "web",
