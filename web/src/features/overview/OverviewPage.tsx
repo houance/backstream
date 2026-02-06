@@ -34,12 +34,31 @@ const OverviewPage: React.FC = () => {
             return res.json();
         },
     });
+    // --- FETCH STATS DATA ---
+    const {data: stats, isLoading: isStatsLoading} = useQuery({
+        queryKey: ['stats'],
+        queryFn: async () => {
+            const res = await client.api.info['stats'].$get();
+            if (!res.ok) throw new Error('Failed to fetch stats');
+            return res.json();
+        },
+    });
 
     return (
         <Container fluid p={0}>
             <Stack gap="xl">
                 {/* 三个卡片, 所有备份策略的 overview */}
-                <StatsCardGroup activeCount={1} totalSize={100} complianceRate={1} />
+                {isStatsLoading ? (
+                    <Center h={400}>
+                        <Loader size="xl"/>
+                    </Center>
+                    ) : (
+                    <StatsCardGroup
+                        activeCount={stats!.activeCount}
+                        totalSize={stats!.totalSize}
+                        successRate={stats!.successRate}
+                    />)
+                }
 
                 {/* by backupPolicy 展示汇总信息 */}
                 <Grid gutter="xl">

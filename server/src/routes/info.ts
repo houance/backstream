@@ -25,5 +25,44 @@ const infoRoute = new Hono()
 
         return c.json(result);
     })
+    .get('/stats', async (c) => {
+        const dbResult = await db.query.strategy.findMany({
+            with: {
+                targets: {
+                    with: {
+                        // Fetch only the single latest backup finished execution
+                        executions: {
+                            columns: {
+                                executeStatus: true,
+                                finishedAt: true,
+                            },
+                            where: (execution, { and, eq }) => and(
+                                eq(execution.commandType, 'backup'),
+                            ),
+                            orderBy: (execution, { desc }) => [desc(execution.finishedAt)],
+                            limit: 1,
+                        },
+                    },
+                },
+            },
+        });
+        if (!dbResult) return c.json({ error: 'db error' }, 500);
+        let totalSize = 0, failStrategy = 0;
+        dbResult.forEach(item => {
+            totalSize += item.dataSourceSize;
+            const hasFailedTarget = item.targets.some((target) => {
+                const latestExecution = target.executions[0]; // limit: 1 ensures this is the latest
+                return latestExecution?.executeStatus === 'fail';
+            });
+            if (hasFailedTarget) failStrategy++;
+        })
+        return c.json({
+            activeCount: dbResult.length,
+            totalSize: totalSize,
+            successRate: dbResult.length > 0 ?
+                (dbResult.length - failStrategy) / dbResult.length
+                : 0
+        });
+    })
 
 export default infoRoute;
