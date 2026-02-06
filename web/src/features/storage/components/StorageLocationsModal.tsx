@@ -1,4 +1,3 @@
-import {useState} from 'react';
 import {Modal, Button, TextInput, Select, Group, Stack, PasswordInput, Divider} from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { zod4Resolver } from 'mantine-form-zod-resolver';
@@ -10,38 +9,25 @@ import {
     type UpdateRepositorySchema,
     EMPTY_REPOSITORY_SCHEMA,
 } from '@backstream/shared'
-import {notice} from "../../../util/notification.tsx";
 import {PROVIDER_MAP} from "../provider-map.tsx";
 
 interface ModalProps {
     opened: boolean;
     onClose: () => void;
     onSubmit: (values: InsertRepositorySchema | UpdateRepositorySchema) => Promise<void> | void;
-    onTestConnection: (values: InsertRepositorySchema | UpdateRepositorySchema) => Promise<void>;
+    onConnect: (values: InsertRepositorySchema | UpdateRepositorySchema) => Promise<void>;
     // data is null for "Create", and populated for "Edit"
     data: UpdateRepositorySchema | null;
     isSubmitting: boolean;
+    isConnecting: boolean;
     title: string;
 }
 
-function StorageLocationModal({ opened, onClose, data, onSubmit, onTestConnection, title, isSubmitting }: ModalProps) {
-    const [isConnecting, setConnecting] = useState(false);
+function StorageLocationModal({ opened, onClose, data, onSubmit, onConnect, title, isSubmitting, isConnecting }: ModalProps) {
     const form = useForm<InsertRepositorySchema | UpdateRepositorySchema>({
         initialValues: data ?? EMPTY_REPOSITORY_SCHEMA,
         validate: zod4Resolver(data ? updateRepositorySchema : insertRepositorySchema),
     });
-
-    const handleTestConnection = async (values: InsertRepositorySchema | UpdateRepositorySchema) => {
-        setConnecting(true)
-        try {
-            await onTestConnection(values);
-            notice(true, `connection success`);
-        } catch (e) {
-            notice(false, `connection failed: ${e}`);
-        } finally {
-            setConnecting(false)
-        }
-    }
 
     const handleTypeChange = (newType: string | null) => {
         if (data) return;
@@ -99,7 +85,7 @@ function StorageLocationModal({ opened, onClose, data, onSubmit, onTestConnectio
 
                     <Group justify="flex-end" mt="xl">
                         <Button variant="subtle" color="gray" onClick={onClose}>Cancel</Button>
-                        <Button variant="outline" loading={isConnecting} onClick={() => handleTestConnection(form.values)}>Test</Button>
+                        <Button variant="outline" loading={isConnecting} onClick={() => onConnect(form.values)}>Test</Button>
                         <Button type="submit" loading={isSubmitting}>{data ? 'Update' : 'Save'} Location</Button>
                     </Group>
                 </Stack>

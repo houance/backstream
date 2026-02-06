@@ -73,7 +73,12 @@ const StorageLocationsPage: React.FC = () => {
         open()
     }
     const handleTestConnection = async (item: InsertRepositorySchema | UpdateRepositorySchema) => {
-        notice(true, `connection ${item.name} success`)
+        const res = await client.api.storage['test-connection'].$post({json: item})
+        if (res.ok) {
+            notice(true, `connection ${item.name} success`)
+        } else {
+            notice(false, `connection ${item.name} failed`)
+        }
     }
 
     if (isLoading) {
@@ -102,7 +107,7 @@ const StorageLocationsPage: React.FC = () => {
                 key={editingItem?.id ?? 'create-storage-location'}
                 onSubmit={(item) => submitMutation.mutate(item)}
                 isSubmitting={isLoading}
-                onTestConnection={(item) => handleTestConnection(item)}
+                onConnect={(item) => handleTestConnection(item)}
                 title={editingItem ? "Edit storage location" : "Create storage location"}
                 opened={opened}
                 onClose={close}

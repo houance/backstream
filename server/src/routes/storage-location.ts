@@ -19,6 +19,7 @@ const storageRoute = new Hono()
         zValidator('json', insertRepositorySchema),
         async (c) => {
         // todo
+            return c.json({ message: 'OK' })
         }
     )
     // create repo
