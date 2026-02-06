@@ -21,7 +21,6 @@ export function BackupPolicyCard({ policy, onDetail }: {
                   width: '100%',
                   textAlign: 'left',
                   cursor: 'pointer',
-                  backgroundColor: 'transparent' // Optional: use interactive colors
               }}>
             {/* 备份计划名称和类型  */}
             <Group justify="space-between" mb="md">
