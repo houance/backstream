@@ -62,6 +62,21 @@ const StorageLocationsPage: React.FC = () => {
             notice(true, "Item deleted");
         }
     });
+    // --- TEST CONNECTION MUTATION ---
+    const testConnMutation = useMutation({
+        mutationFn: async (item: InsertRepositorySchema | UpdateRepositorySchema) => {
+            const response = await client.api.storage['test-connection'].$post({json: item});
+            if (!response.ok) throw new Error('Connection failed');
+            return response.json();
+        },
+        onSuccess: () => {
+            // You can trigger a Mantine notification here
+            notice(true, `connection success`)
+        },
+        onError: (error) => {
+            notice(false, `connection failed: ${error}`)
+        }
+    });
     // 5. OpenModal as empty
     const openCreateModal = () => {
         setEditingItem(null);
@@ -71,14 +86,6 @@ const StorageLocationsPage: React.FC = () => {
     const openEditModal = (item: UpdateRepositorySchema) => {
         setEditingItem(item);
         open()
-    }
-    const handleTestConnection = async (item: InsertRepositorySchema | UpdateRepositorySchema) => {
-        const res = await client.api.storage['test-connection'].$post({json: item})
-        if (res.ok) {
-            notice(true, `connection ${item.name} success`)
-        } else {
-            notice(false, `connection ${item.name} failed`)
-        }
     }
 
     if (isLoading) {
@@ -107,7 +114,8 @@ const StorageLocationsPage: React.FC = () => {
                 key={editingItem?.id ?? 'create-storage-location'}
                 onSubmit={(item) => submitMutation.mutate(item)}
                 isSubmitting={isLoading}
-                onConnect={(item) => handleTestConnection(item)}
+                onConnect={(item) => testConnMutation.mutate(item)}
+                isConnecting={testConnMutation.isPending}
                 title={editingItem ? "Edit storage location" : "Create storage location"}
                 opened={opened}
                 onClose={close}

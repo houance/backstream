@@ -15,7 +15,7 @@ interface ModalProps {
     opened: boolean;
     onClose: () => void;
     onSubmit: (values: InsertRepositorySchema | UpdateRepositorySchema) => Promise<void> | void;
-    onConnect: (values: InsertRepositorySchema | UpdateRepositorySchema) => Promise<void>;
+    onConnect: (values: InsertRepositorySchema | UpdateRepositorySchema) => Promise<void> | void;
     // data is null for "Create", and populated for "Edit"
     data: UpdateRepositorySchema | null;
     isSubmitting: boolean;
