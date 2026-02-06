@@ -5,38 +5,23 @@ import {
 } from '@mantine/core';
 import { zod4Resolver } from "mantine-form-zod-resolver";
 import { useForm } from '@mantine/form';
-import {systemSettings, type SystemSettings} from '@backstream/shared';
-import {notice} from "../../util/notification.tsx";
-import {useState} from "react";
+import {systemSettings, type UpdateSystemSettingSchema} from '@backstream/shared';
 
 interface SystemSettingsProps {
-    initialData: SystemSettings;
-    onSubmit: (values: SystemSettings) => Promise<void> | void;
+    initialData: UpdateSystemSettingSchema;
+    onSubmit: (values: UpdateSystemSettingSchema) => Promise<void> | void;
+    isLoading: boolean;
 }
 
-export function SettingsDualPane({ initialData, onSubmit }: SystemSettingsProps) {
-    const [loading, setLoading] = useState(false)
-    const form = useForm<SystemSettings>({
+export function SettingsDualPane({ initialData, onSubmit, isLoading }: SystemSettingsProps) {
+    const form = useForm<UpdateSystemSettingSchema>({
         initialValues: initialData,
         // 3. Link Zod to Mantine Form
         validate: zod4Resolver(systemSettings),
     });
 
-    const handleSubmit = async (values: SystemSettings) => {
-        setLoading(true)
-        try {
-            await onSubmit(values);
-            notice(true, `update system settings`);
-        } catch (error) {
-            notice(false, "submit system settings failed");
-            form.reset()
-        } finally {
-            setLoading(false)
-        }
-    };
-
     return (
-        <form onSubmit={form.onSubmit((values) => handleSubmit(values))}>
+        <form onSubmit={form.onSubmit((values) => onSubmit(values))}>
             <Stack gap="xl">
                 <Grid gutter="xl">
                     {/* Left Column: Alerts & Maintenance */}
@@ -93,7 +78,7 @@ export function SettingsDualPane({ initialData, onSubmit }: SystemSettingsProps)
                 </Grid>
 
                 <Group justify="flex-end">
-                    <Button type="submit" loading={loading}>Save All Settings</Button>
+                    <Button type="submit" loading={isLoading}>Save All Settings</Button>
                 </Group>
             </Stack>
         </form>

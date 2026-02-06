@@ -1,6 +1,6 @@
 import { z } from "zod";
-import {createInsertSchema, createSelectSchema, createUpdateSchema} from 'drizzle-zod';
-import {backupTarget, execution, repository, setting, strategy} from './schema';
+import {createInsertSchema, createUpdateSchema} from 'drizzle-zod';
+import {backupTarget, repository, setting, strategy} from './schema';
 
 export const RepoType = {
     LOCAL: "LOCAL",
@@ -70,8 +70,8 @@ export const systemSettings = createUpdateSchema(setting, {
     minDiskSpaceGB: z.number().min(1, 'Minimum 1GB required').max(500),
     email: z.email('Invalid email format').or(z.literal('')),
     logRetentionDays: z.number().min(1, 'Keep at least 1 day').max(365, 'Max 1 year'),
-});
-export type SystemSettings = z.infer<typeof systemSettings>;
+}).safeExtend({ id: z.number() });
+export type UpdateSystemSettingSchema = z.infer<typeof systemSettings>;
 // strategy type
 export const StrategyType = {
     STRATEGY_321: "STRATEGY_321",
