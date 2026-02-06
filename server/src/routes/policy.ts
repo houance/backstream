@@ -22,7 +22,10 @@ async function getStrategyData() {
                         columns: {
                             startedAt: true,
                         },
-                        where: (execution, { eq }) => eq(execution.commandType, 'backup'),
+                        where: (execution, { and, eq }) => and(
+                            eq(execution.commandType, 'backup'),
+                            eq(execution.executeStatus, 'success'),
+                        ),
                         orderBy: (execution, { desc }) => [desc(execution.startedAt)],
                         limit: 1,
                     },

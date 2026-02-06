@@ -1,6 +1,6 @@
 import { z } from "zod";
-import {createInsertSchema, createUpdateSchema} from 'drizzle-zod';
-import {backupTarget, repository, setting, strategy} from './schema';
+import {createInsertSchema, createSelectSchema, createUpdateSchema} from 'drizzle-zod';
+import {backupTarget, execution, repository, setting, strategy} from './schema';
 
 export const RepoType = {
     LOCAL: "LOCAL",
@@ -104,7 +104,7 @@ export const retentionPolicy = z.object({
     windowType: z.enum(Object.values(WindowType)).optional(),
     // 3. Used for "count" types
     countValue: z.string()
-        .regex(/^(unlimited|[0-9]+)$/, "Enter a number or 'unlimited'")
+        .regex(/^([0-9]+)$/, "Enter a number or 'unlimited'")
         .or(z.literal("unlimited"))
         .optional(),
     // 4. Used for "duration" types (keep-within)
@@ -172,7 +172,7 @@ export const updateBackupPolicySchema = z.object({
     strategy: updateBackupStrategySchema,
     targets: z.array(updateBackupTargetSchema.safeExtend({
         repository: updateRepositorySchema,
-        lastBackupTimestamp: z.number().int().min(0)
+        lastBackupAt: z.number().min(0).nullable()
     }))
 })
 export type UpdateBackupPolicySchema = z.infer<typeof updateBackupPolicySchema>;
@@ -211,3 +211,11 @@ export const scheduledSnapshotsMetaSchema = z.object({
     createdAtTimestamp: z.number().min(0)
 })
 export type ScheduledSnapshotsMetaSchema = z.infer<typeof scheduledSnapshotsMetaSchema>;
+// activity interface
+export interface Activity {
+    id: number;
+    title: string;
+    description: string;
+    completeAt: number;
+    level: "INFO" | "WARN" | "ALERT";
+}

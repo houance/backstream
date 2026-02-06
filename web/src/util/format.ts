@@ -1,4 +1,9 @@
 import type {RetentionPolicy} from "@backstream/shared";
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
+
+// This is required to unlock the .fromNow() functionality
+dayjs.extend(relativeTime);
 
 export function formatBytes(bytes: number, decimals: number = 2): string {
     if (!+bytes) return '0 Bytes';
@@ -18,8 +23,12 @@ export function getRepositoryStats(usage: number, capacity: number): {usedStr: s
     };
 }
 
-export function formatTimestamp(timestampMs: number): string {
-    return new Date(timestampMs).toLocaleString()
+export function formatTimestamp(timestamp: number): string {
+    return dayjs(timestamp).format('YYYY-MM-DD HH:mm:ss');
+}
+
+export function formatTimestampRelative(timestamp: number): string {
+    return dayjs(timestamp).fromNow();
 }
 
 export function calculateCountdown(scheduledTimestamp: number): string {
@@ -61,8 +70,8 @@ export function formatRetentionPolicy(policy: RetentionPolicy): string {
             return `Keep every single backup taken within the last ${durationValue}.`;
 
         case 'tag':
-            const tags = tagValue?.length ? tagValue.join(', ') : 'specific';
-            return `Only keep backups that have these tags: ${tags}.`;
+            { const tags = tagValue?.length ? tagValue.join(', ') : 'specific';
+            return `Only keep backups that have these tags: ${tags}.`; }
 
         default:
             return "Custom retention rule.";

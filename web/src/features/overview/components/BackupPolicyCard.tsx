@@ -75,8 +75,8 @@ export function BackupPolicyCard({ policy, onDetail }: {
                             </Progress.Root>
                             {/* 空间条下方的 lastBackupTime */}
                             <Text size="xs" c="dimmed" mb={4}>
-                                Last backup: {target.lastBackupTimestamp ?
-                                formatTimestamp(target.lastBackupTimestamp) :
+                                Last backup: {target.lastBackupAt ?
+                                formatTimestamp(target.lastBackupAt) :
                                 'Never'}
                             </Text>
                         </Box>

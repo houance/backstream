@@ -19,14 +19,6 @@ const storageRoute = new Hono()
         zValidator('json', insertRepositorySchema),
         async (c) => {
         // todo
-            const values = c.req.valid('json');
-            // 创建 client 并连接
-            const repoClient = new RepositoryClient(
-                values.path,
-                values.password,
-                values.repositoryType,
-                values.certification
-            );
         }
     )
     // create repo

@@ -8,8 +8,7 @@ export function PolicySummary({ policy } : {policy: UpdateBackupPolicySchema}) {
             <Paper withBorder p="md" radius="md" bg="var(--mantine-color-blue-light)">
                 <Stack gap="xs">
                     <DetailRow label="Policy Name" value={policy.strategy.name} />
-                    <DetailRow label="Data Source" value="/data/production/app-storage" />
-                    <DetailRow label="Exclusions" value=".tmp, .log, cache/" />
+                    <DetailRow label="Data Source" value={policy.strategy.dataSource} />
                 </Stack>
             </Paper>
 
@@ -25,7 +24,7 @@ export function PolicySummary({ policy } : {policy: UpdateBackupPolicySchema}) {
                             <DetailRow label="Retention" value={formatRetentionPolicy(target.retentionPolicy)} />
                             <DetailRow label="Schedule" value={target.schedulePolicy} />
                             <DetailRow label="Last Run" value={
-                                target.lastBackupTimestamp ? new Date(target.lastBackupTimestamp).toLocaleString() : 'Never'
+                                target.lastBackupAt ? new Date(target.lastBackupAt).toLocaleString() : 'Never'
                             } />
                         </Stack>
                     </Paper>

@@ -16,8 +16,8 @@ const OverviewPage: React.FC = () => {
         setDetailPolicy(policy);
         open()
     }
-    // --- FETCH DATA ---
-    const {data, isLoading} = useQuery({
+    // --- FETCH POLICY DATA ---
+    const {data: policy, isLoading: isPolicyLoading} = useQuery({
         queryKey: ['policy'],
         queryFn: async () => {
             const res = await client.api.policy['all-policy'].$get();
@@ -25,122 +25,15 @@ const OverviewPage: React.FC = () => {
             return res.json();
         },
     });
-
-    const backupPolicy: UpdateBackupPolicySchema[] = [
-        {
-        strategy: {
-            name: 'Music Collection',
-            strategyType: 'STRATEGY_321',
-            dataSource: '/music',
-            hostname: '',
-            dataSourceSize: 0,
-            id: 0
+    // --- FETCH ACTIVITY DATA ---
+    const {data: activity, isLoading: isActivityLoading} = useQuery({
+        queryKey: ['activity'],
+        queryFn: async () => {
+            const res = await client.api.info['activity'].$get();
+            if (!res.ok) throw new Error('Failed to fetch all activity');
+            return res.json();
         },
-        targets: [
-            {
-                repository: {
-                    path: '',
-                    name: 'local',
-                    password: '',
-                    repositoryType: 'LOCAL',
-                    usage: 500,
-                    capacity: 1000,
-                    repositoryStatus: 'Active',
-                    id: 0,
-                    certification: null
-                },
-                repositoryId: 1,
-                lastBackupTimestamp: 1769573950000,
-                retentionPolicy: {
-                    type: 'count',
-                    windowType: 'daily',
-                    countValue: 'unlimited'
-                },
-                schedulePolicy: '* * * * * *',
-                index: 0,
-                id: 0
-            },
-            {
-                repository: {
-                    name: 'b2',
-                    path: '',
-                    password: '',
-                    repositoryType: 'BACKBLAZE_B2',
-                    usage: 91,
-                    capacity: 100,
-                    repositoryStatus: 'Active',
-                    id: 0,
-                    certification: {
-                        b2: {
-
-                        }
-                    }
-                },
-                repositoryId: 2,
-                lastBackupTimestamp: 1769573950000,
-                retentionPolicy: {
-                    type: 'duration',
-                    windowType: 'hourly',
-                    durationValue: "1y",
-                },
-                schedulePolicy: '* * * * * *',
-                index: 0,
-                id: 0
-            }
-        ]},
-        {
-            strategy: {
-                name: 'Image Collection',
-                strategyType: 'STRATEGY_321',
-                dataSource: '/image',
-                hostname: '',
-                dataSourceSize: 0,
-                id: 0
-            },
-            targets: [
-                {
-                    repository: {
-                        path: '',
-                        name: 'local',
-                        password: '',
-                        repositoryType: 'LOCAL',
-                        usage: 500,
-                        capacity: 1000,
-                        repositoryStatus: 'Active',
-                        id: 0
-                    },
-                    repositoryId: 1,
-                    lastBackupTimestamp: 1769573950000,
-                    retentionPolicy: {
-                        type: 'duration'
-                    },
-                    schedulePolicy: '* * * * * *',
-                    index: 0,
-                    id: 0
-                },
-                {
-                    repository: {
-                        name: 's3',
-                        path: '',
-                        password: '',
-                        repositoryType: 'AWS_S3',
-                        usage: 50,
-                        capacity: 100,
-                        repositoryStatus: 'Active',
-                        id: 0
-                    },
-                    repositoryId: 2,
-                    lastBackupTimestamp: 1769573950000,
-                    retentionPolicy: {
-                        type: 'duration'
-                    },
-                    schedulePolicy: '* * * * * *',
-                    index: 0,
-                    id: 0
-                }
-            ]}
-    ]
-
+    });
 
     return (
         <Container fluid p={0}>
@@ -152,14 +45,14 @@ const OverviewPage: React.FC = () => {
                 <Grid gutter="xl">
                     {/* backup backupPolicy status */}
                     <Grid.Col span={{ md: 8 }}>
-                        {isLoading ? ((
+                        {isPolicyLoading ? ((
                             <Center h={400}>
                                 <Loader size="xl"/>
                             </Center>
                         )) :
                             (<Grid gutter="md">
-                            {data!.map((policy: UpdateBackupPolicySchema) => (
-                                <Grid.Col span={{ sm: 4}}>
+                            {policy!.map((policy: UpdateBackupPolicySchema) => (
+                                <Grid.Col key={policy.strategy.id} span={{ sm: 4}}>
                                     <BackupPolicyCard policy={policy} onDetail={() => openModal(policy)} />
                                 </Grid.Col>
                             ))}
@@ -167,17 +60,16 @@ const OverviewPage: React.FC = () => {
                     </Grid.Col>
 
                     {/* 3. recent activity */}
-                    <Grid.Col span={{ md: 4 }}>
-                        <RecentActivityCard activitiesList={[
-                            {
-                                id: 1,
-                                title: "Backup Up",
-                                description: 'DB Backup Up',
-                                completeAt: 1769573950000,
-                                level: 'INFO'
-                            }
-                        ]}/>
-                    </Grid.Col>
+                    {isActivityLoading ? (
+                        <Center h={400}>
+                            <Loader size="xl"/>
+                        </Center>
+                    ) : (
+                        <Grid.Col span={{ md: 4 }}>
+                            <RecentActivityCard activities={activity!} />
+                        </Grid.Col>
+                    )}
+
                 </Grid>
             </Stack>
             {/* Detail Modal */}

@@ -42,8 +42,8 @@ export const snapshotsMetadata = sqliteTable("snapshots_metadata_table", {
     snapshotId: text("snapshot_id").notNull(), // The ID from the backup engine
     hostname: text("hostname"),
     username: text("username"),
-    backupStart: integer("backup_start", { mode: "timestamp" }),
-    backupEnd: integer("backup_end", { mode: "timestamp" }),
+    backupStart: integer("backup_start"),
+    backupEnd: integer("backup_end"),
     totalBytes: integer("total_bytes"),
     snapshotStatus: text().notNull(),
 });
@@ -51,16 +51,16 @@ export const snapshotsMetadata = sqliteTable("snapshots_metadata_table", {
 // 5. Execution Table
 export const execution = sqliteTable("execution_table", {
     id: integer("execution_id").primaryKey({ autoIncrement: true }),
-    uuid: text("uuid"),
+    uuid: text("uuid").notNull(),
     logFile: text("log_file"),
     errorFile: text("error_file"),
-    commandType: text("command_type", { enum: ["backup", "prune", "check", "restore", "copy"]}),
+    commandType: text("command_type", { enum: ["backup", "prune", "check", "restore", "copy"]}).notNull(),
     fullCommand: text("full_command"),
     exitCode: integer("exit_code"),
-    scheduledAt: integer("scheduled_at", { mode: "timestamp" }),
-    startedAt: integer("started_at", { mode: "timestamp" }),
-    finishedAt: integer("finished_at", { mode: "timestamp" }),
-    executeStatus: text("execute_status", { enum: ["success", "fail", "running"] }),
+    scheduledAt: integer("scheduled_at"),
+    startedAt: integer("started_at"),
+    finishedAt: integer("finished_at"),
+    executeStatus: text("execute_status", { enum: ["success", "fail", "running", "schedule"] }).notNull(),
     repositoryId: integer("repository_id").references(() => repository.id),
     strategyId: integer("strategy_id").references(() => strategy.id),
     backupTargetId: integer("backup_target_id").references(() => backupTarget.id),
@@ -91,10 +91,21 @@ export const backupTargetRelations = relations(backupTarget, ({ one, many }) => 
     }),
     executions: many(execution),
 }));
-// execution => one target
+// execution => one target or one repository
 export const executionRelations = relations(execution, ({ one }) => ({
+    // Link to Backup Target (which then links to Strategy)
     target: one(backupTarget, {
         fields: [execution.backupTargetId],
         references: [backupTarget.id],
+    }),
+    // Link to Strategy directly (as defined in your table)
+    strategy: one(strategy, {
+        fields: [execution.strategyId],
+        references: [strategy.id],
+    }),
+    // Link to Repository directly
+    repository: one(repository, {
+        fields: [execution.repositoryId],
+        references: [repository.id],
     }),
 }));
