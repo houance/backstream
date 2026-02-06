@@ -6,7 +6,8 @@
     "build": "vite build",
     "start": "node dist/index.js",
     "init": "npx drizzle-kit generate --name create_table",
-    "db": "npx drizzle-kit studio"
+    "db": "npx drizzle-kit studio",
+    "seed": "tsx ./src/service/db/seed.ts"
   },
   "dependencies": {
     "@backstream/shared": "^1.0.0",
