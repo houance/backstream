@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import {type Env} from '../index'
 import { updateRepositorySchema, insertRepositorySchema, repository } from '@backstream/shared';
 import {zValidator} from "@hono/zod-validator";
-import { RepositoryClient } from '../service/restic'
+import {RepositoryClient} from '../service/restic'
 
 
 const storageRoute = new Hono<Env>()
@@ -15,11 +15,20 @@ const storageRoute = new Hono<Env>()
         const validated = updateRepositorySchema.array().parse(locations)
         return c.json(validated);
     })
+    // test conn
     .post('/test-connection',
         zValidator('json', insertRepositorySchema),
         async (c) => {
-        // todo
-            return c.json({ message: 'OK' })
+            const values = c.req.valid('json');
+            const client = new RepositoryClient(
+                values.path,
+                values.password,
+                values.repositoryType,
+                values.certification
+            )
+            const result = await client.isRepoExist()
+            if (result.success) return c.json( { message: 'OK'} );
+            return c.json({ error: result.errorMsg }, 400);
         }
     )
     // create repo

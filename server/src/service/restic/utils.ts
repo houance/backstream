@@ -6,7 +6,7 @@ import {join} from "node:path";
 
 export function mapResticCode(input: number | undefined): ExitCode {
     // Check if the input exists as a value in the Enum
-    if (input !== undefined && input in ExitCode) {
+    if (input !== undefined && Object.values(ExitCode).includes(input as any)) {
         return input as ExitCode;
     }
     return ExitCode.UNKNOWN;
