@@ -1,17 +1,17 @@
 import { Hono } from 'hono';
-import { db } from '../service/db';
+import {type Env} from '../index'
 import { updateBackupPolicySchema } from "@backstream/shared";
 
-const policyRoute = new Hono()
+const policyRoute = new Hono<Env>()
     .get('/all-policy', async (c) => {
-        const dbResult = await getStrategyData();
+        const dbResult = await getStrategyData(c.var.db);
         // validate with zod
         const validated = updateBackupPolicySchema.array().parse(dbResult);
         return c.json(validated);
     })
 
 
-async function getStrategyData() {
+async function getStrategyData(db: Env['Variables']['db']) {
     const result = await db.query.strategy.findMany({
         with: {
             targets: {

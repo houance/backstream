@@ -1,11 +1,11 @@
 import { Hono } from 'hono';
-import { db } from '../service/db'
 import {type Activity} from "@backstream/shared";
+import {type Env} from '../index'
 
-const infoRoute = new Hono()
+const infoRoute = new Hono<Env>()
     .get('/health', (c) => c.json({ message:'OK'}))
     .get('/activity', async (c) => {
-        const dbResult = await db.query.execution.findMany({
+        const dbResult = await c.var.db.query.execution.findMany({
             orderBy: (execution, { desc }) => [desc(execution.finishedAt)],
             limit: 20,
             with: {
@@ -26,7 +26,7 @@ const infoRoute = new Hono()
         return c.json(result);
     })
     .get('/stats', async (c) => {
-        const dbResult = await db.query.strategy.findMany({
+        const dbResult = await c.var.db.query.strategy.findMany({
             with: {
                 targets: {
                     with: {

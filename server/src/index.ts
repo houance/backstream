@@ -9,7 +9,7 @@ import { db } from './service/db';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-type Env = {
+export type Env = {
   Variables: {
     db: typeof db;
   };

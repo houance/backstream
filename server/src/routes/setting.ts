@@ -1,14 +1,14 @@
 import { Hono } from 'hono';
 import { eq } from 'drizzle-orm';
-import { db } from '../service/db';
+import {type Env} from '../index'
 import {setting, systemSettings} from '@backstream/shared';
 import {zValidator} from "@hono/zod-validator";
 
 
-const settingRoute = new Hono()
+const settingRoute = new Hono<Env>()
     // GET system setting
     .get('/system-setting', async (c) => {
-        const settings = await db.select().from(setting);
+        const settings = await c.var.db.select().from(setting);
         if (!settings) return c.json({ error: 'not found' }, 404);
         const validated = systemSettings.array().parse(settings);
         return c.json(validated[0]);
@@ -20,7 +20,7 @@ const settingRoute = new Hono()
             const id = Number(c.req.param('id'));
             const values = c.req.valid('json');
 
-            const [updateSetting] = await db.update(setting)
+            const [updateSetting] = await c.var.db.update(setting)
                 .set(values)
                 .where(eq(setting.id, id))
                 .returning();

@@ -1,15 +1,15 @@
 import { Hono } from 'hono';
 import { eq } from 'drizzle-orm';
-import { db } from '../service/db'; // Your drizzle instance
+import {type Env} from '../index'
 import { updateRepositorySchema, insertRepositorySchema, repository } from '@backstream/shared';
 import {zValidator} from "@hono/zod-validator";
 import { RepositoryClient } from '../service/restic'
 
 
-const storageRoute = new Hono()
+const storageRoute = new Hono<Env>()
     // GET all repo
     .get('/all-storage-location', async (c) => {
-        const locations = await db.select().from(repository);
+        const locations = await c.var.db.select().from(repository);
         if (!locations) return c.json({ error: 'not found'}, 404);
         // validate it through zod schema
         const validated = updateRepositorySchema.array().parse(locations)
@@ -29,7 +29,7 @@ const storageRoute = new Hono()
         // todo
             const values = c.req.valid('json');
             // 校验重复 repo
-            const dbResult = await db.select()
+            const dbResult = await c.var.db.select()
                 .from(repository)
                 .where(eq(repository.path, values.path));
             if (dbResult) {
@@ -48,7 +48,7 @@ const storageRoute = new Hono()
             values.repositoryStatus = 'Active'
 
             // 创建 repo
-            const [newRepo] = await db.insert(repository)
+            const [newRepo] = await c.var.db.insert(repository)
                 .values(values)
                 .returning();
             return c.json(newRepo, 201);
@@ -60,7 +60,7 @@ const storageRoute = new Hono()
             const id = Number(c.req.param('id'));
             const values = c.req.valid('json');
 
-            const [updatedRepo] = await db.update(repository)
+            const [updatedRepo] = await c.var.db.update(repository)
                 .set(values)
                 .where(eq(repository.id, id))
                 .returning();
@@ -73,7 +73,7 @@ const storageRoute = new Hono()
         // todo
         const id = Number(c.req.param('id'));
 
-        const [deletedRepo] = await db.delete(repository)
+        const [deletedRepo] = await c.var.db.delete(repository)
             .where(eq(repository.id, id))
             .returning();
 
