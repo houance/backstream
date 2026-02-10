@@ -65,13 +65,13 @@ export const EMPTY_REPOSITORY_SCHEMA: InsertRepositorySchema = {
     certification: null,
 }
 // system settings schema, only update schema since it always have only on record in db
-export const systemSettings = createUpdateSchema(setting, {
+export const updateSettingSchema = createUpdateSchema(setting, {
     ioPriority: z.enum(['low', 'normal']),
     minDiskSpaceGB: z.number().min(1, 'Minimum 1GB required').max(500),
     email: z.email('Invalid email format').or(z.literal('')),
     logRetentionDays: z.number().min(1, 'Keep at least 1 day').max(365, 'Max 1 year'),
 }).safeExtend({ id: z.number() });
-export type UpdateSystemSettingSchema = z.infer<typeof systemSettings>;
+export type UpdateSystemSettingSchema = z.infer<typeof updateSettingSchema>;
 // strategy type
 export const StrategyType = {
     STRATEGY_321: "STRATEGY_321",

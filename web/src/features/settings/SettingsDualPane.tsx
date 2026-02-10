@@ -5,7 +5,7 @@ import {
 } from '@mantine/core';
 import { zod4Resolver } from "mantine-form-zod-resolver";
 import { useForm } from '@mantine/form';
-import {systemSettings, type UpdateSystemSettingSchema} from '@backstream/shared';
+import {updateSettingSchema, type UpdateSystemSettingSchema} from '@backstream/shared';
 
 interface SystemSettingsProps {
     initialData: UpdateSystemSettingSchema;
@@ -17,7 +17,7 @@ export function SettingsDualPane({ initialData, onSubmit, isLoading }: SystemSet
     const form = useForm<UpdateSystemSettingSchema>({
         initialValues: initialData,
         // 3. Link Zod to Mantine Form
-        validate: zod4Resolver(systemSettings),
+        validate: zod4Resolver(updateSettingSchema),
     });
 
     return (

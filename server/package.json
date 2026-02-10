@@ -15,7 +15,8 @@
     "@hono/vite-dev-server": "^0.24.1",
     "@hono/zod-validator": "^0.7.6",
     "better-sqlite3": "^12.6.0",
-    "execa": "^9.6.1"
+    "execa": "^9.6.1",
+    "p-queue": "^9.1.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { eq } from 'drizzle-orm';
 import {type Env} from '../index'
-import {setting, systemSettings} from '@backstream/shared';
+import {setting, updateSettingSchema} from '@backstream/shared';
 import {zValidator} from "@hono/zod-validator";
 
 
@@ -10,12 +10,12 @@ const settingRoute = new Hono<Env>()
     .get('/system-setting', async (c) => {
         const settings = await c.var.db.select().from(setting);
         if (!settings) return c.json({ error: 'not found' }, 404);
-        const validated = systemSettings.array().parse(settings);
+        const validated = updateSettingSchema.array().parse(settings);
         return c.json(validated[0]);
     })
     // update system setting
     .patch('/:id',
-        zValidator('json', systemSettings.partial()),
+        zValidator('json', updateSettingSchema.partial()),
         async (c) => {
             const id = Number(c.req.param('id'));
             const values = c.req.valid('json');
