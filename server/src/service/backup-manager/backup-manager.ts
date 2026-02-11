@@ -1,5 +1,3 @@
-import {RepositoryClient} from "../restic";
-import PQueue from "p-queue";
 import {
     repository,
     setting,
@@ -40,7 +38,7 @@ export class BackupManager {
         })
         // start repo connect heart beat
         const backupManager = new BackupManager(clientMap, validateSetting);
-        void backupManager.startConnTest()
+        void backupManager.checkRepoConnected()
         return backupManager;
     }
 
@@ -48,7 +46,7 @@ export class BackupManager {
         this.clientMap.set(repo.id, new Client(repo));
     }
 
-    private async startConnTest() {
+    private async checkRepoConnected() {
         while (this.isRunning) {
             const checks = Array.from(this.clientMap.values()).map(c => {c.isConnected()});
             await Promise.all(checks)
