@@ -9,18 +9,13 @@ import {
     type UpdateSystemSettingSchema
 } from "@backstream/shared";
 import {db} from "../db";
-
-
-interface Client {
-    repo: UpdateRepositorySchema;
-    repoClient: RepositoryClient,
-    workerQueue: PQueue,
-    cleanupQueue: PQueue,
-}
+import {eq} from "drizzle-orm";
+import {Client} from "./client";
 
 export class BackupManager {
     private readonly clientMap: Map<number, Client>;
     private readonly setting: UpdateSystemSettingSchema
+    private isRunning = true;
 
     private constructor(clientMap:Map<number, Client> ,setting: UpdateSystemSettingSchema) {
         this.clientMap = clientMap;
@@ -40,37 +35,25 @@ export class BackupManager {
         allRepo.forEach(repository => {
             // convert to validate zod schema
             const validated = updateRepositorySchema.parse(repository);
-            // init repo client
-            const repoClient = new RepositoryClient(
-                validated.path,
-                validated.password,
-                validated.repositoryType,
-                validated.certification
-            )
             // add client to map
-            clientMap.set(validated.id, {
-                repo: validated,
-                repoClient: repoClient,
-                workerQueue: new PQueue({ concurrency: 3 }),
-                cleanupQueue: new PQueue({ concurrency: 1 }),
-            })
+            clientMap.set(validated.id, new Client(validated));
         })
-        return new BackupManager(clientMap, validateSetting)
+        // start repo connect heart beat
+        const backupManager = new BackupManager(clientMap, validateSetting);
+        void backupManager.startConnTest()
+        return backupManager;
     }
 
     public addClient(repo: UpdateRepositorySchema) {
-        // init repo client
-        const repoClient = new RepositoryClient(
-            repo.path,
-            repo.password,
-            repo.repositoryType,
-            repo.certification
-        )
-        this.clientMap.set(repo.id, {
-            repo: repo,
-            repoClient: repoClient,
-            workerQueue: new PQueue({ concurrency: 3 }),
-            cleanupQueue: new PQueue({ concurrency: 1 }),
-        });
+        this.clientMap.set(repo.id, new Client(repo));
+    }
+
+    private async startConnTest() {
+        while (this.isRunning) {
+            const checks = Array.from(this.clientMap.values()).map(c => {c.isConnected()});
+            await Promise.all(checks)
+            // runs every 10 sec
+            await new Promise(resolve => setTimeout(resolve, 10000));
+        }
     }
 }
