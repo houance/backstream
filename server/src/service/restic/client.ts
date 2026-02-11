@@ -2,6 +2,7 @@ import {createTempDir, execute, executeStream, getParentPathFromNode, mapResticC
 import {
     type CheckSummary,
     ExitCode,
+    type Lock,
     type Node,
     type Progress,
     type RepoConfig,
@@ -348,6 +349,27 @@ export class RepositoryClient {
             case ExitCode.RepositoryDoesNotExist: return ResticResult.ok(result, false);
             default: return ResticResult.error(result);
         }
+    }
+
+    public async getRepoLock(): Promise<ResticResult<Lock>> {
+        const listLockResult = await execute('restic list locks --no-lock --json', { env: this._env });
+        const code = mapResticCode(listLockResult.exitCode)
+        if (code !== ExitCode.Success) return ResticResult.error(listLockResult);
+        const lockId = listLockResult.stdout as string;
+        if (lockId === "") return ResticResult.ok(listLockResult, {
+            time: "",
+            exclusive: false,
+            hostname: "",
+            username: "",
+            pid: -1,
+            uid: -1,
+            gid: -1
+        })
+        const catLockResult = await execute(`restic cat lock ${lockId} --no-lock --json`, { env: this._env });
+        const catLockCode = mapResticCode(catLockResult.exitCode)
+        if (catLockCode !== ExitCode.Success) return ResticResult.error(catLockResult);
+        const lock: Lock = JSON.parse(catLockResult.stdout as string);
+        return ResticResult.ok(catLockResult, lock);
     }
 
     public async createRepo(): Promise<ResticResult<boolean>> {

@@ -20,31 +20,45 @@ export interface RepoConfig {
     chunkerPolynomial: string;
 }
 
+export interface Lock {
+    time: string;
+    exclusive: boolean;
+    hostname: string;
+    username: string;
+    pid: number;
+    uid: number,
+    gid: number;
+}
+
 export class ResticResult<T> {
     public success: boolean;
-    public lock: boolean;
     public readonly rawExecResult: Result;
     public result?: T;
-    public errorMsg?: string;
+    public errorMsg?: {
+        cmd: string;
+        exitCode: number;
+        stderr: string;
+    };
 
     private constructor(execaResult: Result, result?: T, parseError?: any) {
         this.rawExecResult = execaResult;
         if (result !== undefined) { // exec success
             this.success = true;
-            this.lock = false;
             this.result = result;
-            return;
         } else if (parseError !== undefined) { // exec success, result parse fail
             this.success = false;
-            this.lock = false;
-            this.errorMsg = parseError instanceof Error ? parseError.message : String(parseError);
-            return;
+            this.errorMsg = {
+                cmd: execaResult.command,
+                exitCode: execaResult.exitCode as ExitCode,
+                stderr: parseError instanceof Error ? parseError.message : String(parseError)
+            }
         } else { // // exec failed
             this.success = false;
-            this.lock = execaResult.exitCode === ExitCode.FailedToLockRepository;
-            this.errorMsg = `Cmd: ${execaResult.command}. ` +
-                `Exit Code: ${execaResult.exitCode}. ` +
-                `Stderr: ${execaResult.stderr}`
+            this.errorMsg = {
+                cmd: execaResult.command,
+                exitCode: execaResult.exitCode as ExitCode,
+                stderr: execaResult.stderr as string
+            }
         }
     }
 
