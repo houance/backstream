@@ -22,7 +22,7 @@ export function MaintainPolicyConfig({ form }: { form: UseFormReturnType<InsertR
                 onChange={(val) => {
                     setCheckScheduleType(val!);
                     if (val !== 'custom') {
-                        form.setFieldValue('maintainPolicy.checkSchedule', val!)
+                        form.setFieldValue('checkSchedule', val!)
                     }
                 }}
             />
@@ -30,13 +30,13 @@ export function MaintainPolicyConfig({ form }: { form: UseFormReturnType<InsertR
                 <TextInput
                     label="Cron Expression"
                     placeholder="* * * * * *"
-                    {...form.getInputProps('maintainPolicy.checkSchedule')}
+                    {...form.getInputProps('checkSchedule')}
                     withAsterisk
                 />
             )}
             {checkScheduleType !== 'custom' && checkScheduleType !== 'manual' && (
                 <Paper withBorder p="xs" bg="var(--mantine-color-gray-0)">
-                    <Text size="xs" c="dimmed">Resulting Cron: <b>{form.values.maintainPolicy.checkSchedule}</b></Text>
+                    <Text size="xs" c="dimmed">Resulting Cron: <b>{form.values.checkSchedule}</b></Text>
                 </Paper>
             )}
             {checkScheduleType !== 'manual' && (
@@ -48,7 +48,7 @@ export function MaintainPolicyConfig({ form }: { form: UseFormReturnType<InsertR
                 step={0.01}
                 decimalScale={2}
                 fixedDecimalScale
-                {...form.getInputProps('maintainPolicy.checkPercentage')}
+                {...form.getInputProps('checkPercentage')}
                 />
             )}
 
@@ -59,7 +59,7 @@ export function MaintainPolicyConfig({ form }: { form: UseFormReturnType<InsertR
                 onChange={(val) => {
                     setPruneScheduleType(val!);
                     if (val !== 'custom') {
-                        form.setFieldValue('maintainPolicy.pruneSchedule', val!)
+                        form.setFieldValue('pruneSchedule', val!)
                     }
                 }}
             />
@@ -67,13 +67,13 @@ export function MaintainPolicyConfig({ form }: { form: UseFormReturnType<InsertR
                 <TextInput
                     label="Cron Expression"
                     placeholder="* * * * * *"
-                    {...form.getInputProps('maintainPolicy.pruneSchedule')}
+                    {...form.getInputProps('pruneSchedule')}
                     withAsterisk
                 />
             )}
             {pruneScheduleType !== 'custom' && pruneScheduleType !== 'manual' && (
                 <Paper withBorder p="xs" bg="var(--mantine-color-gray-0)">
-                    <Text size="xs" c="dimmed">Resulting Cron: <b>{form.values.maintainPolicy.pruneSchedule}</b></Text>
+                    <Text size="xs" c="dimmed">Resulting Cron: <b>{form.values.pruneSchedule}</b></Text>
                 </Paper>
             )}
         </Stack>

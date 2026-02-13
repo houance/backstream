@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import {sqliteTable, text, integer, real} from "drizzle-orm/sqlite-core";
 import {relations} from "drizzle-orm";
 
 // 1. Repository Table
@@ -11,8 +11,11 @@ export const repository = sqliteTable("repository_table", {
     usage: integer("size").notNull(),
     capacity: integer("capacity").notNull(),
     certification: text("certification", { mode: "json" }),
-    // todo: add check and prune schedule field
-    maintainPolicy: text("maintain_policy", { mode: "json" }).notNull(),
+    checkSchedule: text("check_schedule").notNull(),
+    checkPercentage: real("check_percentage").notNull(),
+    nextCheckAt: integer("next_check_at").notNull(),
+    pruneSchedule: text("prune_schedule").notNull(),
+    nextPruneAt: integer("next_prune_at").notNull(),
     repositoryStatus: text("repository_status").notNull(),
 });
 
@@ -33,6 +36,7 @@ export const backupTarget = sqliteTable("backup_target_table", {
     repositoryId: integer("repository_id").references(() => repository.id).notNull(),
     retentionPolicy: text("retention_policy", { mode: "json"}).notNull(),
     schedulePolicy: text("schedule_policy").notNull(),
+    nextBackupAt: integer("next_backup_at").notNull(),
     index: integer("index").notNull(),
 });
 

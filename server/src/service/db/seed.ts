@@ -40,11 +40,11 @@ async function main() {
                 usage: 5368709120, // 5GB
                 capacity: 10737418240, // 10GB
                 repositoryStatus: "Active",
-                maintainPolicy: {
-                    checkSchedule: "manual",
-                    checkPercentage: 0.2,
-                    pruneSchedule: "manual",
-                }
+                checkSchedule: "manual",
+                checkPercentage: 0.2,
+                nextCheckAt: 0,
+                pruneSchedule: "manual",
+                nextPruneAt: 0
             },
             {
                 name: "云备份仓库",
@@ -58,11 +58,11 @@ async function main() {
                     AWS_SECRET_ACCESS_KEY: "XVDSAE",
                 },
                 repositoryStatus: "Active",
-                maintainPolicy: {
-                    checkSchedule: "* * * * * *",
-                    checkPercentage: 0.2,
-                    pruneSchedule: "* * * * * *",
-                }
+                checkSchedule: "* * * * * *",
+                checkPercentage: 0.2,
+                nextCheckAt: 1770967868630,
+                pruneSchedule: "* * * * * *",
+                nextPruneAt: 1770967868630
             },
             {
                 name: "归档仓库",
@@ -75,11 +75,11 @@ async function main() {
                     SSH_AUTH_SOCK: "FDSALE"
                 },
                 repositoryStatus: "Disconnected",
-                maintainPolicy: {
-                    checkSchedule: "0 0 1 * * *",
-                    checkPercentage: 0.2,
-                    pruneSchedule: "0 0 2 * * *",
-                }
+                checkSchedule: "* * * * * *",
+                checkPercentage: 0.2,
+                nextCheckAt: 1770967868630,
+                pruneSchedule: "* * * * * *",
+                nextPruneAt: 1770967868630
             },
         ])
         .returning();
@@ -129,6 +129,7 @@ async function main() {
                     countValue: "123"
                 },
                 schedulePolicy: "0 2 * * * *",
+                nextBackupAt: 1770969043979,
                 index: 1,
             },
             {
@@ -140,6 +141,7 @@ async function main() {
                     durationValue: "1y2m3d"
                 },
                 schedulePolicy: "* 0 */6 * * *",
+                nextBackupAt: 1770969043979,
                 index: 1,
             },
             {
@@ -151,6 +153,7 @@ async function main() {
                     countValue: "123"
                 },
                 schedulePolicy: "* 0 3 * * 0",
+                nextBackupAt: 1770969043979,
                 index: 1,
             },
             {
@@ -161,6 +164,7 @@ async function main() {
                     tagValue: ["pro", "test"]
                 },
                 schedulePolicy: "* 0 4 1 * *",
+                nextBackupAt: 1770969043979,
                 index: 2,
             },
         ])

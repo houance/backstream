@@ -39,20 +39,6 @@ export const certificateSchema = z.object({
     sftp: sftpSchema.partial().optional(),
 }).nullable()
 export type CertificateSchema = z.infer<typeof certificateSchema>;
-// repo maintain policy
-const maintainPolicySchema = z.object({
-    checkSchedule: z.string()
-        .min(1, "Check Schedule is required")
-        .regex(cronSecondRegex, 'Invalid cron format (requires 6 fields: s m h D M d)')
-        .or(z.literal("manual")),
-    checkPercentage: z.number()
-        .min(0, "number between 0 ~ 1")
-        .max(1, "number between 0 ~ 1"),
-    pruneSchedule: z.string()
-        .min(1, "Check Schedule is required")
-        .regex(cronSecondRegex, 'Invalid cron format (requires 6 fields: s m h D M d)')
-        .or(z.literal("manual")),
-})
 // The restic repository main schema
 export const insertRepositorySchema = createInsertSchema(repository, {
     name: z.string().min(1, 'Name is required'),
@@ -61,7 +47,19 @@ export const insertRepositorySchema = createInsertSchema(repository, {
     repositoryType: z.enum(Object.values(RepoType)),
     repositoryStatus: z.enum(['Active', 'Disconnected']),
     certification: certificateSchema,
-    maintainPolicy: maintainPolicySchema,
+    checkSchedule: z.string()
+        .min(1, "Check Schedule is required")
+        .regex(cronSecondRegex, 'Invalid cron format (requires 6 fields: s m h D M d)')
+        .or(z.literal("manual")),
+    checkPercentage: z.number()
+        .min(0, "number between 0 ~ 1")
+        .max(1, "number between 0 ~ 1"),
+    nextCheckAt: z.number().default(0),
+    pruneSchedule: z.string()
+        .min(1, "Check Schedule is required")
+        .regex(cronSecondRegex, 'Invalid cron format (requires 6 fields: s m h D M d)')
+        .or(z.literal("manual")),
+    nextPruneAt: z.number().default(0),
 }).omit({ id: true });
 // Insert Repository
 export type InsertRepositorySchema = z.infer<typeof insertRepositorySchema>
@@ -88,11 +86,11 @@ export const EMPTY_REPOSITORY_SCHEMA: InsertRepositorySchema = {
     usage: 0,
     capacity: 1,
     certification: null,
-    maintainPolicy: {
-        checkSchedule: "manual",
-        checkPercentage: 0.5,
-        pruneSchedule: "manual",
-    }
+    checkSchedule: "0 0 0 * * *",
+    checkPercentage: 0.20,
+    nextCheckAt: 1770967868630,
+    pruneSchedule: "0 0 0 * * *",
+    nextPruneAt: 1770967868630,
 }
 // strategy type
 export const StrategyType = {
@@ -144,6 +142,7 @@ export const insertBackupTargetSchema = createInsertSchema(backupTarget, {
         .regex(cronSecondRegex, 'Invalid cron format (requires 6 fields: s m h D M d)'),
     index: z.number().positive(),
     repositoryId: z.coerce.number().min(1, "Please select a value"),
+    nextBackupAt: z.number().default(0),
 }).omit({ id: true, backupStrategyId: true });
 export type InsertBackupTargetSchema = z.infer<typeof insertBackupTargetSchema>;
 export const updateBackupTargetSchema = insertBackupTargetSchema.safeExtend({
@@ -185,6 +184,7 @@ export const EMPTY_BACKUP_POLICY_SCHEMA: InsertBackupPolicySchema = {
             countValue: "100"
         },
         schedulePolicy: "* * * * * *",
+        nextBackupAt: 1770967868630,
         index: 1
     }]
 }

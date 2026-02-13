@@ -247,8 +247,8 @@ export class RepositoryClient {
         }
     }
 
-    public check(logFile: string, errorFile: string, percentage?:number): Task<ResticResult<CheckSummary>> {
-        const command = percentage ?
+    public check(logFile: string, errorFile: string, percentage:number = 0): Task<ResticResult<CheckSummary>> {
+        const command = percentage > 0 ?
             `restic check --read-data-subset=${percentage}% --json` :
             `restic check --json`
         const process = executeStream(
