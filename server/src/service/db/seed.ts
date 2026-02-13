@@ -40,6 +40,11 @@ async function main() {
                 usage: 5368709120, // 5GB
                 capacity: 10737418240, // 10GB
                 repositoryStatus: "Active",
+                maintainPolicy: {
+                    checkSchedule: "manual",
+                    checkPercentage: 0.2,
+                    pruneSchedule: "manual",
+                }
             },
             {
                 name: "云备份仓库",
@@ -53,6 +58,11 @@ async function main() {
                     AWS_SECRET_ACCESS_KEY: "XVDSAE",
                 },
                 repositoryStatus: "Active",
+                maintainPolicy: {
+                    checkSchedule: "* * * * * *",
+                    checkPercentage: 0.2,
+                    pruneSchedule: "* * * * * *",
+                }
             },
             {
                 name: "归档仓库",
@@ -65,6 +75,11 @@ async function main() {
                     SSH_AUTH_SOCK: "FDSALE"
                 },
                 repositoryStatus: "Disconnected",
+                maintainPolicy: {
+                    checkSchedule: "0 0 1 * * *",
+                    checkPercentage: 0.2,
+                    pruneSchedule: "0 0 2 * * *",
+                }
             },
         ])
         .returning();

@@ -12,6 +12,7 @@ export const repository = sqliteTable("repository_table", {
     capacity: integer("capacity").notNull(),
     certification: text("certification", { mode: "json" }),
     // todo: add check and prune schedule field
+    maintainPolicy: text("maintain_policy", { mode: "json" }).notNull(),
     repositoryStatus: text("repository_status").notNull(),
 });
 

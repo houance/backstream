@@ -10,6 +10,7 @@ import {
     EMPTY_REPOSITORY_SCHEMA,
 } from '@backstream/shared'
 import {PROVIDER_MAP} from "../provider-map.tsx";
+import MaintainPolicyConfig from "./MaintainPolicyConfig.tsx";
 
 interface ModalProps {
     opened: boolean;
@@ -68,6 +69,7 @@ function StorageLocationModal({ opened, onClose, data, onSubmit, onConnect, titl
                         description="Required to encrypt/decrypt your backups"
                         autoComplete="new-password"
                     />
+                    <MaintainPolicyConfig form={form} />
                     <Select
                         label="Type"
                         data={Object.values(RepoType)}

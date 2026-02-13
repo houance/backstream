@@ -2,6 +2,9 @@ import { z } from "zod";
 import {createInsertSchema, createUpdateSchema} from 'drizzle-zod';
 import {backupTarget, repository, setting, strategy} from './schema';
 
+
+// cron format: sec min hour day month day-of-week
+const cronSecondRegex = /^(?:[0-9*,\/\-]+ ){5}[0-9*,\/\-]+$/;
 export const RepoType = {
     LOCAL: "LOCAL",
     SFTP: "SFTP",
@@ -11,7 +14,6 @@ export const RepoType = {
     AWS_S3: "AWS_S3",
 } as const;
 export type RepoType = typeof RepoType[keyof typeof RepoType];
-
 // Define the specific restic provider schemas
 const sftpSchema = z.object({SSH_AUTH_SOCK: z.string().optional()})
 const s3Schema = z.object({
@@ -37,6 +39,20 @@ export const certificateSchema = z.object({
     sftp: sftpSchema.partial().optional(),
 }).nullable()
 export type CertificateSchema = z.infer<typeof certificateSchema>;
+// repo maintain policy
+const maintainPolicySchema = z.object({
+    checkSchedule: z.string()
+        .min(1, "Check Schedule is required")
+        .regex(cronSecondRegex, 'Invalid cron format (requires 6 fields: s m h D M d)')
+        .or(z.literal("manual")),
+    checkPercentage: z.number()
+        .min(0, "number between 0 ~ 1")
+        .max(1, "number between 0 ~ 1"),
+    pruneSchedule: z.string()
+        .min(1, "Check Schedule is required")
+        .regex(cronSecondRegex, 'Invalid cron format (requires 6 fields: s m h D M d)')
+        .or(z.literal("manual")),
+})
 // The restic repository main schema
 export const insertRepositorySchema = createInsertSchema(repository, {
     name: z.string().min(1, 'Name is required'),
@@ -45,6 +61,7 @@ export const insertRepositorySchema = createInsertSchema(repository, {
     repositoryType: z.enum(Object.values(RepoType)),
     repositoryStatus: z.enum(['Active', 'Disconnected']),
     certification: certificateSchema,
+    maintainPolicy: maintainPolicySchema,
 }).omit({ id: true });
 // Insert Repository
 export type InsertRepositorySchema = z.infer<typeof insertRepositorySchema>
@@ -53,17 +70,6 @@ export const updateRepositorySchema = insertRepositorySchema.safeExtend({
     id: z.number().positive(),
 })
 export type UpdateRepositorySchema = z.infer<typeof updateRepositorySchema>
-// initial value for all field in repository schema
-export const EMPTY_REPOSITORY_SCHEMA: InsertRepositorySchema = {
-    name: '',
-    path: '',
-    password: '',
-    repositoryType: "LOCAL",
-    repositoryStatus: 'Disconnected',
-    usage: 0,
-    capacity: 1,
-    certification: null,
-}
 // system settings schema, only update schema since it always have only on record in db
 export const updateSettingSchema = createUpdateSchema(setting, {
     ioPriority: z.enum(['low', 'normal']),
@@ -72,14 +78,28 @@ export const updateSettingSchema = createUpdateSchema(setting, {
     logRetentionDays: z.number().min(1, 'Keep at least 1 day').max(365, 'Max 1 year'),
 }).safeExtend({ id: z.number() });
 export type UpdateSystemSettingSchema = z.infer<typeof updateSettingSchema>;
+// initial value for all field in repository schema
+export const EMPTY_REPOSITORY_SCHEMA: InsertRepositorySchema = {
+    name: '',
+    path: '',
+    password: '',
+    repositoryType: RepoType.LOCAL,
+    repositoryStatus: 'Disconnected',
+    usage: 0,
+    capacity: 1,
+    certification: null,
+    maintainPolicy: {
+        checkSchedule: "manual",
+        checkPercentage: 0.5,
+        pruneSchedule: "manual",
+    }
+}
 // strategy type
 export const StrategyType = {
     STRATEGY_321: "STRATEGY_321",
     LOCAL_BACKUP: "LOCAL_BACKUP",
 } as const;
 export type StrategyType = typeof StrategyType[keyof typeof StrategyType];
-// cron format: sec min hour day month day-of-week
-const cronSecondRegex = /^(?:[0-9*,\/\-]+ ){5}[0-9*,\/\-]+$/;
 // retention enum
 export const RetentionType = {
     count: "count",
@@ -155,7 +175,7 @@ export const EMPTY_BACKUP_POLICY_SCHEMA: InsertBackupPolicySchema = {
         hostname: "",
         dataSource: "",
         dataSourceSize: 0,
-        strategyType: "LOCAL_BACKUP"
+        strategyType: StrategyType.LOCAL_BACKUP
     },
     targets: [{
         repositoryId: 0,
