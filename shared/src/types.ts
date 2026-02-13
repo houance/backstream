@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {createInsertSchema, createUpdateSchema} from 'drizzle-zod';
-import {backupTarget, repository, setting, strategy} from './schema';
+import {backupTarget, execution, repository, setting, strategy} from './schema';
 
 
 // cron format: sec min hour day month day-of-week
@@ -239,3 +239,18 @@ export interface Activity {
     completeAt: number;
     level: "INFO" | "WARN" | "ALERT";
 }
+// execution
+export const commandType = {
+    backup: "backup",
+    prune: "prune",
+    check: "check",
+    restore: "restore",
+    copy: "copy",
+} as const;
+export type CommandType = typeof commandType[keyof typeof commandType];
+export const insertExecutionSchema = createInsertSchema(execution, {
+    commandType: z.enum(Object.values(commandType)),
+}).omit({ id: true })
+export type InsertExecutionSchema = z.infer<typeof insertExecutionSchema>;
+export const updateExecutionSchema = insertExecutionSchema.safeExtend({ id: z.number().positive() })
+export type UpdateExecutionSchema = z.infer<typeof updateExecutionSchema>;

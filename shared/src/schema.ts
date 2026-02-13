@@ -60,13 +60,13 @@ export const execution = sqliteTable("execution_table", {
     uuid: text("uuid").notNull(),
     logFile: text("log_file"),
     errorFile: text("error_file"),
-    commandType: text("command_type", { enum: ["backup", "prune", "check", "restore", "copy"]}).notNull(),
+    commandType: text("command_type").notNull(),
     fullCommand: text("full_command"),
     exitCode: integer("exit_code"),
-    scheduledAt: integer("scheduled_at"),
+    scheduledAt: integer("scheduled_at").notNull(),
     startedAt: integer("started_at"),
     finishedAt: integer("finished_at"),
-    executeStatus: text("execute_status", { enum: ["success", "fail", "running", "schedule"] }).notNull(),
+    executeStatus: text("execute_status", { enum: ["success", "fail", "running", "pending"] }).notNull(),
     repositoryId: integer("repository_id").references(() => repository.id),
     strategyId: integer("strategy_id").references(() => strategy.id),
     backupTargetId: integer("backup_target_id").references(() => backupTarget.id),
@@ -115,3 +115,6 @@ export const executionRelations = relations(execution, ({ one }) => ({
         references: [repository.id],
     }),
 }));
+export const repositoryRelations = relations(repository, ({ many }) => ({
+    executions: many(execution),
+}))

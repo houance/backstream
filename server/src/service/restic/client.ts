@@ -207,8 +207,8 @@ export class RepositoryClient {
         }
     }
 
-    public prune(type: 'local' | 'cloud', logFile: string, errorFile: string): Task<ResticResult<boolean>> {
-        const command = type === "local" ?
+    public prune(logFile: string, errorFile: string): Task<ResticResult<boolean>> {
+        const command = this.repoType === "LOCAL" ?
             `restic prune --max-unused 0 --repack-cacheable-only --verbose` :
             `restic prune --max-unused unlimited --verbose`;
         const process = executeStream(

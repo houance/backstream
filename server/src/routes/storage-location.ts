@@ -53,7 +53,7 @@ const storageRoute = new Hono<Env>()
             );
             const createRepoResult = await repoClient.createRepo();
             if (!createRepoResult.success) return c.json({ error: `init repo failed ${createRepoResult.errorMsg}`}, 500);
-            // 更新 repo status, usage, capacity
+            // todo: 更新 repo status, usage, capacity
             values.repositoryStatus = 'Active'
 
             // 创建 repo

@@ -303,7 +303,7 @@ async function main() {
             scheduledAt: now() + 3600, // 1小时后
             startedAt: null,
             finishedAt: null,
-            executeStatus: "schedule",
+            executeStatus: "pending",
             strategyId: strategy1.id,
             backupTargetId: target1.id,
         },
