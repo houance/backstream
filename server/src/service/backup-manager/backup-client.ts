@@ -4,13 +4,13 @@ import PQueue from "p-queue";
 import {db} from "../db";
 import {eq} from "drizzle-orm";
 
-export class Client {
+export class BackupClient {
     private repo: UpdateRepositorySchema;
     private repoClient: RepositoryClient;
-    private workerQueue: PQueue; // backup, copyTo(current repo is target)
-    private cleanupQueue: PQueue; // prune, check
+    private globalQueue: PQueue; // global concurrency limit
+    private workerQueue: PQueue; // actual working queue
 
-    public constructor(repo: UpdateRepositorySchema) {
+    public constructor(repo: UpdateRepositorySchema, queue: PQueue) {
         this.repo = repo;
         // convert to validate zod schema
         const validated = updateRepositorySchema.parse(repo);
@@ -22,13 +22,13 @@ export class Client {
             validated.certification
         )
         // init queue
-        this.workerQueue = new PQueue({ concurrency: 3 });
-        this.cleanupQueue = new PQueue({ concurrency: 1 });
+        this.globalQueue = queue
+        this.workerQueue = new PQueue({ concurrency: 1 });
     }
 
     public async isConnected() {
         // queue's job is running === repo is connected
-        if (this.cleanupQueue.pending !== 0 || this.workerQueue.pending !== 0) {
+        if (this.workerQueue.pending !== 0) {
             return true;
         }
         // check if repo connected
@@ -47,9 +47,8 @@ export class Client {
         retryCount: number = 3
     ): Promise<T> {
         for (let attempt = 0; attempt <= retryCount; attempt++) {
-            // 1. Check if the repository is locked (Placeholder)
+            // 1. Check if the repository is locked
             const isLocked = await this.isRepoLocked();
-
             if (!isLocked) {
                 try {
                     return await func();
@@ -59,7 +58,6 @@ export class Client {
             } else {
                 console.warn(`Attempt ${attempt + 1}: Repository is locked.`);
             }
-
             // 2. If we have retries left, calculate the backoff and wait
             if (attempt < retryCount) {
                 // Formula: base * 2^attempt + jitter
@@ -75,8 +73,6 @@ export class Client {
     }
 
     private async isRepoLocked(): Promise<boolean> {
-        if (this.cleanupQueue.pending !== 0) return true // clean up is exclusive lock
-        if (this.workerQueue.pending !== 0) return false // worker is shared lock
         // check if outside restic command lock the repo
         const getLocksResult = await this.repoClient.getRepoLock();
         if (!getLocksResult.success) throw new Error(`Get repository locks failed: ${getLocksResult.errorMsg}`);
