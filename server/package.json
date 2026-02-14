@@ -16,7 +16,8 @@
     "better-sqlite3": "^12.6.0",
     "croner": "^10.0.1",
     "execa": "^9.6.1",
-    "p-queue": "^9.1.0"
+    "p-queue": "^9.1.0",
+    "p-wait-for": "^6.0.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

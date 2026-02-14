@@ -6,4 +6,4 @@ import {schema} from '@backstream/shared';
 const sqlite = new Database('./db/backstream_app.db');
 
 // Export the singleton instance
-export const db = drizzle(sqlite, { schema, logger:true });
+export const db = drizzle(sqlite, { schema });

@@ -28,6 +28,7 @@ export class Scheduler {
         this.globalQueue = globalQueue;
         // start repo heart beat schedule
         void this.checkRepoConnected();
+        void this.initRepoSchedule();
     }
 
     public static async create(concurrency: number = 5): Promise<Scheduler> {
@@ -36,7 +37,7 @@ export class Scheduler {
         // get setting from db
         const systemSetting = await db.select().from(setting).orderBy(setting.id).limit(1)
         if (!systemSetting) throw new Error("get setting failed");
-        const validateSetting = updateSettingSchema.parse(systemSetting);
+        const validateSetting = updateSettingSchema.parse(systemSetting[0]);
         // get all repo from db
         const allRepo = await db.select().from(repository);
         if (!allRepo) throw new Error("get all repo failed");

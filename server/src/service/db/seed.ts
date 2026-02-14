@@ -34,13 +34,13 @@ async function main() {
         .values([
             {
                 name: "主备份仓库",
-                path: "/mnt/backups/primary",
-                password: "encrypted_password_123",
+                path: "/home/nopepsi-dev/fullstack-project/backstream/server/src/test/local-repo",
+                password: "0608",
                 repositoryType: RepoType.LOCAL,
                 usage: 5368709120, // 5GB
                 capacity: 10737418240, // 10GB
                 repositoryStatus: "Active",
-                checkSchedule: "manual",
+                checkSchedule: "*/30 * * * * *",
                 checkPercentage: 0.2,
                 nextCheckAt: 0,
                 pruneSchedule: "manual",
@@ -58,10 +58,10 @@ async function main() {
                     AWS_SECRET_ACCESS_KEY: "XVDSAE",
                 },
                 repositoryStatus: "Active",
-                checkSchedule: "* * * * * *",
+                checkSchedule: "manual",
                 checkPercentage: 0.2,
                 nextCheckAt: 1770967868630,
-                pruneSchedule: "* * * * * *",
+                pruneSchedule: "manual",
                 nextPruneAt: 1770967868630
             },
             {
@@ -75,10 +75,10 @@ async function main() {
                     SSH_AUTH_SOCK: "FDSALE"
                 },
                 repositoryStatus: "Disconnected",
-                checkSchedule: "* * * * * *",
+                checkSchedule: "manual",
                 checkPercentage: 0.2,
                 nextCheckAt: 1770967868630,
-                pruneSchedule: "* * * * * *",
+                pruneSchedule: "manual",
                 nextPruneAt: 1770967868630
             },
         ])

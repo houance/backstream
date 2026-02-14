@@ -7,20 +7,23 @@ import {
     updateRepositorySchema,
     type UpdateRepositorySchema
 } from "@backstream/shared";
-import {RepositoryClient, ResticResult, type Task} from "../restic";
+import {type CheckSummary, RepositoryClient, ResticResult, type Task} from "../restic";
 import PQueue from "p-queue";
 import {db} from "../db";
 import {eq} from "drizzle-orm";
-import {existsSync, mkdirSync, writeFileSync} from "node:fs";
+import {existsSync} from "node:fs";
+import { mkdir, writeFile } from 'node:fs/promises';
 import os from "node:os";
 import path from "node:path";
+import pWaitFor from "p-wait-for";
 
 export class ResticService {
     public repo: UpdateRepositorySchema;
     private repoClient: RepositoryClient;
     private globalQueue: PQueue; // global concurrency limit
-    private workerQueue: PQueue; // actual working queue
-    private readonly runningJob: Map<number, Task<any>> // <executionId, Task>
+    private workerQueue = new PQueue({ concurrency: 1 }); // queue up all job
+    private reader = 0;
+    private readonly runningJob: Map<number, Task<ResticResult<any>>> // <executionId, Task>
 
     public constructor(repo: UpdateRepositorySchema, queue: PQueue) {
         // init map
@@ -37,7 +40,6 @@ export class ResticService {
         )
         // init queue
         this.globalQueue = queue
-        this.workerQueue = new PQueue({ concurrency: 1 });
     }
 
     public async isConnected() {
@@ -52,7 +54,7 @@ export class ResticService {
             .set({ repositoryStatus: repoConn ? 'Active' : 'Disconnected' })
             .where(eq(repository.id, this.repo.id))
             .returning();
-        this.repo = updateRepositorySchema.parse(updatedResult);
+        this.repo = updateRepositorySchema.parse(updatedResult[0]);
     }
 
     public async check() {
@@ -64,13 +66,16 @@ export class ResticService {
             (log, err) =>
                 this.repoClient.check(log, err, this.repo.checkPercentage),
         )
+        await pWaitFor(() => this.runningJob.has(newExecution.id), {timeout: 5000})
+        const result: ResticResult<CheckSummary> = await this.runningJob.get(newExecution.id)!.result;
+        console.log(result);
     }
 
     public async prune() {
         // insert execution as pending
         const newExecution = await this.createExecution(commandType.prune);
         // add to queue
-        void this.addJob(
+        return this.addJob(
             newExecution,
             (log, err) => this.repoClient.prune(log, err)
         )
@@ -79,37 +84,31 @@ export class ResticService {
     private async addJob<T> (
         newExecution: UpdateExecutionSchema,
         jobFunc: (log: string, err: string) => Task<ResticResult<T>>,
+        isExclusive: boolean = true,
     ) {
-        // todo: rw lock
         return this.workerQueue.add(async () => {
-            // pause worker queue
-            this.workerQueue.pause();
+            if (isExclusive) {
+                // write job wait for reader <= 0
+                await pWaitFor(() => this.reader <= 0, { interval: 10000 })
+            } else {
+                // read job immediately add reader
+                this.reader++
+            }
             // get global queue slot to operate
-            return this.globalQueue.add(async () => {
-                let task = null;
+            void this.globalQueue.add(async () => {
                 try {
                     // create log file and start
-                    const { logFile, errorFile } = this.createLogFile(null, newExecution);
-                    task = await this.checkLockAndTry(() => jobFunc(logFile, errorFile))
+                    const { logFile, errorFile } = await this.createLogFile(null, newExecution);
+                    const task = await this.checkLockAndTry(() => jobFunc(logFile, errorFile))
                     this.runningJob.set(newExecution.id, task)
-                } catch (e) {
-                    this.runningJob.delete(newExecution.id);
-                    await this.updateToFail(newExecution);
-                    this.workerQueue.start();
-                    return;
-                }
-                try {
                     // update execution as running
                     await this.updateToRunning(newExecution, task)
-                    // await the task finish
-                    await task.result;
-                    // update final result
+                    // await the task finish then update final result
                     await this.finalizeExecution(newExecution, await task.result);
                 } catch (e) {
                     console.error(e);
                 } finally {
-                    this.workerQueue.start();
-                    this.runningJob.delete(newExecution.id);
+                    if (!isExclusive) this.reader--;
                 }
             })
         })
@@ -149,22 +148,20 @@ export class ResticService {
         return getLocksResult.result!.exclusive
     }
 
-    private createLogFile(baseDirPath: string | null | undefined, execution: UpdateExecutionSchema) {
+    private async createLogFile(baseDirPath: string | null | undefined, execution: UpdateExecutionSchema) {
         // 1. Determine Root (Default to system temp)
         const root = baseDirPath && existsSync(baseDirPath)
             ? baseDirPath
             : os.tmpdir();
-        // Ensure the parent directory exists
-        if (!existsSync(root)) {
-            mkdirSync(root, { recursive: true });
-        }
         // log folder
         const logFolder = path.join(root, `backstream-${execution.uuid}`);
+        // create folder
+        await mkdir(logFolder, { recursive: true });
         // 3. Create Files
         const logFile = path.join(logFolder, `stdout.log`);
         const errorFile = path.join(logFolder, `stderr.log`);
-        writeFileSync(logFile, '');
-        writeFileSync(errorFile, '');
+        await writeFile(logFile, '');
+        await writeFile(errorFile, '');
 
         return {
             logFile,
@@ -195,15 +192,9 @@ export class ResticService {
 
     private async finalizeExecution(exec: UpdateExecutionSchema, result: ResticResult<any>) {
         await db.update(execution).set({
+            exitCode: result.rawExecResult.exitCode,
             finishedAt: Date.now(),
             executeStatus: result.success ? 'success' : 'fail'
         }).where(eq(execution.id, exec.id));
-    }
-
-    private async updateToFail(exec: UpdateExecutionSchema) {
-        await db.update(execution).set({
-            finishedAt: Date.now(),
-            executeStatus: "fail"
-        }).where(eq(execution.id, exec.id))
     }
 }
