@@ -7,7 +7,7 @@ import {
     updateRepositorySchema,
     type UpdateRepositorySchema
 } from "@backstream/shared";
-import {type CheckSummary, RepositoryClient, ResticResult, type Task} from "../restic";
+import {RepositoryClient, ResticResult, type Task} from "../restic";
 import PQueue from "p-queue";
 import {db} from "../db";
 import {eq} from "drizzle-orm";
@@ -21,8 +21,7 @@ export class ResticService {
     public repo: UpdateRepositorySchema;
     private repoClient: RepositoryClient;
     private globalQueue: PQueue; // global concurrency limit
-    private workerQueue = new PQueue({ concurrency: 1 }); // queue up all job
-    private reader = 0;
+    private reader = 0; // simple rw lock
     private readonly runningJob: Map<number, Task<ResticResult<any>>> // <executionId, Task>
 
     public constructor(repo: UpdateRepositorySchema, queue: PQueue) {
@@ -44,9 +43,7 @@ export class ResticService {
 
     public async isConnected() {
         // queue's job is running === repo is connected
-        if (this.workerQueue.pending !== 0) {
-            return true;
-        }
+        if (this.reader !== 0) return true;
         // check if repo connected
         const result = await this.repoClient.isRepoExist();
         const repoConn = result.success && result.result!
@@ -61,56 +58,58 @@ export class ResticService {
         // insert execution as pending
         const newExecution = await this.createExecution(commandType.check);
         // add to queue
-        void this.addJob(
+        const task = await this.startJob(
             newExecution,
             (log, err) =>
                 this.repoClient.check(log, err, this.repo.checkPercentage),
         )
-        await pWaitFor(() => this.runningJob.has(newExecution.id), {timeout: 5000})
-        const result: ResticResult<CheckSummary> = await this.runningJob.get(newExecution.id)!.result;
-        console.log(result);
+        console.info(task)
     }
 
     public async prune() {
         // insert execution as pending
         const newExecution = await this.createExecution(commandType.prune);
         // add to queue
-        return this.addJob(
+        const task = await this.startJob(
             newExecution,
             (log, err) => this.repoClient.prune(log, err)
         )
+        console.info(task)
     }
 
-    private async addJob<T> (
+    private async startJob<T> (
         newExecution: UpdateExecutionSchema,
-        jobFunc: (log: string, err: string) => Task<ResticResult<T>>,
+        job: (log: string, err: string) => Task<ResticResult<T>>,
         isExclusive: boolean = true,
-    ) {
-        return this.workerQueue.add(async () => {
+    ): Promise<Task<ResticResult<T>>> {
+        return this.globalQueue.add(async () => {
             if (isExclusive) {
-                // write job wait for reader <= 0
-                await pWaitFor(() => this.reader <= 0, { interval: 10000 })
+                await pWaitFor(() => this.reader === 0, {interval: 5000})
+                this.reader = -1
             } else {
-                // read job immediately add reader
-                this.reader++
+                await pWaitFor(() => this.reader >= 0, {interval: 5000})
+                this.reader++;
             }
-            // get global queue slot to operate
-            void this.globalQueue.add(async () => {
-                try {
-                    // create log file and start
-                    const { logFile, errorFile } = await this.createLogFile(null, newExecution);
-                    const task = await this.checkLockAndTry(() => jobFunc(logFile, errorFile))
-                    this.runningJob.set(newExecution.id, task)
-                    // update execution as running
-                    await this.updateToRunning(newExecution, task)
-                    // await the task finish then update final result
-                    await this.finalizeExecution(newExecution, await task.result);
-                } catch (e) {
-                    console.error(e);
-                } finally {
-                    if (!isExclusive) this.reader--;
+            try {
+                // create log file and start
+                const { logFile, errorFile } = await this.createLogFile(null, newExecution);
+                const task = await this.checkLockAndTry(() => job(logFile, errorFile))
+                this.runningJob.set(newExecution.id, task)
+                // update execution as running
+                await this.updateToRunning(newExecution, task)
+                // await the task finish then update final result
+                await this.finalizeExecution(newExecution, await task.result);
+                return task;
+            } catch (e) {
+                throw new Error(`execution ${newExecution.id} failed: ${String(e)}`);
+            } finally {
+                if (isExclusive) {
+                    this.reader = 0;
+                } else {
+                    this.reader--;
                 }
-            })
+                this.runningJob.delete(newExecution.id);
+            }
         })
     }
 
@@ -144,7 +143,7 @@ export class ResticService {
     private async isRepoLocked(): Promise<boolean> {
         // check if outside restic command lock the repo
         const getLocksResult = await this.repoClient.getRepoLock();
-        if (!getLocksResult.success) throw new Error(`Get repository locks failed: ${getLocksResult.errorMsg}`);
+        if (!getLocksResult.success) throw new Error(`Get repository locks failed: ${String(getLocksResult.errorMsg)}`);
         return getLocksResult.result!.exclusive
     }
 

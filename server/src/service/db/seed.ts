@@ -34,7 +34,7 @@ async function main() {
         .values([
             {
                 name: "主备份仓库",
-                path: "/home/nopepsi-dev/fullstack-project/backstream/server/src/test/local-repo",
+                path: "/home/nopepsi-lenovo-laptop/backstream/server/src/test/local-repo",
                 password: "0608",
                 repositoryType: RepoType.LOCAL,
                 usage: 5368709120, // 5GB
@@ -43,7 +43,7 @@ async function main() {
                 checkSchedule: "*/30 * * * * *",
                 checkPercentage: 0.2,
                 nextCheckAt: 0,
-                pruneSchedule: "manual",
+                pruneSchedule: "*/30 * * * * *",
                 nextPruneAt: 0
             },
             {
