@@ -1,7 +1,7 @@
 import {
-    backupTarget, execution,
+    execution,
     repository,
-    setting, type UpdateBackupTargetSchema, type UpdateExecutionSchema,
+    setting, type UpdateBackupTargetSchema,
     updateRepositorySchema,
     type UpdateRepositorySchema,
     updateSettingSchema,
@@ -10,7 +10,6 @@ import {
 import {db} from "../db";
 import {ResticService} from "./restic-service";
 import PQueue from "p-queue";
-import {type Task} from "../restic";
 import {eq} from "drizzle-orm";
 import {Cron} from "croner";
 
@@ -76,14 +75,22 @@ export class Scheduler {
 
     private async initRepoSchedule() {
         this.clientMap.forEach((client) => {
-            if (client.repo.checkSchedule !== "manual") {
-                this.triggers.set(`${repository.id}:check`, new Cron(client.repo.checkSchedule, { protect: true }, async () => {
+            const checkSchedule = client.repo.checkSchedule;
+            const pruneSchedule = client.repo.pruneSchedule;
+            if (checkSchedule !== "manual") {
+                this.triggers.set(`${repository.id}:check`, new Cron(checkSchedule, { protect: true }, async () => {
                     await client.check()
+                    await db.update(repository)
+                        .set({ nextCheckAt: new Cron(checkSchedule).nextRun()!.getTime() })
+                        .where(eq(repository.id, client.repo.id))
                 }))
             }
-            if (client.repo.pruneSchedule !== "manual") {
-                this.triggers.set(`${repository.id}:prune`, new Cron(client.repo.pruneSchedule, async () => {
+            if (pruneSchedule !== "manual") {
+                this.triggers.set(`${repository.id}:prune`, new Cron(pruneSchedule, { protect: true }, async () => {
                     await client.prune()
+                    await db.update(repository)
+                        .set({ nextPruneAt: new Cron(pruneSchedule).nextRun()!.getTime() })
+                        .where(eq(repository.id, client.repo.id))
                 }))
             }
         })
