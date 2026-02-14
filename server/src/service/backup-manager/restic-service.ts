@@ -61,7 +61,7 @@ export class ResticService {
         const task = await this.startJob(
             newExecution,
             (log, err) =>
-                this.repoClient.check(log, err, this.repo.checkPercentage),
+                this.repoClient.check(log, err, this.repo.checkPercentage, newExecution.uuid),
         )
         console.info(task)
     }
@@ -72,7 +72,7 @@ export class ResticService {
         // add to queue
         const task = await this.startJob(
             newExecution,
-            (log, err) => this.repoClient.prune(log, err)
+            (log, err) => this.repoClient.prune(log, err, newExecution.uuid)
         )
         console.info(task)
     }
@@ -84,11 +84,9 @@ export class ResticService {
     ): Promise<Task<ResticResult<T>>> {
         return this.globalQueue.add(async () => {
             if (isExclusive) {
-                await pWaitFor(() => this.reader === 0, {interval: 5000})
-                this.reader = -1
+                await this.writeLock();
             } else {
-                await pWaitFor(() => this.reader >= 0, {interval: 5000})
-                this.reader++;
+                await this.readLock();
             }
             try {
                 // create log file and start
@@ -104,9 +102,9 @@ export class ResticService {
                 throw new Error(`execution ${newExecution.id} failed: ${String(e)}`);
             } finally {
                 if (isExclusive) {
-                    this.reader = 0;
+                    await this.writeUnlock();
                 } else {
-                    this.reader--;
+                    await this.readUnlock();
                 }
                 this.runningJob.delete(newExecution.id);
             }
@@ -195,5 +193,35 @@ export class ResticService {
             finishedAt: Date.now(),
             executeStatus: result.success ? 'success' : 'fail'
         }).where(eq(execution.id, exec.id));
+    }
+
+    private async readLock() {
+        await pWaitFor(() => {
+            if (this.reader >= 0) {
+                this.reader++;
+                return true;
+            } else {
+                return false;
+            }
+        }, { interval: 5000 })
+    }
+
+    private async readUnlock() {
+        this.reader--;
+    }
+
+    private async writeLock() {
+        await pWaitFor(() => {
+            if (this.reader === 0) {
+                this.reader = -1;
+                return true;
+            } else {
+                return false;
+            }
+        }, { interval: 5000 })
+    }
+
+    private async writeUnlock() {
+        this.reader = 0;
     }
 }

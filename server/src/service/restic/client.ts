@@ -47,7 +47,8 @@ export class RepositoryClient {
         targetClient: RepositoryClient,
         snapshotIds: string[],
         logFie:string,
-        errorFile: string): Task<ResticResult<boolean>> {
+        errorFile: string,
+        uuid: string): Task<ResticResult<boolean>> {
         if (this.repoType !== RepoType.LOCAL && this.repoType === targetClient.repoType) {
             throw new Error('copying between two remote repositories is not supported');
         }
@@ -87,7 +88,7 @@ export class RepositoryClient {
             return ResticResult.ok(result, true);
         })();
         return {
-            uuid: crypto.randomUUID(),
+            uuid:  uuid,
             command: command,
             logFile: logFie,
             errorFile: errorFile,
@@ -97,7 +98,7 @@ export class RepositoryClient {
         }
     }
 
-    public backup(path: string, logFile: string, errorFile: string): Task<ResticResult<ExitCode>> {
+    public backup(path: string, logFile: string, errorFile: string, uuid: string): Task<ResticResult<ExitCode>> {
         const process = executeStream(
             `restic backup . --skip-if-unchanged --json`,
             logFile,
@@ -142,7 +143,7 @@ export class RepositoryClient {
             }
         })();
         return {
-            uuid: crypto.randomUUID(),
+            uuid:  uuid,
             command: `restic backup ${path}(set as cwd) --skip-if-unchanged --json`,
             logFile: logFile,
             errorFile: errorFile,
@@ -152,7 +153,12 @@ export class RepositoryClient {
         }
     }
 
-    public restore(snapshotId: string, node: Node, logFile: string, errorFile: string): Task<ResticResult<string>> {
+    public restore(
+        snapshotId: string,
+        node: Node,
+        logFile: string,
+        errorFile: string,
+        uuid: string): Task<ResticResult<string>> {
         const dir = createTempDir();
         const command = `restic restore ${snapshotId}:${getParentPathFromNode(node)} ` +
             `--target ${dir} --include /${node.name} --json`
@@ -197,7 +203,7 @@ export class RepositoryClient {
             return ResticResult.ok(result, join(dir, node.name));
         })();
         return {
-            uuid: crypto.randomUUID(),
+            uuid:  uuid,
             command: command,
             logFile: logFile,
             errorFile: errorFile,
@@ -207,7 +213,7 @@ export class RepositoryClient {
         }
     }
 
-    public prune(logFile: string, errorFile: string): Task<ResticResult<boolean>> {
+    public prune(logFile: string, errorFile: string, uuid: string): Task<ResticResult<boolean>> {
         const command = this.repoType === "LOCAL" ?
             `restic prune --max-unused 0 --repack-cacheable-only --verbose` :
             `restic prune --max-unused unlimited --verbose`;
@@ -237,7 +243,7 @@ export class RepositoryClient {
             return ResticResult.ok(result, true);
         })();
         return {
-            uuid: crypto.randomUUID(),
+            uuid:  uuid,
             command: command,
             logFile: logFile,
             errorFile: errorFile,
@@ -247,7 +253,11 @@ export class RepositoryClient {
         }
     }
 
-    public check(logFile: string, errorFile: string, percentage:number = 0): Task<ResticResult<CheckSummary>> {
+    public check(
+        logFile: string,
+        errorFile: string,
+        percentage:number = 0,
+        uuid: string): Task<ResticResult<CheckSummary>> {
         const command = percentage > 0 ?
             `restic check --read-data-subset=${percentage}% --json` :
             `restic check --json`
@@ -278,7 +288,7 @@ export class RepositoryClient {
             }
         })();
         return {
-            uuid: crypto.randomUUID(),
+            uuid:  uuid,
             command: command,
             logFile: logFile,
             errorFile: errorFile,
