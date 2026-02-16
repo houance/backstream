@@ -45,7 +45,7 @@ export const insertRepositorySchema = createInsertSchema(repository, {
     path: z.string().min(1, 'Path is required'),
     password: z.string().min(4, 'Password must be at least 4 characters'),
     repositoryType: z.enum(Object.values(RepoType)),
-    repositoryStatus: z.enum(['Active', 'Disconnected']),
+    repositoryStatus: z.enum(['Active', 'Disconnected', 'Corrupt']),
     certification: certificateSchema,
     checkSchedule: z.string()
         .min(1, "Check Schedule is required")

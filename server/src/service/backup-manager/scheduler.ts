@@ -26,7 +26,7 @@ export class Scheduler {
         this.setting = setting;
         this.globalQueue = globalQueue;
         // start repo heart beat schedule
-        void this.checkRepoConnected();
+        void this.scheduleRepoHeartBeat();
         void this.initRepoSchedule();
     }
 
@@ -64,7 +64,7 @@ export class Scheduler {
         return this.clientMap.get(repository.id)!;
     }
 
-    private async checkRepoConnected() {
+    private async scheduleRepoHeartBeat() {
         while (this.isRunning) {
             const checks = Array.from(this.clientMap.values()).map(c => {c.isConnected()});
             await Promise.all(checks)

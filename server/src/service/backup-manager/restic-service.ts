@@ -42,8 +42,16 @@ export class ResticService {
     }
 
     public async isConnected() {
+        if (this.repo.repositoryStatus === "Corrupt") return;
         // queue's job is running === repo is connected
-        if (this.reader !== 0) return true;
+        if (this.reader !== 0) {
+            const updatedResult = await db.update(repository)
+                .set({ repositoryStatus: "Active" })
+                .where(eq(repository.id, this.repo.id))
+                .returning()
+            this.repo = updateRepositorySchema.parse(updatedResult[0]);
+            return;
+        }
         // check if repo connected
         const result = await this.repoClient.isRepoExist();
         const repoConn = result.success && result.result!
@@ -63,7 +71,17 @@ export class ResticService {
             (log, err) =>
                 this.repoClient.check(log, err, this.repo.checkPercentage, newExecution.uuid),
         )
-        console.info(task)
+        // update repo as corrupt if check failed
+        const result = await task.result;
+        if (!result.success) return;
+        if (result.result!.numErrors > 0) {
+            const updatedResult = await db.update(repository)
+                .set({ repositoryStatus: 'Corrupt' })
+                .where(eq(repository.id, this.repo.id))
+                .returning()
+            this.repo = updateRepositorySchema.parse(updatedResult[0]);
+            return;
+        }
     }
 
     public async prune() {
@@ -74,7 +92,9 @@ export class ResticService {
             newExecution,
             (log, err) => this.repoClient.prune(log, err, newExecution.uuid)
         )
-        console.info(task)
+        const result = await task.result;
+        if (!result.success) return;
+        console.info(`repo ${this.repo.name} prune at ${this.repo.nextPruneAt} success`)
     }
 
     private async startJob<T> (
