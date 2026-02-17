@@ -148,3 +148,17 @@ export interface Task<T> {
     cancel: () => void;
     getProgress?: () => Progress;
 }
+
+export interface ForgetGroup {
+    tags: string[];
+    host: string;
+    paths: string[];
+    keep: Snapshot[];
+    remove: Snapshot[];
+    reasons: KeepReason[];
+}
+
+export interface KeepReason {
+    snapshot: Snapshot;
+    matches: string[];
+}

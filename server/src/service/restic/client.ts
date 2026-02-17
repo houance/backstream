@@ -1,7 +1,7 @@
 import {createTempDir, execute, executeStream, getParentPathFromNode, mapResticCode} from "./utils";
 import {
     type CheckSummary,
-    ExitCode,
+    ExitCode, type ForgetGroup,
     type Lock,
     type Node,
     type Progress,
@@ -10,9 +10,10 @@ import {
     type Snapshot,
     type Task,
 } from "./types";
-import { RepoType, type CertificateSchema } from "@backstream/shared"
+import {RepoType, type CertificateSchema, type RetentionPolicy} from "@backstream/shared"
 import type {Result} from "execa";
 import {join} from "node:path";
+import camelcaseKeys from "camelcase-keys";
 
 export class RepositoryClient {
     private readonly _env: Record<string, string>;
@@ -282,7 +283,9 @@ export class RepositoryClient {
             const result:Result = await process;
             if (result.failed) return ResticResult.error(result);
             try {
-                return ResticResult.ok(result, JSON.parse(lastLine));
+                const snakeCaseResult = JSON.parse(lastLine)
+                const camelCaseResult: CheckSummary = camelcaseKeys(snakeCaseResult, { deep: true })
+                return ResticResult.ok(result, camelCaseResult);
             } catch (e:any) {
                 return ResticResult.parseError(result, e);
             }
@@ -305,12 +308,37 @@ export class RepositoryClient {
             ResticResult.ok(result, true);
     }
 
+    public async forgetByPathWithPolicy(path: string, retentionPolicy: RetentionPolicy): Promise<ResticResult<ForgetGroup[]>> {
+        let retentionArg = '';
+        switch (retentionPolicy.type) {
+            case "count": {
+                retentionArg = `keep-${retentionPolicy.windowType} ${retentionPolicy.countValue}`
+            } break;
+            case "duration": {
+                if (retentionPolicy.windowType !== 'last') {
+                    retentionArg = `keep-within-${retentionPolicy.windowType} ${retentionPolicy.durationValue}`
+                } else {
+                    retentionArg = `keep-within ${retentionPolicy.durationValue}`
+                }
+            } break;
+            case "tag": {
+                retentionArg = `keep-tag ${retentionPolicy.tagValue!.values()}`
+            } break;
+        }
+        const result = await execute(`restic forget ${retentionArg}`, { env: this._env });
+        if (!result.failed) return ResticResult.error(result);
+        const snakeCaseResult = JSON.parse(result.stdout as string);
+        const camelCaseResult: ForgetGroup[] = camelcaseKeys(snakeCaseResult, { deep: true });
+        return ResticResult.ok(result, camelCaseResult);
+    }
+
     public async getSnapshotsByPath(path: string): Promise<ResticResult<Snapshot[]>> {
         const result = await execute(`restic snapshots --path ${path} --json`, { env: this._env });
         if (result.failed) return ResticResult.error(result);
         try {
-            const snapshots:Snapshot[] = JSON.parse(result.stdout as string)
-            return ResticResult.ok(result, snapshots);
+            const snapshots = JSON.parse(result.stdout as string)
+            const camelCaseResult: Snapshot[] = camelcaseKeys(snapshots, { deep: true });
+            return ResticResult.ok(result, camelCaseResult);
         } catch (error:any) {
             return ResticResult.parseError(result, error);
         }
@@ -326,9 +354,10 @@ export class RepositoryClient {
                 const trimLine: string = line.trim();
                 const data: { message_type: string, path: string[] } = JSON.parse(trimLine);
                 if (data.message_type === 'node') {
-                    const node: Node = JSON.parse(trimLine);
+                    const node= JSON.parse(trimLine);
+                    const camelCaseResult: Node = camelcaseKeys(node, { deep: true });
                     if (node.path !== path) {
-                        nodes.push(node);
+                        nodes.push(camelCaseResult);
                     }
                 }
             })
@@ -344,8 +373,9 @@ export class RepositoryClient {
             return ResticResult.error(result);
         }
         try {
-            const repoConfig:RepoConfig = JSON.parse(result.stdout as string)
-            return ResticResult.ok(result, repoConfig);
+            const repoConfig = JSON.parse(result.stdout as string)
+            const camelCaseResult: RepoConfig = camelcaseKeys(repoConfig, { deep: true });
+            return ResticResult.ok(result, camelCaseResult);
         } catch (e:any) {
             return ResticResult.parseError(result, e);
         }

@@ -43,7 +43,8 @@ export const backupTarget = sqliteTable("backup_target_table", {
 // 4. Snapshots Metadata Table
 export const snapshotsMetadata = sqliteTable("snapshots_metadata_table", {
     id: integer("snapshot_db_id").primaryKey({ autoIncrement: true }),
-    repositoryId: integer("repository_id").references(() => repository.id),
+    repositoryId: integer("repository_id").references(() => repository.id).notNull(),
+    executionId: integer("execution_id").references(() => execution.id),
     path: text("path"),
     snapshotId: text("snapshot_id").notNull(), // The ID from the backup engine
     hostname: text("hostname"),
