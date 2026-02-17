@@ -312,24 +312,28 @@ export class RepositoryClient {
         let retentionArg = '';
         switch (retentionPolicy.type) {
             case "count": {
-                retentionArg = `keep-${retentionPolicy.windowType} ${retentionPolicy.countValue}`
+                retentionArg = `--keep-${retentionPolicy.windowType} ${retentionPolicy.countValue}`
             } break;
             case "duration": {
                 if (retentionPolicy.windowType !== 'last') {
-                    retentionArg = `keep-within-${retentionPolicy.windowType} ${retentionPolicy.durationValue}`
+                    retentionArg = `--keep-within-${retentionPolicy.windowType} ${retentionPolicy.durationValue}`
                 } else {
-                    retentionArg = `keep-within ${retentionPolicy.durationValue}`
+                    retentionArg = `--keep-within ${retentionPolicy.durationValue}`
                 }
             } break;
             case "tag": {
-                retentionArg = `keep-tag ${retentionPolicy.tagValue!.values()}`
+                retentionArg = `--keep-tag ${retentionPolicy.tagValue!.values()}`
             } break;
         }
-        const result = await execute(`restic forget ${retentionArg}`, { env: this._env });
-        if (!result.failed) return ResticResult.error(result);
-        const snakeCaseResult = JSON.parse(result.stdout as string);
-        const camelCaseResult: ForgetGroup[] = camelcaseKeys(snakeCaseResult, { deep: true });
-        return ResticResult.ok(result, camelCaseResult);
+        const result = await execute(`restic forget ${retentionArg} --path ${path} --json`, { env: this._env });
+        if (result.failed) return ResticResult.error(result);
+        try {
+            const snakeCaseResult = JSON.parse(result.stdout as string);
+            const camelCaseResult: ForgetGroup[] = camelcaseKeys(snakeCaseResult, { deep: true });
+            return ResticResult.ok(result, camelCaseResult);
+        } catch (error: any) {
+            return ResticResult.parseError(result, error);
+        }
     }
 
     public async getSnapshotsByPath(path: string): Promise<ResticResult<Snapshot[]>> {
