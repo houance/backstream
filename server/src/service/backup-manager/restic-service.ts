@@ -1,16 +1,16 @@
 import {
     commandType,
     type CommandType,
-    execution,
-    repository, updateExecutionSchema,
+    execution, type InsertSnapshotsMetadataSchema, insertSnapshotsMetadataSchema,
+    repository, snapshotsMetadata, type UpdateBackupTargetSchema, updateExecutionSchema,
     type UpdateExecutionSchema,
     updateRepositorySchema,
-    type UpdateRepositorySchema
+    type UpdateRepositorySchema, type UpdateSnapshotsMetadataSchema, updateSnapshotsMetadataSchema
 } from "@backstream/shared";
 import {RepositoryClient, ResticResult, type Task} from "../restic";
 import PQueue from "p-queue";
 import {db} from "../db";
-import {eq} from "drizzle-orm";
+import {eq, and, inArray} from "drizzle-orm";
 import {existsSync} from "node:fs";
 import { mkdir, writeFile } from 'node:fs/promises';
 import os from "node:os";
@@ -62,7 +62,101 @@ export class ResticService {
         this.repo = updateRepositorySchema.parse(updatedResult[0]);
     }
 
+    public async backup(path: string, target: UpdateBackupTargetSchema) {
+        if (this.repo.repositoryStatus !== 'Active') return;
+        const newExecution = await this.createExecution(commandType.backup);
+        try {
+            const forgetResult = await this.checkLockAndTry(() => this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy))
+            if (!forgetResult.success) console.warn(`forget ${path} at ${this.repo.name} fail: ${forgetResult.errorMsg}`)
+        } catch (error) {
+            console.warn(`forget ${path} at ${this.repo.name} fail: ${String(error)}`)
+        }
+        // add to queue
+        const task = await this.startJob(
+            newExecution,
+            (log, err) =>
+                this.repoClient.backup(path, log, err, newExecution.uuid)
+        )
+        const result = await task.result
+        if (!result.success || result.result?.snapshotId === undefined || result.result.snapshotId === null) return;
+        // index snapshots
+        await this.indexSnapshots(path);
+        // update set execution id
+        await db.update(snapshotsMetadata)
+            .set({ executionId: newExecution.id })
+            .where(eq(snapshotsMetadata.snapshotId, result.result.snapshotId));
+    }
+
+    public async indexSnapshots(path?: string) {
+        if (this.repo.repositoryStatus !== 'Active') return;
+        const result = await this.checkLockAndTry(() => this.repoClient.getSnapshots(path))
+        if (!result.success) {
+            console.warn(`indexSnapshots ${path} wrong`);
+            return;
+        }
+        if (result.result?.length === 0) return;
+        const resticSnapshots = result.result!;
+        let validatedDbResult: UpdateSnapshotsMetadataSchema[];
+        if (path) {
+            const dbResult = await db.select().from(snapshotsMetadata)
+                .where(and(eq(snapshotsMetadata.path, path), eq(snapshotsMetadata.repositoryId, this.repo.id)))
+            validatedDbResult = updateSnapshotsMetadataSchema.array().parse(dbResult);
+        } else {
+            const dbResult = await db.select().from(snapshotsMetadata)
+                .where(eq(snapshotsMetadata.repositoryId, this.repo.id))
+            validatedDbResult = updateSnapshotsMetadataSchema.array().parse(dbResult);
+        }
+        const newSnapshots: InsertSnapshotsMetadataSchema[] = [];
+        resticSnapshots.forEach((snapshot) => {
+            let hit = false;
+            validatedDbResult.forEach((dbResult) => {
+                if (snapshot.id === dbResult.snapshotId) {
+                    hit = true;
+                    return ;
+                }
+            })
+            if (!hit) {
+                const tmp = {
+                    repositoryId: this.repo.id,
+                    path: snapshot.paths[0],
+                    snapshotId: snapshot.id,
+                    hostname: snapshot.hostname,
+                    username: snapshot.username,
+                    uid: snapshot.uid,
+                    gid: snapshot.gid,
+                    excludes: snapshot.excludes,
+                    tags: snapshot.tags,
+                    programVersion: snapshot.programVersion,
+                    time: snapshot.time,
+                    snapshotStatus: 'success',
+                    snapshotSummary: snapshot.summary,
+                }
+                newSnapshots.push(insertSnapshotsMetadataSchema.parse(tmp))
+            }
+        })
+        const deleteSnapshots: UpdateSnapshotsMetadataSchema[] = [];
+        validatedDbResult.forEach((dbResult) => {
+            let hit = false;
+            resticSnapshots.forEach((snapshot) => {
+                if (dbResult.snapshotId === snapshot.id) {
+                    hit = true;
+                    return;
+                }
+            })
+            if (!hit) deleteSnapshots.push(dbResult);
+        })
+        // create
+        await db.insert(snapshotsMetadata).values(newSnapshots);
+        // delete
+        await db.delete(snapshotsMetadata)
+            .where(inArray(
+                snapshotsMetadata.id,
+                deleteSnapshots.map(dbResult => dbResult.id)
+            ));
+    }
+
     public async check() {
+        if (this.repo.repositoryStatus !== 'Active') return;
         // insert execution as pending
         const newExecution = await this.createExecution(commandType.check);
         // add to queue
@@ -80,11 +174,14 @@ export class ResticService {
                 .where(eq(repository.id, this.repo.id))
                 .returning()
             this.repo = updateRepositorySchema.parse(updatedResult[0]);
+            console.info(`check repo ${this.repo.name} with num error > 0`)
             return;
         }
+        console.info(`check repo ${this.repo.name} with num error = 0`)
     }
 
     public async prune() {
+        if (this.repo.repositoryStatus !== 'Active') return;
         // insert execution as pending
         const newExecution = await this.createExecution(commandType.prune);
         // add to queue
@@ -138,11 +235,15 @@ export class ResticService {
     ): Promise<T> {
         for (let attempt = 0; attempt <= retryCount; attempt++) {
             // 1. Check if the repository is locked
-            const isLocked = await this.isRepoLocked();
-            if (!isLocked) {
-                return func();
-            } else {
-                console.warn(`Attempt ${attempt + 1}: Repository is locked.`);
+            try {
+                const isLocked = await this.isRepoLocked();
+                if (!isLocked) {
+                    return func();
+                } else {
+                    console.warn(`Attempt ${attempt + 1}: Repository is locked.`);
+                }
+            } catch (e) {
+                console.warn(`Attempt ${attempt + 1}: ${String(e)}`);
             }
             // 2. If we have retries left, calculate the backoff and wait
             if (attempt < retryCount) {

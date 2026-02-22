@@ -7,7 +7,7 @@ import {
     type Progress,
     type RepoConfig,
     ResticResult,
-    type Snapshot,
+    type Snapshot, type SnapshotSummary,
     type Task,
 } from "./types";
 import {RepoType, type CertificateSchema, type RetentionPolicy} from "@backstream/shared"
@@ -51,7 +51,7 @@ export class RepositoryClient {
         errorFile: string,
         uuid: string): Task<ResticResult<boolean>> {
         if (this.repoType !== RepoType.LOCAL && this.repoType === targetClient.repoType) {
-            throw new Error('copying between two remote repositories is not supported');
+            throw new Error('copying between same type repositories is not supported');
         }
         const command = `restic copy ${snapshotIds.join(' ')}`;
         const process = executeStream(
@@ -99,7 +99,7 @@ export class RepositoryClient {
         }
     }
 
-    public backup(path: string, logFile: string, errorFile: string, uuid: string): Task<ResticResult<ExitCode>> {
+    public backup(path: string, logFile: string, errorFile: string, uuid: string): Task<ResticResult<SnapshotSummary>> {
         const process = executeStream(
             `restic backup . --skip-if-unchanged --json`,
             logFile,
@@ -108,7 +108,7 @@ export class RepositoryClient {
         );
         const progress: Progress = { totalBytes: 0, bytesDone: 0, percentDone: 0 };
         // 2. Process the stream in the background (Immediate Execution)
-        // We don't 'await' this here so we can return the Task immediately
+        let summary = '';
         (async () => {
             try {
                 // Execa v9+ yields lines automatically from the subprocess
@@ -126,6 +126,9 @@ export class RepositoryClient {
                             progress.bytesDone = data.bytes_done;
                             progress.percentDone = data.percent_done;
                         }
+                        if (data.message_type === 'summary') {
+                            summary = line.toString();
+                        }
                     } catch {
                         /* Ignore non-JSON lines or partial chunks */
                     }
@@ -134,12 +137,16 @@ export class RepositoryClient {
                 console.error("Stream processing error:", err);
             }
         })();
-        const result = (async (): Promise<ResticResult<ExitCode>> => {
+        const result = (async () => {
             const result:Result = await process;
             const exitCode = mapResticCode(result.exitCode);
             switch (exitCode) {
                 case ExitCode.Success:
-                case ExitCode.BackupReadError: return ResticResult.ok(result, exitCode);
+                case ExitCode.BackupReadError: {
+                    const snakeCaseResult = JSON.parse(summary);
+                    const camelCaseResult = camelcaseKeys(snakeCaseResult, { deep: true });
+                    return ResticResult.ok(result, camelCaseResult);
+                }
                 default: return ResticResult.error(result);
             }
         })();
@@ -336,8 +343,9 @@ export class RepositoryClient {
         }
     }
 
-    public async getSnapshotsByPath(path: string): Promise<ResticResult<Snapshot[]>> {
-        const result = await execute(`restic snapshots --path ${path} --json`, { env: this._env });
+    public async getSnapshots(path?: string): Promise<ResticResult<Snapshot[]>> {
+        let pathArg = path ? `--path ${path}` : ``;
+        const result = await execute(`restic snapshots ${pathArg} --json`, { env: this._env });
         if (result.failed) return ResticResult.error(result);
         try {
             const snapshots = JSON.parse(result.stdout as string)

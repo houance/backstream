@@ -45,14 +45,18 @@ export const snapshotsMetadata = sqliteTable("snapshots_metadata_table", {
     id: integer("snapshot_db_id").primaryKey({ autoIncrement: true }),
     repositoryId: integer("repository_id").references(() => repository.id).notNull(),
     executionId: integer("execution_id").references(() => execution.id),
-    path: text("path"),
-    snapshotId: text("snapshot_id").notNull(), // The ID from the backup engine
+    path: text("path").notNull(),
+    snapshotId: text("snapshot_id").notNull().unique(), // The ID from the backup engine
     hostname: text("hostname"),
     username: text("username"),
-    backupStart: integer("backup_start"),
-    backupEnd: integer("backup_end"),
-    totalBytes: integer("total_bytes"),
-    snapshotStatus: text().notNull(),
+    uid: integer("uid"),
+    gid: integer("gid"),
+    excludes: text("excludes", { mode: "json" }),
+    tags: text("tags", { mode: "json" }),
+    programVersion: text("program_version"),
+    time: integer("time").notNull(),
+    snapshotStatus: text("snapshotStatus", { enum: ['success', 'partial'] }).notNull(),
+    snapshotSummary: text("snapshotSummary", { mode: "json" }).notNull(),
 });
 
 // 5. Execution Table

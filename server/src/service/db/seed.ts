@@ -40,10 +40,10 @@ async function main() {
                 usage: 5368709120, // 5GB
                 capacity: 10737418240, // 10GB
                 repositoryStatus: "Active",
-                checkSchedule: "*/30 * * * * *",
+                checkSchedule: "* * 0 * * *",
                 checkPercentage: 0.2,
                 nextCheckAt: 0,
-                pruneSchedule: "*/30 * * * * *",
+                pruneSchedule: "* * 0 * * *",
                 nextPruneAt: 0
             },
             {
@@ -57,7 +57,7 @@ async function main() {
                     AWS_ACCESS_KEY_ID: "DSAEF",
                     AWS_SECRET_ACCESS_KEY: "XVDSAE",
                 },
-                repositoryStatus: "Active",
+                repositoryStatus: "Disconnected",
                 checkSchedule: "manual",
                 checkPercentage: 0.2,
                 nextCheckAt: 1770967868630,
@@ -93,7 +93,7 @@ async function main() {
             {
                 name: "完整服务器备份",
                 hostname: "server1.example.com",
-                dataSource: "/etc",
+                dataSource: "/home/nopepsi-lenovo-laptop/backstream",
                 dataSourceSize: 21474836480, // 20GB
                 strategyType: StrategyType.STRATEGY_321,
             },
@@ -128,7 +128,7 @@ async function main() {
                     windowType: WindowType.last,
                     countValue: "123"
                 },
-                schedulePolicy: "0 2 * * * *",
+                schedulePolicy: "*/30 * * * * *",
                 nextBackupAt: 1770969043979,
                 index: 1,
             },
@@ -140,7 +140,7 @@ async function main() {
                     windowType: WindowType.hourly,
                     durationValue: "1y2m3d"
                 },
-                schedulePolicy: "* 0 */6 * * *",
+                schedulePolicy: "* * 0 * * *",
                 nextBackupAt: 1770969043979,
                 index: 1,
             },
@@ -152,7 +152,7 @@ async function main() {
                     windowType: WindowType.last,
                     countValue: "123"
                 },
-                schedulePolicy: "* 0 3 * * 0",
+                schedulePolicy: "* * 0 * * *",
                 nextBackupAt: 1770969043979,
                 index: 1,
             },
@@ -163,7 +163,7 @@ async function main() {
                     type: RetentionType.tag,
                     tagValue: ["pro", "test"]
                 },
-                schedulePolicy: "* 0 4 1 * *",
+                schedulePolicy: "* * 0 * * *",
                 nextBackupAt: 1770969043979,
                 index: 2,
             },
@@ -180,32 +180,92 @@ async function main() {
             snapshotId: "abc123def456",
             hostname: "server1.example.com",
             username: "backup-user",
-            backupStart: daysAgo(1),
-            backupEnd: daysAgo(1) + 3600, // 1小时后
-            totalBytes: 2147483648, // 2GB
-            snapshotStatus: "completed",
+            uid: 1000,
+            gid: 1000,
+            excludes: ['.cls', '.xls', 'txt'],
+            tags: ['success', 'production'],
+            programVersion: '0.18.0',
+            time: daysAgo(1),
+            snapshotStatus: "success",
+            snapshotSummary: {
+                backupStart: now(), // Coerced & transformed to number
+                backupEnd: now(),           // Coerced & transformed to number
+                filesNew: 10,
+                filesChanged: 5,
+                filesUnmodified: 100,
+                dirsNew: 2,
+                dirsChanged: 1,
+                dirsUnmodified: 20,
+                dataBlobs: 150,
+                treeBlobs: 30,
+                dataAdded: 1024576,
+                dataAddedPacked: 512288,
+                totalFilesProcessed: 115,
+                totalBytesProcessed: 5000000,
+                snapshotId: "abc123def456",
+            }
         },
         {
             repositoryId: repo1.id,
             path: "/mnt/backups/primary/snapshots/db",
             snapshotId: "ghi789jkl012",
-            hostname: "db.example.com",
-            username: "postgres",
-            backupStart: daysAgo(0.5), // 12小时前
-            backupEnd: daysAgo(0.5) + 1800, // 30分钟后
-            totalBytes: 536870912, // 512MB
-            snapshotStatus: "completed",
+            hostname: "server1.example.com",
+            username: "backup-user",
+            uid: 1000,
+            gid: 1000,
+            excludes: ['.cls', '.xls', 'txt'],
+            tags: ['success', 'production'],
+            programVersion: '0.18.0',
+            time: daysAgo(1),
+            snapshotStatus: "success",
+            snapshotSummary: {
+                backupStart: now(), // Coerced & transformed to number
+                backupEnd: now(),           // Coerced & transformed to number
+                filesNew: 10,
+                filesChanged: 5,
+                filesUnmodified: 100,
+                dirsNew: 2,
+                dirsChanged: 1,
+                dirsUnmodified: 20,
+                dataBlobs: 150,
+                treeBlobs: 30,
+                dataAdded: 1024576,
+                dataAddedPacked: 512288,
+                totalFilesProcessed: 115,
+                totalBytesProcessed: 5000000,
+                snapshotId: "ghi789jkl012",
+            }
         },
         {
             repositoryId: repo2.id,
             path: "s3://my-backup-bucket/docs",
             snapshotId: "mno345pqr678",
-            hostname: "nas.example.com",
-            username: "admin",
-            backupStart: daysAgo(7),
-            backupEnd: daysAgo(7) + 7200, // 2小时后
-            totalBytes: 1073741824, // 1GB
-            snapshotStatus: "completed",
+            hostname: "server1.example.com",
+            username: "backup-user",
+            uid: 1000,
+            gid: 1000,
+            excludes: ['.cls', '.xls', 'txt'],
+            tags: ['success', 'production'],
+            programVersion: '0.18.0',
+            time: daysAgo(1),
+            snapshotStatus: "success",
+            snapshotSummary: {
+                backupStart: now(), // Coerced & transformed to number
+                backupEnd: now(),           // Coerced & transformed to number
+                filesNew: 10,
+                filesChanged: 5,
+                filesUnmodified: 100,
+                dirsNew: 2,
+                dirsChanged: 1,
+                dirsUnmodified: 20,
+                dataBlobs: 150,
+                treeBlobs: 30,
+                dataAdded: 1024576,
+                dataAddedPacked: 512288,
+                totalFilesProcessed: 115,
+                totalBytesProcessed: 5000000,
+                snapshotId: "mno345pqr678",
+            }
         },
         {
             repositoryId: repo1.id,
@@ -213,10 +273,30 @@ async function main() {
             snapshotId: "stu901vwx234",
             hostname: "server1.example.com",
             username: "backup-user",
-            backupStart: daysAgo(0.25), // 6小时前
-            backupEnd: null,
-            totalBytes: null,
+            uid: 1000,
+            gid: 1000,
+            excludes: ['.cls', '.xls', 'txt'],
+            tags: ['success', 'production'],
+            programVersion: '0.18.0',
+            time: daysAgo(1),
             snapshotStatus: "partial",
+            snapshotSummary: {
+                backupStart: now(), // Coerced & transformed to number
+                backupEnd: now(),           // Coerced & transformed to number
+                filesNew: 10,
+                filesChanged: 5,
+                filesUnmodified: 100,
+                dirsNew: 2,
+                dirsChanged: 1,
+                dirsUnmodified: 20,
+                dataBlobs: 150,
+                treeBlobs: 30,
+                dataAdded: 1024576,
+                dataAddedPacked: 512288,
+                totalFilesProcessed: 115,
+                totalBytesProcessed: 5000000,
+                snapshotId: "stu901vwx234",
+            }
         },
     ]);
 

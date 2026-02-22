@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {createInsertSchema, createUpdateSchema} from 'drizzle-zod';
-import {backupTarget, execution, repository, setting, strategy} from './schema';
+import {backupTarget, execution, repository, setting, snapshotsMetadata, strategy} from './schema';
 
 
 // cron format: sec min hour day month day-of-week
@@ -204,14 +204,14 @@ export const snapshotFile = z.object({
     mtime: z.number(),
 })
 export type SnapshotFile = z.infer<typeof snapshotFile>;
-export const snapshotsMetaSchema = z.object({
+export const finishedSnapshotsMetaSchema = z.object({
     snapshotsId: z.string(),
     status: z.enum(['complete', 'failed', 'partial']),
     createdAtTimestamp: z.number().min(0),
     files: z.array(snapshotFile),
     size: z.number().positive(),
 })
-export type SnapshotsMetaSchema = z.infer<typeof snapshotsMetaSchema>;
+export type FinishedSnapshotsMetaSchema = z.infer<typeof finishedSnapshotsMetaSchema>;
 export const onGoingSnapshotsMetaSchema = z.object({
     uuid: z.string(),
     status: z.literal('backing up'),
@@ -254,3 +254,32 @@ export const insertExecutionSchema = createInsertSchema(execution, {
 export type InsertExecutionSchema = z.infer<typeof insertExecutionSchema>;
 export const updateExecutionSchema = insertExecutionSchema.safeExtend({ id: z.number().positive() })
 export type UpdateExecutionSchema = z.infer<typeof updateExecutionSchema>;
+// snapshots summary inherit from restic
+export const snapshotSummarySchema = z.object({
+    backupStart: z.coerce.date().transform((date) => date.getTime()),
+    backupEnd: z.coerce.date().transform((date) => date.getTime()),
+    filesNew: z.number().nonnegative(),
+    filesChanged: z.number().nonnegative(),
+    filesUnmodified: z.number().nonnegative(),
+    dirsNew: z.number().nonnegative(),
+    dirsChanged: z.number().nonnegative(),
+    dirsUnmodified: z.number().nonnegative(),
+    dataBlobs: z.number().nonnegative(),
+    treeBlobs: z.number().nonnegative(),
+    dataAdded: z.number().nonnegative(),
+    dataAddedPacked: z.number().nonnegative(),
+    totalFilesProcessed: z.number().nonnegative(),
+    totalBytesProcessed: z.number().nonnegative(),
+})
+// snapshots meta data schema
+export const insertSnapshotsMetadataSchema = createInsertSchema(snapshotsMetadata, {
+    time: z.coerce.date().transform((date) => date.getTime()),
+    uid: z.number().nonnegative().optional(),
+    gid: z.number().nonnegative().optional(),
+    excludes: z.array(z.string()).nullable().optional(),
+    tags: z.array(z.string()).nullable().optional(),
+    snapshotSummary: snapshotSummarySchema,
+}).omit({ id: true })
+export type InsertSnapshotsMetadataSchema = z.infer<typeof insertSnapshotsMetadataSchema>;
+export const updateSnapshotsMetadataSchema = insertSnapshotsMetadataSchema.safeExtend({id: z.number().positive() })
+export type UpdateSnapshotsMetadataSchema = z.infer<typeof updateSnapshotsMetadataSchema>;

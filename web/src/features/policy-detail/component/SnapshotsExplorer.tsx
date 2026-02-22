@@ -6,7 +6,7 @@ import {
     IconSearch
 } from '@tabler/icons-react';
 import {useState} from 'react';
-import type {SnapshotsMetaSchema, OnGoingSnapshotsMetaSchema, ScheduledSnapshotsMetaSchema} from "@backstream/shared";
+import type {FinishedSnapshotsMetaSchema, OnGoingSnapshotsMetaSchema, ScheduledSnapshotsMetaSchema} from "@backstream/shared";
 import {SnapshotRow} from "./SnapshotRow.tsx";
 
 export default function SnapshotsExplorer() {
@@ -34,7 +34,7 @@ export default function SnapshotsExplorer() {
         },
         totalSize: 21000000
     }]
-    const snapshots: SnapshotsMetaSchema[] = [
+    const snapshots: FinishedSnapshotsMetaSchema[] = [
         {
             snapshotsId: 'a1b2c',
             status: 'complete',

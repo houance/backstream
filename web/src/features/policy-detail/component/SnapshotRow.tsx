@@ -1,13 +1,13 @@
 import { Accordion, Group, Text, Badge, Loader, Paper, Stack, Grid, Center } from '@mantine/core';
 import { IconClock, IconHistory, IconAlertCircle } from '@tabler/icons-react';
-import type {OnGoingSnapshotsMetaSchema, ScheduledSnapshotsMetaSchema, SnapshotsMetaSchema } from '@backstream/shared';
+import type {OnGoingSnapshotsMetaSchema, ScheduledSnapshotsMetaSchema, FinishedSnapshotsMetaSchema } from '@backstream/shared';
 import {FileBrowser} from "./FileBrowser.tsx";
 import {calculateCountdown, formatTimestamp} from "../../../util/format.ts";
 import {LogTerminal} from "./LogTerminal.tsx";
 
 // Use your Zod types
 type SnapshotUnion =
-    | SnapshotsMetaSchema
+    | FinishedSnapshotsMetaSchema
     | OnGoingSnapshotsMetaSchema
     | ScheduledSnapshotsMetaSchema;
 
@@ -24,7 +24,7 @@ export function SnapshotRow({ data }: SnapshotRowProps) {
     // 2. Map visual configuration
     const config = {
         // Unique ID varies between schemas: 'snapshotsId' vs 'uuid'
-        id: isFinished ? (data as SnapshotsMetaSchema).snapshotsId : (data as any).uuid,
+        id: isFinished ? (data as FinishedSnapshotsMetaSchema).snapshotsId : (data as any).uuid,
 
         icon: isOngoing ? (
             <Loader size="xs" color="blue" />
@@ -107,7 +107,7 @@ export function SnapshotRow({ data }: SnapshotRowProps) {
                 )}
 
                 {isFinished && (
-                    <FileBrowser flatFiles={(data as SnapshotsMetaSchema).files} />
+                    <FileBrowser flatFiles={(data as FinishedSnapshotsMetaSchema).files} />
                 )}
             </Accordion.Panel>
         </Accordion.Item>

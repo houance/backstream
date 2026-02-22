@@ -92,6 +92,8 @@ export interface Snapshot {
     shortId: string;
 }
 
+// https://restic.readthedocs.io/en/stable/075_scripting.html#summary
+// https://restic.readthedocs.io/en/stable/075_scripting.html#snapshots
 export interface SnapshotSummary {
     backupStart: Date;
     backupEnd: Date;
@@ -107,6 +109,7 @@ export interface SnapshotSummary {
     dataAddedPacked: number;
     totalFilesProcessed: number;
     totalBytesProcessed: number;
+    snapshotId?: string; // only return in backup command
 }
 
 export interface Node {
