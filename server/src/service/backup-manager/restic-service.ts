@@ -1,13 +1,13 @@
 import {
     commandType,
     type CommandType,
-    execution, type InsertSnapshotsMetadataSchema, insertSnapshotsMetadataSchema,
+    execution, type InsertExecutionSchema, type InsertSnapshotsMetadataSchema, insertSnapshotsMetadataSchema,
     repository, snapshotsMetadata, type UpdateBackupTargetSchema, updateExecutionSchema,
     type UpdateExecutionSchema,
     updateRepositorySchema,
     type UpdateRepositorySchema, type UpdateSnapshotsMetadataSchema, updateSnapshotsMetadataSchema
 } from "@backstream/shared";
-import {RepositoryClient, ResticResult, type Task} from "../restic";
+import {RepositoryClient, ResticResult, type Snapshot, type Task} from "../restic";
 import PQueue from "p-queue";
 import {db} from "../db";
 import {eq, and, inArray} from "drizzle-orm";
@@ -62,20 +62,60 @@ export class ResticService {
         this.repo = updateRepositorySchema.parse(updatedResult[0]);
     }
 
+    public async copyTo(
+        path: string,
+        targetService: ResticService,
+        target: UpdateBackupTargetSchema,
+    ) {
+        if (this.repo.repositoryStatus !== 'Active') return;
+        if (targetService.repo.repositoryStatus !== 'Active') return;
+        // run remote retention policy against local in dry run mode, get what snapshot should be copy
+        let keepSnapshotIds: string[] = [];
+        try {
+            const forgetResult = await this.forgetByPolicy(path, target, true);
+            if (!forgetResult.success) {
+                console.error(`forget ${path} at ${this.repo.name} fail: ${String(forgetResult.errorMsg)}`);
+                return;
+            }
+            const keepSnapshots: Snapshot[] = forgetResult.result!.flatMap(group => group.keep || []);
+            keepSnapshotIds = keepSnapshots.map(s => s.id);
+        } catch (e) {
+            console.warn(`forget ${path} at ${this.repo.name} fail: ${String(e)}`)
+            return;
+        }
+        // run copy
+        const newExecution = await this.createExecution(commandType.backup);
+        const task = await this.startJob(
+            newExecution,
+            async (log, err) => {
+                return this.repoClient.copyTo(
+                    targetService.repoClient,
+                    keepSnapshotIds,
+                    log,
+                    err,
+                    newExecution.uuid
+                )
+            },
+            false,
+            async () => await targetService.readLock(),
+            async () => await targetService.readUnlock()
+        )
+        const result = await task.result
+        if (!result.success) return;
+        console.log(`copyTo ${targetService.repo.name} success`)
+        // run remote retention policy against remote for cleaning up old data
+        await targetService.forgetByPolicy(path, target);
+    }
+
     public async backup(path: string, target: UpdateBackupTargetSchema) {
         if (this.repo.repositoryStatus !== 'Active') return;
         const newExecution = await this.createExecution(commandType.backup);
-        try {
-            const forgetResult = await this.checkLockAndTry(() => this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy))
-            if (!forgetResult.success) console.warn(`forget ${path} at ${this.repo.name} fail: ${forgetResult.errorMsg}`)
-        } catch (error) {
-            console.warn(`forget ${path} at ${this.repo.name} fail: ${String(error)}`)
-        }
         // add to queue
         const task = await this.startJob(
             newExecution,
             (log, err) =>
-                this.repoClient.backup(path, log, err, newExecution.uuid)
+                this.repoClient.backup(path, log, err, newExecution.uuid),
+            false
         )
         const result = await task.result
         if (!result.success || result.result?.snapshotId === undefined || result.result.snapshotId === null) return;
@@ -85,6 +125,13 @@ export class ResticService {
         await db.update(snapshotsMetadata)
             .set({ executionId: newExecution.id })
             .where(eq(snapshotsMetadata.snapshotId, result.result.snapshotId));
+        // forget old data
+        try {
+            const forgetResult = await this.forgetByPolicy(path, target);
+            if (!forgetResult.success) console.warn(`forget ${path} at ${this.repo.name} fail: ${forgetResult.errorMsg}`)
+        } catch (error) {
+            console.warn(`forget ${path} at ${this.repo.name} fail: ${String(error)}`)
+        }
     }
 
     public async indexSnapshots(path?: string) {
@@ -146,9 +193,9 @@ export class ResticService {
             if (!hit) deleteSnapshots.push(dbResult);
         })
         // create
-        await db.insert(snapshotsMetadata).values(newSnapshots);
+        if (newSnapshots.length > 0) await db.insert(snapshotsMetadata).values(newSnapshots);
         // delete
-        await db.delete(snapshotsMetadata)
+        if (deleteSnapshots.length > 0) await db.delete(snapshotsMetadata)
             .where(inArray(
                 snapshotsMetadata.id,
                 deleteSnapshots.map(dbResult => dbResult.id)
@@ -194,16 +241,29 @@ export class ResticService {
         console.info(`repo ${this.repo.name} prune at ${this.repo.nextPruneAt} success`)
     }
 
+    public async forgetByPolicy(
+        path: string,
+        target: UpdateBackupTargetSchema,
+        dryRun?: boolean) {
+        return await this.checkLockAndTry(() =>
+            this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy, dryRun))
+    }
+
     private async startJob<T> (
         newExecution: UpdateExecutionSchema,
-        job: (log: string, err: string) => Task<ResticResult<T>>,
+        job: (log: string, err: string) => Task<ResticResult<T>> | Promise<Task<ResticResult<T>>>,
         isExclusive: boolean = true,
+        lockRemote?: () => Promise<void>,
+        unLockRemote?: () => Promise<void>,
     ): Promise<Task<ResticResult<T>>> {
         return this.globalQueue.add(async () => {
             if (isExclusive) {
                 await this.writeLock();
             } else {
                 await this.readLock();
+            }
+            if (lockRemote) {
+                await lockRemote();
             }
             try {
                 // create log file and start
@@ -222,6 +282,9 @@ export class ResticService {
                     await this.writeUnlock();
                 } else {
                     await this.readUnlock();
+                }
+                if (unLockRemote) {
+                    await unLockRemote();
                 }
                 this.runningJob.delete(newExecution.id);
             }
@@ -287,13 +350,26 @@ export class ResticService {
         };
     }
 
-    private async createExecution(commandType: CommandType): Promise<UpdateExecutionSchema> {
+    private async createExecution(
+        commandType: CommandType,
+        target?:UpdateBackupTargetSchema): Promise<UpdateExecutionSchema> {
+        let value: InsertExecutionSchema = {
+            commandType: commandType,
+            executeStatus: "pending",
+            scheduledAt: Date.now(),
+            uuid: crypto.randomUUID(),
+        };
+        if (target) {
+            value.backupTargetId = target.id;
+            value.strategyId = target.backupStrategyId;
+        } else {
+            value.repositoryId = this.repo.id
+        }
         const [row] = await db.insert(execution).values({
             commandType: commandType,
             executeStatus: "pending",
             scheduledAt: Date.now(),
             uuid: crypto.randomUUID(),
-            repositoryId: this.repo.id
         }).returning();
         return updateExecutionSchema.parse(row);
     }
@@ -316,7 +392,7 @@ export class ResticService {
         }).where(eq(execution.id, exec.id));
     }
 
-    private async readLock() {
+    public async readLock() {
         await pWaitFor(() => {
             if (this.reader >= 0) {
                 this.reader++;
@@ -327,7 +403,7 @@ export class ResticService {
         }, { interval: 5000 })
     }
 
-    private async readUnlock() {
+    public async readUnlock() {
         this.reader--;
     }
 

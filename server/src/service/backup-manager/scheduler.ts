@@ -1,7 +1,7 @@
 import {
     execution,
     repository,
-    setting, updateBackupTargetSchema,
+    setting, StrategyType, updateBackupStrategySchema, updateBackupTargetSchema,
     updateRepositorySchema,
     type UpdateRepositorySchema,
     updateSettingSchema,
@@ -107,19 +107,53 @@ export class Scheduler {
         }))
     }
 
-    public async addPolicySchedule(policy: Policy) {
+    public addPolicySchedule(policy: Policy) {
+        const validateStrategy = updateBackupStrategySchema.parse(policy);
+        switch (validateStrategy.strategyType) {
+            case 'LOCAL_BACKUP':
+                this.scheduleLocalBackupStrategy(policy);
+                break;
+            case 'STRATEGY_321':
+                this.schedule321BackupStrategy(policy);
+                break;
+        }
+    }
+
+    private scheduleLocalBackupStrategy(policy: Policy) {
         policy.targets.forEach(target => {
+            if (target.index !== 1) {
+                return;
+            }
             const cronJobKey = `${policy.id}:${target.id}`
             if (this.policyCronJob.has(cronJobKey)) return;
             const validRepo = updateRepositorySchema.parse(target.repository);
-            if (validRepo.repositoryType === 'LOCAL') {
-                this.policyCronJob.set(cronJobKey, new Cron(target.schedulePolicy, { protect: true }, async () => {
-                    const resticService = await this.getResticService(validRepo);
-                    const validatedTarget = updateBackupTargetSchema.parse(target);
-                    await resticService.backup(policy.dataSource, validatedTarget);
-                }))
-            } else {
+            this.policyCronJob.set(cronJobKey, new Cron(target.schedulePolicy, { protect: true }, async () => {
+                const resticService = await this.getResticService(validRepo);
+                const validatedTarget = updateBackupTargetSchema.parse(target);
+                await resticService.backup(policy.dataSource, validatedTarget);
+            }))
+        })
+    }
 
+    private schedule321BackupStrategy(policy: Policy) {
+        let localResticService: ResticService;
+        // asc by target index, 1 is local, 2/3 is remote
+        policy.targets.sort((a, b) => a.index - b.index).forEach(async target => {
+            const cronJobKey = `${policy.id}:${target.id}`;
+            if (this.policyCronJob.has(cronJobKey)) return;
+            const targetValidRepo = updateRepositorySchema.parse(target.repository);
+            const targetResticService = await this.getResticService(targetValidRepo);
+            const validatedTarget = updateBackupTargetSchema.parse(target);
+            if (target.index === 1) {
+                localResticService = targetResticService;
+                this.policyCronJob.set(cronJobKey, new Cron(target.schedulePolicy, { protect: true }, async () => {
+                    await localResticService.backup(policy.dataSource, validatedTarget);
+                }))
+            }
+            if ([2, 3].includes(target.index) && localResticService !== undefined) {
+                this.policyCronJob.set(cronJobKey, new Cron(target.schedulePolicy, { protect: true }, async () => {
+                    await localResticService.copyTo(policy.dataSource, targetResticService, validatedTarget);
+                }))
             }
         })
     }

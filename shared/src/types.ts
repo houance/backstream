@@ -147,6 +147,7 @@ export const insertBackupTargetSchema = createInsertSchema(backupTarget, {
 export type InsertBackupTargetSchema = z.infer<typeof insertBackupTargetSchema>;
 export const updateBackupTargetSchema = insertBackupTargetSchema.safeExtend({
     id: z.number().positive(),
+    backupStrategyId: z.number().positive(),
 });
 export type UpdateBackupTargetSchema = z.infer<typeof updateBackupTargetSchema>;
 // create backup strategy schema

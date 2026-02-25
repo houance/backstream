@@ -66,15 +66,12 @@ async function main() {
             },
             {
                 name: "归档仓库",
-                path: "/mnt/backups/archive",
-                password: "encrypted_password_789",
-                repositoryType: RepoType.SFTP,
+                path: "/home/nopepsi-lenovo-laptop/backstream/server/src/test/second-repo",
+                password: "0608",
+                repositoryType: RepoType.LOCAL,
                 usage: 3221225472, // 3GB
                 capacity: 10737418240, // 10GB
-                certification: {
-                    SSH_AUTH_SOCK: "FDSALE"
-                },
-                repositoryStatus: "Disconnected",
+                repositoryStatus: "Active",
                 checkSchedule: "manual",
                 checkPercentage: 0.2,
                 nextCheckAt: 1770967868630,
@@ -160,10 +157,11 @@ async function main() {
                 backupStrategyId: strategy1.id,
                 repositoryId: repo3.id,
                 retentionPolicy: {
-                    type: RetentionType.tag,
-                    tagValue: ["pro", "test"]
+                    type: RetentionType.count,
+                    windowType: WindowType.last,
+                    countValue: "1"
                 },
-                schedulePolicy: "* * 0 * * *",
+                schedulePolicy: "* 0 * * * *",
                 nextBackupAt: 1770969043979,
                 index: 2,
             },

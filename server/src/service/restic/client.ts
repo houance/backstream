@@ -51,7 +51,7 @@ export class RepositoryClient {
         errorFile: string,
         uuid: string): Task<ResticResult<boolean>> {
         if (this.repoType !== RepoType.LOCAL && this.repoType === targetClient.repoType) {
-            throw new Error('copying between same type repositories is not supported');
+            throw new Error('copy between same type of repositories is not supported');
         }
         const command = `restic copy ${snapshotIds.join(' ')}`;
         const process = executeStream(
@@ -315,7 +315,11 @@ export class RepositoryClient {
             ResticResult.ok(result, true);
     }
 
-    public async forgetByPathWithPolicy(path: string, retentionPolicy: RetentionPolicy): Promise<ResticResult<ForgetGroup[]>> {
+    public async forgetByPathWithPolicy(
+        path: string,
+        retentionPolicy: RetentionPolicy,
+        dryRun: boolean = false
+    ): Promise<ResticResult<ForgetGroup[]>> {
         let retentionArg = '';
         switch (retentionPolicy.type) {
             case "count": {
@@ -332,7 +336,11 @@ export class RepositoryClient {
                 retentionArg = `--keep-tag ${retentionPolicy.tagValue!.values()}`
             } break;
         }
-        const result = await execute(`restic forget ${retentionArg} --path ${path} --json`, { env: this._env });
+        const dryRunArg = dryRun ? `--dry-run` : ``;
+        const result = await execute(
+            `restic forget ${retentionArg} --path ${path} ${dryRunArg} --json`,
+            { env: this._env }
+        );
         if (result.failed) return ResticResult.error(result);
         try {
             const snakeCaseResult = JSON.parse(result.stdout as string);
