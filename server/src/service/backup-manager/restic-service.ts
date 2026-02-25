@@ -72,9 +72,10 @@ export class ResticService {
         // run remote retention policy against local in dry run mode, get what snapshot should be copy
         let keepSnapshotIds: string[] = [];
         try {
-            const forgetResult = await this.forgetByPolicy(path, target, true);
+            const forgetResult = await this.checkLockAndTry(() =>
+                this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy));
             if (!forgetResult.success) {
-                console.error(`forget ${path} at ${this.repo.name} fail: ${String(forgetResult.errorMsg)}`);
+                console.warn(`forget ${path} at ${this.repo.name} fail: ${String(forgetResult.errorMsg)}`);
                 return;
             }
             const keepSnapshots: Snapshot[] = forgetResult.result!.flatMap(group => group.keep || []);
@@ -84,7 +85,7 @@ export class ResticService {
             return;
         }
         // run copy
-        const newExecution = await this.createExecution(commandType.backup);
+        const newExecution = await this.createExecution(commandType.copy, target);
         const task = await this.startJob(
             newExecution,
             async (log, err) => {
@@ -103,13 +104,22 @@ export class ResticService {
         const result = await task.result
         if (!result.success) return;
         console.log(`copyTo ${targetService.repo.name} success`)
+        // remote repo index snapshot
+        await targetService.indexSnapshots(path);
         // run remote retention policy against remote for cleaning up old data
-        await targetService.forgetByPolicy(path, target);
+        try {
+            const forgetResult = await this.checkLockAndTry(() =>
+                targetService.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy));
+            if (!forgetResult.success) console.warn(`forget ${path} at ${targetService.repo.name} fail: ${forgetResult.errorMsg}`)
+        } catch (error) {
+            console.warn(`forget ${path} at ${targetService.repo.name} fail: ${String(error)}`);
+            return;
+        }
     }
 
     public async backup(path: string, target: UpdateBackupTargetSchema) {
         if (this.repo.repositoryStatus !== 'Active') return;
-        const newExecution = await this.createExecution(commandType.backup);
+        const newExecution = await this.createExecution(commandType.backup, target);
         // add to queue
         const task = await this.startJob(
             newExecution,
@@ -127,10 +137,12 @@ export class ResticService {
             .where(eq(snapshotsMetadata.snapshotId, result.result.snapshotId));
         // forget old data
         try {
-            const forgetResult = await this.forgetByPolicy(path, target);
+            const forgetResult = await this.checkLockAndTry(() =>
+                this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy));
             if (!forgetResult.success) console.warn(`forget ${path} at ${this.repo.name} fail: ${forgetResult.errorMsg}`)
         } catch (error) {
-            console.warn(`forget ${path} at ${this.repo.name} fail: ${String(error)}`)
+            console.warn(`forget ${path} at ${this.repo.name} fail: ${String(error)}`);
+            return;
         }
     }
 
@@ -239,14 +251,6 @@ export class ResticService {
         const result = await task.result;
         if (!result.success) return;
         console.info(`repo ${this.repo.name} prune at ${this.repo.nextPruneAt} success`)
-    }
-
-    public async forgetByPolicy(
-        path: string,
-        target: UpdateBackupTargetSchema,
-        dryRun?: boolean) {
-        return await this.checkLockAndTry(() =>
-            this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy, dryRun))
     }
 
     private async startJob<T> (
@@ -365,12 +369,7 @@ export class ResticService {
         } else {
             value.repositoryId = this.repo.id
         }
-        const [row] = await db.insert(execution).values({
-            commandType: commandType,
-            executeStatus: "pending",
-            scheduledAt: Date.now(),
-            uuid: crypto.randomUUID(),
-        }).returning();
+        const [row] = await db.insert(execution).values(value).returning();
         return updateExecutionSchema.parse(row);
     }
 

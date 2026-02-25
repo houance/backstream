@@ -76,7 +76,7 @@ export class RepositoryClient {
             try {
                 // Execa v9+ yields lines automatically from the subprocess
                 for await (const line of process) {
-                    // todo: regex from stdout
+                    // todo: regex from stdout, get process and snapshot id
                 }
             } catch (err) {
                 console.error("Stream processing error:", err);
@@ -137,15 +137,13 @@ export class RepositoryClient {
                 console.error("Stream processing error:", err);
             }
         })();
-        const result = (async () => {
+        const result = (async (): Promise<ResticResult<SnapshotSummary>> => {
             const result:Result = await process;
             const exitCode = mapResticCode(result.exitCode);
             switch (exitCode) {
                 case ExitCode.Success:
                 case ExitCode.BackupReadError: {
-                    const snakeCaseResult = JSON.parse(summary);
-                    const camelCaseResult = camelcaseKeys(snakeCaseResult, { deep: true });
-                    return ResticResult.ok(result, camelCaseResult);
+                    return ResticResult.ok(result, this.parse(summary, "{}"));
                 }
                 default: return ResticResult.error(result);
             }
@@ -241,7 +239,7 @@ export class RepositoryClient {
                     // todo: regex from stdout
                 }
             } catch (err) {
-                console.error("Stream processing error:", err);
+                console.warn("Stream processing error:", err);
             }
         })();
         // 处理结果
@@ -285,14 +283,12 @@ export class RepositoryClient {
                     lastLine = line as string;
                 }
             } catch (err) {
-                lastLine = err instanceof Error ? err.message : String(err);
+                console.warn("Stream processing error:", String(err));
             }
             const result:Result = await process;
             if (result.failed) return ResticResult.error(result);
             try {
-                const snakeCaseResult = JSON.parse(lastLine)
-                const camelCaseResult: CheckSummary = camelcaseKeys(snakeCaseResult, { deep: true })
-                return ResticResult.ok(result, camelCaseResult);
+                return ResticResult.ok(result, this.parse(lastLine, "{}"));
             } catch (e:any) {
                 return ResticResult.parseError(result, e);
             }
@@ -336,16 +332,15 @@ export class RepositoryClient {
                 retentionArg = `--keep-tag ${retentionPolicy.tagValue!.values()}`
             } break;
         }
-        const dryRunArg = dryRun ? `--dry-run` : ``;
+        let command = `restic forget ${retentionArg} --path ${path} --json`
+        if (dryRun) command += ` --dry-run`;
         const result = await execute(
-            `restic forget ${retentionArg} --path ${path} ${dryRunArg} --json`,
+            command,
             { env: this._env }
         );
         if (result.failed) return ResticResult.error(result);
         try {
-            const snakeCaseResult = JSON.parse(result.stdout as string);
-            const camelCaseResult: ForgetGroup[] = camelcaseKeys(snakeCaseResult, { deep: true });
-            return ResticResult.ok(result, camelCaseResult);
+            return ResticResult.ok(result, this.parse(result.stdout as string, "{[]}"));
         } catch (error: any) {
             return ResticResult.parseError(result, error);
         }
@@ -356,9 +351,7 @@ export class RepositoryClient {
         const result = await execute(`restic snapshots ${pathArg} --json`, { env: this._env });
         if (result.failed) return ResticResult.error(result);
         try {
-            const snapshots = JSON.parse(result.stdout as string)
-            const camelCaseResult: Snapshot[] = camelcaseKeys(snapshots, { deep: true });
-            return ResticResult.ok(result, camelCaseResult);
+            return ResticResult.ok(result, this.parse(result.stdout as string, "[]"));
         } catch (error:any) {
             return ResticResult.parseError(result, error);
         }
@@ -374,10 +367,9 @@ export class RepositoryClient {
                 const trimLine: string = line.trim();
                 const data: { message_type: string, path: string[] } = JSON.parse(trimLine);
                 if (data.message_type === 'node') {
-                    const node= JSON.parse(trimLine);
-                    const camelCaseResult: Node = camelcaseKeys(node, { deep: true });
+                    const node: Node = this.parse(trimLine, "{}")
                     if (node.path !== path) {
-                        nodes.push(camelCaseResult);
+                        nodes.push(node);
                     }
                 }
             })
@@ -393,9 +385,7 @@ export class RepositoryClient {
             return ResticResult.error(result);
         }
         try {
-            const repoConfig = JSON.parse(result.stdout as string)
-            const camelCaseResult: RepoConfig = camelcaseKeys(repoConfig, { deep: true });
-            return ResticResult.ok(result, camelCaseResult);
+            return ResticResult.ok(result, this.parse(result.stdout as string, "{}"));
         } catch (e:any) {
             return ResticResult.parseError(result, e);
         }
@@ -464,5 +454,20 @@ export class RepositoryClient {
         return mapResticCode(result.exitCode) === ExitCode.Success ?
             ResticResult.ok(result, true) :
             ResticResult.error(result);
+    }
+
+    /**
+     * Parses stdout or a fallback string into JSON, then camelCases the keys.
+     * Throws an error if the resulting string is not valid JSON.
+     */
+    private parse<T>(stdout: string, fallbackJson: string): T {
+        // Use stdout if it exists, otherwise use the fallback string
+        const payload = stdout.trim() === "" ? fallbackJson : stdout;
+
+        // Parse the JSON (will throw naturally if payload is invalid)
+        const snakeCaseResult = JSON.parse(payload);
+
+        // Convert keys and return as the generic type
+        return camelcaseKeys(snakeCaseResult, { deep: true }) as unknown as T;
     }
 }
