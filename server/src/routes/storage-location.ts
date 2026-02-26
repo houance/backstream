@@ -28,7 +28,7 @@ const storageRoute = new Hono<Env>()
             )
             const result = await client.isRepoExist()
             if (result.success) return c.json( { message: 'OK'} );
-            return c.json({ error: result.errorMsg }, 400);
+            return c.json({ error: result.error.toString() }, 400);
         }
     )
     // create repo
