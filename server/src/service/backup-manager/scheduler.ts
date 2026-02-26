@@ -1,4 +1,5 @@
 import {
+    backupTarget,
     execution,
     repository,
     setting, StrategyType, updateBackupStrategySchema, updateBackupTargetSchema,
@@ -131,6 +132,10 @@ export class Scheduler {
                 const resticService = await this.getResticService(validRepo);
                 const validatedTarget = updateBackupTargetSchema.parse(target);
                 await resticService.backup(policy.dataSource, validatedTarget);
+                // 更新下一次运行时间
+                await db.update(backupTarget)
+                    .set({ nextBackupAt: new Cron(target.schedulePolicy).nextRun()!.getTime() })
+                    .where(eq(backupTarget.id, target.id));
             }))
         })
     }
@@ -148,11 +153,19 @@ export class Scheduler {
                 localResticService = targetResticService;
                 this.policyCronJob.set(cronJobKey, new Cron(target.schedulePolicy, { protect: true }, async () => {
                     await localResticService.backup(policy.dataSource, validatedTarget);
+                    // 更新下一次运行时间
+                    await db.update(backupTarget)
+                        .set({ nextBackupAt: new Cron(target.schedulePolicy).nextRun()!.getTime() })
+                        .where(eq(backupTarget.id, target.id));
                 }))
             }
             if ([2, 3].includes(target.index) && localResticService !== undefined) {
                 this.policyCronJob.set(cronJobKey, new Cron(target.schedulePolicy, { protect: true }, async () => {
                     await localResticService.copyTo(policy.dataSource, targetResticService, validatedTarget);
+                    // 更新下一次运行时间
+                    await db.update(backupTarget)
+                        .set({ nextBackupAt: new Cron(target.schedulePolicy).nextRun()!.getTime() })
+                        .where(eq(backupTarget.id, target.id));
                 }))
             }
         })
