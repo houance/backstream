@@ -62,51 +62,6 @@ export function fail<T>(rawResult: Result, parseError?: any): ResticResult<T> {
     return {success: false, error: new ResticError(rawResult, parseError)};
 }
 
-export class ResticResultTmp<T> {
-    public success: boolean;
-    public readonly rawExecResult: Result;
-    public result?: T;
-    public errorMsg?: {
-        cmd: string;
-        exitCode: number;
-        stderr: string;
-    };
-
-    private constructor(execaResult: Result, result?: T, parseError?: any) {
-        this.rawExecResult = execaResult;
-        if (result !== undefined) { // exec success
-            this.success = true;
-            this.result = result;
-        } else if (parseError !== undefined) { // exec success, result parse fail
-            this.success = false;
-            this.errorMsg = {
-                cmd: execaResult.command,
-                exitCode: execaResult.exitCode as ExitCode,
-                stderr: parseError instanceof Error ? parseError.message : String(parseError)
-            }
-        } else { // // exec failed
-            this.success = false;
-            this.errorMsg = {
-                cmd: execaResult.command,
-                exitCode: execaResult.exitCode as ExitCode,
-                stderr: execaResult.stderr as string
-            }
-        }
-    }
-
-    public static ok<T>(execaResult: Result, result: T): ResticResultTmp<T> {
-        return new ResticResultTmp<T>(execaResult, result);
-    }
-
-    public static error<T>(execaResult: Result): ResticResultTmp<T> {
-        return new ResticResultTmp<T>(execaResult);
-    }
-
-    public static parseError<T>(execaResult: Result, exception: string): ResticResultTmp<T> {
-        return new ResticResultTmp<T>(execaResult, undefined, exception);
-    }
-}
-
 export interface Snapshot {
     time: Date;
     parent: string;

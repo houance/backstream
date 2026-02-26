@@ -57,7 +57,9 @@ export class ResticService {
 
     public async renameRepo(name: string): Promise<UpdateRepositorySchema> {
         this.repo.name = name;
-        const updatedRepo = await db.update(repository).set({ name: name }).where(eq(repository.id, this.repo.id)).returning();
+        const updatedRepo = await db.update(repository)
+            .set({ name: name })
+            .where(eq(repository.id, this.repo.id)).returning();
         return updateRepositorySchema.parse(updatedRepo);
     }
 
@@ -116,7 +118,7 @@ export class ResticService {
         const retryResult = await this.retryOnLock(() =>
             this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy));
         if (!retryResult.success) {
-            console.warn(`forget ${path} at ${this.repo.name} fail: ${String(retryResult.error)}`);
+            console.warn(`forget ${path} at ${this.repo.name} fail: ${retryResult.error.toString()}`);
             return;
         }
         const forgetGroups = retryResult.result;
