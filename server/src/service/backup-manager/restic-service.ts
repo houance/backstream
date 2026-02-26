@@ -104,23 +104,22 @@ export class ResticService {
         targetService: ResticService,
         target: UpdateBackupTargetSchema,
     ) {
-        if (this.repo.repositoryStatus !== 'Active') return;
-        if (targetService.repo.repositoryStatus !== 'Active') return;
+        if (this.repo.repositoryStatus !== 'Active' || targetService.repo.repositoryStatus !== 'Active') return;
         // run remote retention policy against local in dry run mode, get what snapshot should be copy
         let keepSnapshotIds: string[] = [];
-        try {
-            const forgetResult = await this.checkLockAndTry(() =>
-                this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy));
-            if (!forgetResult.success) {
-                console.warn(`forget ${path} at ${this.repo.name} fail: ${String(forgetResult.errorMsg)}`);
-                return;
-            }
-            const keepSnapshots: Snapshot[] = forgetResult.result!.flatMap(group => group.keep || []);
-            keepSnapshotIds = keepSnapshots.map(s => s.id);
-        } catch (e) {
-            console.warn(`forget ${path} at ${this.repo.name} fail: ${String(e)}`)
+        const retryResult = await this.checkLockAndTry(() =>
+            this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy));
+        if (!retryResult.success) {
+            console.warn(`forget ${path} at ${this.repo.name} fail: ${String(retryResult.error)}`);
             return;
         }
+        const forgetResult = retryResult.result;
+        if (!forgetResult.success) {
+            console.warn(`forget ${path} at ${this.repo.name} fail: ${String(forgetResult.errorMsg!.stderr)}`);
+            return;
+        }
+        const keepSnapshots: Snapshot[] = forgetResult.result!.flatMap(group => group.keep || []);
+        keepSnapshotIds = keepSnapshots.map(s => s.id);
         // run copy
         const newExecution = await this.createExecution(commandType.copy, target);
         const task = await this.startJob(
@@ -144,14 +143,8 @@ export class ResticService {
         // remote repo index snapshot
         await targetService.indexSnapshots(path);
         // run remote retention policy against remote for cleaning up old data
-        try {
-            const forgetResult = await this.checkLockAndTry(() =>
-                targetService.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy));
-            if (!forgetResult.success) console.warn(`forget ${path} at ${targetService.repo.name} fail: ${forgetResult.errorMsg}`)
-        } catch (error) {
-            console.warn(`forget ${path} at ${targetService.repo.name} fail: ${String(error)}`);
-            return;
-        }
+        await targetService.checkLockAndTry(() =>
+            targetService.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy));
     }
 
     public async backup(path: string, target: UpdateBackupTargetSchema) {
@@ -173,25 +166,25 @@ export class ResticService {
             .set({ executionId: newExecution.id })
             .where(eq(snapshotsMetadata.snapshotId, result.result.snapshotId));
         // forget old data
-        try {
-            const forgetResult = await this.checkLockAndTry(() =>
-                this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy));
-            if (!forgetResult.success) console.warn(`forget ${path} at ${this.repo.name} fail: ${forgetResult.errorMsg}`)
-        } catch (error) {
-            console.warn(`forget ${path} at ${this.repo.name} fail: ${String(error)}`);
-            return;
-        }
+        const retryResult = await this.checkLockAndTry(() =>
+            this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy));
+        if (!retryResult.success) console.warn(`forget ${path} at ${this.repo.name} fail: ${retryResult.error}`)
     }
 
     public async indexSnapshots(path?: string) {
         if (this.repo.repositoryStatus !== 'Active') return;
-        const result = await this.checkLockAndTry(() => this.repoClient.getSnapshots(path))
-        if (!result.success) {
-            console.warn(`indexSnapshots ${path} wrong`);
+        const retryResult = await this.checkLockAndTry(() => this.repoClient.getSnapshots(path))
+        if (!retryResult.success) {
+            console.warn(`indexSnapshots ${path} wrong. ${retryResult.error}`);
             return;
         }
-        if (result.result?.length === 0) return;
-        const resticSnapshots = result.result!;
+        const snapshotResult = retryResult.result;
+        if (!snapshotResult.success) {
+            console.warn(`indexSnapshots ${path} wrong. ${snapshotResult.errorMsg!.stderr}`);
+            return;
+        }
+        if (snapshotResult.result!.length === 0) return;
+        const resticSnapshots = snapshotResult.result!;
         let validatedDbResult: UpdateSnapshotsMetadataSchema[];
         if (path) {
             const dbResult = await db.select().from(snapshotsMetadata)
@@ -309,7 +302,10 @@ export class ResticService {
             try {
                 // create log file and start
                 const { logFile, errorFile } = await this.createLogFile(null, newExecution);
-                const task = await this.checkLockAndTry(() => job(logFile, errorFile))
+                const retryResult =
+                    await this.checkLockAndTry(() => job(logFile, errorFile))
+                if (!retryResult.success) throw new Error(`Retry failed: ${retryResult.error || 'unknown reason'}`);
+                const task = retryResult.result;
                 this.runningJob.set(newExecution.id, task)
                 // update execution as running
                 await this.updateToRunning(newExecution, task)
@@ -334,17 +330,23 @@ export class ResticService {
 
     private async checkLockAndTry<T>(
         func: () => Promise<T> | T,
-        initialIntervalMs: number = 5000,
+        initialIntervalMs: number = 10000,
         retryCount: number = 3
-    ): Promise<T> {
+    ): Promise<RetryResult<T>> {
         for (let attempt = 0; attempt <= retryCount; attempt++) {
             // 1. Check if the repository is locked
             try {
-                const isLocked = await this.isRepoLocked();
-                if (!isLocked) {
-                    return func();
+                const lockResult = await this.repoClient.getRepoLock();
+                if (!lockResult.success) {
+                    console.warn(`Attempt ${attempt + 1}: get lock at repo ${this.repo.name} failed. ${lockResult.errorMsg!.stderr}.`)
+                    continue;
+                }
+                if (lockResult.result!.exclusive) {
+                    console.warn(`Attempt ${attempt + 1}: Repository ${this.repo.name} is locked.`);
+                    continue;
                 } else {
-                    console.warn(`Attempt ${attempt + 1}: Repository is locked.`);
+                    const result = await func();
+                    return { success: true, result: result };
                 }
             } catch (e) {
                 console.warn(`Attempt ${attempt + 1}: ${String(e)}`);
@@ -359,15 +361,7 @@ export class ResticService {
                 await new Promise(resolve => setTimeout(resolve, backoffDelay));
             }
         }
-
-        throw new Error(`Execution failed after ${retryCount + 1} attempts (Repo locked or function error).`);
-    }
-
-    private async isRepoLocked(): Promise<boolean> {
-        // check if outside restic command lock the repo
-        const getLocksResult = await this.repoClient.getRepoLock();
-        if (!getLocksResult.success) throw new Error(`Get repository locks failed: ${String(getLocksResult.errorMsg)}`);
-        return getLocksResult.result!.exclusive
+        return { success: false, error: "exceed max retry count" };
     }
 
     private async createLogFile(baseDirPath: string | null | undefined, execution: UpdateExecutionSchema) {
@@ -462,3 +456,7 @@ export class ResticService {
         this.reader = 0;
     }
 }
+
+type RetryResult<T> =
+    { success: true, result: T } |
+    { success: false, error: any }

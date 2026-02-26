@@ -58,7 +58,7 @@ async function main() {
                     AWS_ACCESS_KEY_ID: "DSAEF",
                     AWS_SECRET_ACCESS_KEY: "XVDSAE",
                 },
-                repositoryStatus: "Disconnected",
+                repositoryStatus: "Corrupt",
                 checkSchedule: "manual",
                 checkPercentage: 0.2,
                 nextCheckAt: 1770967868630,
