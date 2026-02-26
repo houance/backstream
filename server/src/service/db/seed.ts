@@ -18,14 +18,15 @@ const daysAgo = (days: number) => now() - days * 24 * 60 * 60;
 
 async function main() {
     console.log("🗑️ Resetting database...");
-    // 1. 首先清空所有表（注意外键约束顺序）
-    console.log("清空现有数据...");
+    // turn off foreign key CONSTRAINT for seeding
+    db.run(`PRAGMA foreign_keys = OFF;`)
     await db.delete(execution);
     await db.delete(snapshotsMetadata);
     await db.delete(backupTarget);
     await db.delete(strategy);
     await db.delete(repository);
     await db.delete(setting);
+    db.run(`PRAGMA foreign_keys = ON;`)
 
     // 2. 插入 Repository 数据
     console.log("🌱 Seeding started...");
