@@ -8,10 +8,12 @@ import settingRoute from "./routes/setting";
 import { db } from './service/db';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {Scheduler} from "./service/backup-manager/scheduler";
 
 export type Env = {
   Variables: {
     db: typeof db;
+    scheduler: Scheduler;
   };
 };
 
@@ -19,6 +21,7 @@ const app = new Hono<Env>();
 
 app.use('*', async (c, next) => {
   c.set('db', db);
+  c.set('scheduler', await Scheduler.create(5))
   await next();
 });
 

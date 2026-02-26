@@ -35,7 +35,6 @@ const storageRoute = new Hono<Env>()
     .post('/',
         zValidator('json', insertRepositorySchema),
         async (c) => {
-        // todo
             const values = c.req.valid('json');
             // 校验重复 repo
             const dbResult = await c.var.db.select()
@@ -44,42 +43,31 @@ const storageRoute = new Hono<Env>()
             if (dbResult) {
                 return c.json({ error: `duplicate path` }, 400);
             }
-            // 初始化 repo
-            const repoClient = new RepositoryClient(
-                values.path,
-                values.password,
-                values.repositoryType,
-                values.certification
-            );
-            const createRepoResult = await repoClient.createRepo();
-            if (!createRepoResult.success) return c.json({ error: `init repo failed ${createRepoResult.errorMsg}`}, 500);
-            // todo: 更新 repo status, usage, capacity
-            values.repositoryStatus = 'Active'
-
-            // 创建 repo
+            // 数据库新增记录
+            values.repositoryStatus = 'Disconnected'
             const [newRepo] = await c.var.db.insert(repository)
                 .values(values)
                 .returning();
+            // scheduler 创建仓库并开始调度
+            await c.var.scheduler.addResticService(updateRepositorySchema.parse(newRepo))
             return c.json(newRepo, 201);
         })
-    // update repo
+    // update repo, currently support rename
     .patch('/:id',
         zValidator('json', updateRepositorySchema.partial()),
         async (c) => {
-            const id = Number(c.req.param('id'));
             const values = c.req.valid('json');
-
-            const [updatedRepo] = await c.var.db.update(repository)
-                .set(values)
-                .where(eq(repository.id, id))
-                .returning();
-
-            if (!updatedRepo) return c.json({ error: 'Not found' }, 404);
+            if (values.name === undefined) return c.json({ error: 'name is not provided' }, 400);
+            const id = Number(c.req.param('id'));
+            const [repo] = await c.var.db.select().from(repository).where(eq(repository.id, id));
+            if (repo === undefined) return c.json({ error: 'Not found'}, 404);
+            // scheduler 对应的 restic service 更新 repo name
+            const resticService = await c.var.scheduler.getResticService(updateRepositorySchema.parse(repo))
+            const updatedRepo = await resticService.renameRepo(values.name);
             return c.json(updatedRepo);
         })
     // delete repo
     .delete('/:id', async (c) => {
-        // todo
         const id = Number(c.req.param('id'));
 
         const [deletedRepo] = await c.var.db.delete(repository)
@@ -87,6 +75,8 @@ const storageRoute = new Hono<Env>()
             .returning();
 
         if (!deletedRepo) return c.json({ error: 'Not found' }, 404);
+        // scheduler 删除
+        await c.var.scheduler.deleteResticService(updateRepositorySchema.parse(deletedRepo))
         return c.json({ success: true, id: deletedRepo.id });
     });
 

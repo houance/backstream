@@ -25,6 +25,7 @@ export function MaintainPolicyConfig({ form }: { form: UseFormReturnType<InsertR
                         form.setFieldValue('checkSchedule', val!)
                     }
                 }}
+                disabled={!!form.values.checkSchedule}
             />
             {checkScheduleType === 'custom' && (
                 <TextInput
@@ -62,6 +63,7 @@ export function MaintainPolicyConfig({ form }: { form: UseFormReturnType<InsertR
                         form.setFieldValue('pruneSchedule', val!)
                     }
                 }}
+                disabled={!!form.values.pruneSchedule}
             />
             {pruneScheduleType === 'custom' && (
                 <TextInput

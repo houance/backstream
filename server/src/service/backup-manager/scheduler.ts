@@ -15,11 +15,11 @@ import {eq} from "drizzle-orm";
 import {Cron} from "croner";
 
 export class Scheduler {
-    private readonly clientMap: Map<number, ResticService>;
+    private readonly clientMap: Map<number, ResticService>; // <repoId, ResticService>
     private readonly setting: UpdateSystemSettingSchema
     private readonly globalQueue: PQueue; // all working job
     private readonly repoCronJob: Map<string, Cron> // <repoId:check/prune/heartbeat/snapshots, Cron>
-    private readonly policyCronJob: Map<string, Cron> // <strategyId:backupTargetId, Cron>
+    private readonly policyCronJob: Map<string, Cron> // <strategyId:backupTargetId:repoId, Cron>
 
     private constructor(setting: UpdateSystemSettingSchema, globalQueue: PQueue) {
         this.clientMap = new Map<number, ResticService>();
@@ -59,7 +59,7 @@ export class Scheduler {
 
     public async addResticService(repo: UpdateRepositorySchema) {
         if (this.clientMap.has(repo.id)) return;
-        const resticService = new ResticService(repo, this.globalQueue);
+        const resticService = await ResticService.create(repo, this.globalQueue);
         this.clientMap.set(repo.id, resticService);
         // add schedule
         void this.addRepoHeartBeatSchedule(resticService);
@@ -74,6 +74,28 @@ export class Scheduler {
             await this.addResticService(repository);
         }
         return this.clientMap.get(repository.id)!;
+    }
+
+    public async deleteResticService(repo: UpdateRepositorySchema) {
+        if (!this.clientMap.has(repo.id)) return;
+        // 停止所有调度
+        for(const [key, value] of this.repoCronJob) {
+            const repoId = key.split(":")[0];
+            if (repoId === repo.id.toString()) {
+                value.stop();
+            }
+        }
+        for (const [key, value] of this.policyCronJob) {
+            const repoId = key.split(":")[2];
+            if (repoId === repo.id.toString()) {
+                value.stop();
+            }
+        }
+        // cancel 所有运行中的任务
+        const resticService = this.clientMap.get(repo.id)!;
+        await resticService.stopAllRunningJob();
+        // 删除 mapping 关系
+        this.clientMap.delete(repo.id);
     }
 
     private async addRepoMaintainSchedule(resticService: ResticService) {
@@ -103,9 +125,11 @@ export class Scheduler {
     private async addRepoHeartBeatSchedule(resticService: ResticService) {
         const heartbeatJobKey = `${resticService.repo.id}:heartbeat`
         if (this.repoCronJob.has(heartbeatJobKey)) return;
-        this.repoCronJob.set(heartbeatJobKey, new Cron("*/15 * * * * *", { protect: true }, async () => {
+        const job = new Cron("*/15 * * * * *", { protect: true }, async () => {
             await resticService.isConnected()
-        }))
+        })
+        void job.trigger();
+        this.repoCronJob.set(heartbeatJobKey, job)
     }
 
     public addPolicySchedule(policy: Policy) {
@@ -125,7 +149,7 @@ export class Scheduler {
             if (target.index !== 1) {
                 return;
             }
-            const cronJobKey = `${policy.id}:${target.id}`
+            const cronJobKey = `${policy.id}:${target.id}:${target.repositoryId}`
             if (this.policyCronJob.has(cronJobKey)) return;
             const validRepo = updateRepositorySchema.parse(target.repository);
             this.policyCronJob.set(cronJobKey, new Cron(target.schedulePolicy, { protect: true }, async () => {
@@ -144,7 +168,7 @@ export class Scheduler {
         let localResticService: ResticService;
         // asc by target index, 1 is local, 2/3 is remote
         policy.targets.sort((a, b) => a.index - b.index).forEach(async target => {
-            const cronJobKey = `${policy.id}:${target.id}`;
+            const cronJobKey = `${policy.id}:${target.id}:${target.repositoryId}`;
             if (this.policyCronJob.has(cronJobKey)) return;
             const targetValidRepo = updateRepositorySchema.parse(target.repository);
             const targetResticService = await this.getResticService(targetValidRepo);
@@ -173,9 +197,13 @@ export class Scheduler {
 
     public async addSnapshotIndexSchedule(resticService: ResticService) {
         const cronJobKey = `${resticService.repo.id}:snapshots`;
-        this.repoCronJob.set(cronJobKey, new Cron("*/30 * * * * *", { protect: true }, async () => {
+        if (this.repoCronJob.has(cronJobKey)) return;
+        const job = new Cron("* */5 * * * *", { protect: true }, async () => {
             await resticService.indexSnapshots();
-        }))
+        })
+        this.repoCronJob.set(cronJobKey, job);
+        // run index snapshot IMMEDIATELY
+        void job.trigger();
     }
 }
 

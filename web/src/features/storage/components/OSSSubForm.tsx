@@ -12,7 +12,7 @@ export function OSSSubform({form, data}: { form: UseFormReturnType<InsertReposit
                 withAsterisk
             />
             <PasswordInput
-                variant={!!data ? "filled" : "default"}
+                variant={data ? "filled" : "default"}
                 label="SECRET ACCESS KEY"
                 type="password"
                 {...form.getInputProps('certification.oss.OSS_SECRET_ACCESS_KEY')}

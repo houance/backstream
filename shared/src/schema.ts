@@ -71,7 +71,7 @@ export const execution = sqliteTable("execution_table", {
     scheduledAt: integer("scheduled_at").notNull(),
     startedAt: integer("started_at"),
     finishedAt: integer("finished_at"),
-    executeStatus: text("execute_status", { enum: ["success", "fail", "running", "pending"] }).notNull(),
+    executeStatus: text("execute_status", { enum: ["success", "fail", "running", "pending", "cancel"] }).notNull(),
     repositoryId: integer("repository_id").references(() => repository.id),
     strategyId: integer("strategy_id").references(() => strategy.id),
     backupTargetId: integer("backup_target_id").references(() => backupTarget.id),

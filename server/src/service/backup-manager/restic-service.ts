@@ -41,6 +41,43 @@ export class ResticService {
         this.globalQueue = queue
     }
 
+    public static async create(repo: UpdateRepositorySchema, queue: PQueue): Promise<ResticService> {
+        const resticService = new ResticService(repo, queue);
+        // create repo if not exist
+        await resticService.initRepo();
+        return resticService;
+    }
+
+    public async renameRepo(name: string): Promise<UpdateRepositorySchema> {
+        this.repo.name = name;
+        const updatedRepo = await db.update(repository).set({ name: name }).where(eq(repository.id, this.repo.id)).returning();
+        return updateRepositorySchema.parse(updatedRepo);
+    }
+
+    public async initRepo() {
+        const initSuccess = await this.repoClient.createRepo();
+        if (initSuccess) {
+            const dbResult = await db.update(repository)
+                .set({ repositoryStatus: 'Active' })
+                .where(eq(repository.id, this.repo.id))
+                .returning()
+            this.repo = updateRepositorySchema.parse(dbResult[0]);
+        } else {
+            const dbResult = await db.update(repository)
+                .set({ repositoryStatus: 'Disconnected' })
+                .where(eq(repository.id, this.repo.id))
+                .returning()
+            this.repo = updateRepositorySchema.parse(dbResult[0]);
+        }
+    }
+
+    public async stopAllRunningJob() {
+        for (const [key, value] of this.runningJob) {
+            value.cancel();
+            await this.cancelExecution(key)
+        }
+    }
+
     public async isConnected() {
         if (this.repo.repositoryStatus === "Corrupt") return;
         // queue's job is running === repo is connected
@@ -389,6 +426,10 @@ export class ResticService {
             finishedAt: Date.now(),
             executeStatus: result.success ? 'success' : 'fail'
         }).where(eq(execution.id, exec.id));
+    }
+
+    private async cancelExecution(execId: number): Promise<void> {
+        await db.update(execution).set({ executeStatus: "cancel" }).where(eq(execution.id, execId));
     }
 
     public async readLock() {
