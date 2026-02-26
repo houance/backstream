@@ -54,6 +54,9 @@ export class Scheduler {
             // add client to schedule
             scheduler.addResticService(validated);
         })
+        // init policy schedule
+        const allPolicy = await getAllPolicy();
+        allPolicy.forEach(policy => scheduler.addPolicySchedule(policy))
         return scheduler;
     }
 
@@ -61,12 +64,10 @@ export class Scheduler {
         if (this.clientMap.has(repo.id)) return;
         const resticService = await ResticService.create(repo, this.globalQueue);
         this.clientMap.set(repo.id, resticService);
-        // add schedule
+        // add repo schedule
         void this.addRepoHeartBeatSchedule(resticService);
         void this.addRepoMaintainSchedule(resticService);
         void this.addSnapshotIndexSchedule(resticService);
-        const allPolicy = await getAllPolicy();
-        allPolicy.forEach(policy => this.addPolicySchedule(policy))
     }
 
     public async getResticService(repository: UpdateRepositorySchema) {
