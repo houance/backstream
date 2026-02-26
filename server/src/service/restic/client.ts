@@ -1,13 +1,12 @@
 import {createTempDir, execute, executeStream, getParentPathFromNode, mapResticCode} from "./utils";
 import {
     type CheckSummary,
-    ExitCode, type ForgetGroup,
+    ExitCode, fail, type ForgetGroup,
     type Lock,
     type Node,
     type Progress,
-    type RepoConfig,
-    ResticResult,
-    type Snapshot, type SnapshotSummary,
+    type RepoConfig, type ResticResult,
+    type Snapshot, type SnapshotSummary, success,
     type Task,
 } from "./types";
 import {RepoType, type CertificateSchema, type RetentionPolicy} from "@backstream/shared"
@@ -85,8 +84,8 @@ export class RepositoryClient {
         // 处理结果
         const result = (async (): Promise<ResticResult<boolean>> => {
             const result:Result = await process;
-            if (result.failed) return ResticResult.error(result);
-            return ResticResult.ok(result, true);
+            if (result.failed) return fail(result);
+            return success(true, result);
         })();
         return {
             uuid:  uuid,
@@ -143,9 +142,9 @@ export class RepositoryClient {
             switch (exitCode) {
                 case ExitCode.Success:
                 case ExitCode.BackupReadError: {
-                    return ResticResult.ok(result, this.parse(summary, "{}"));
+                    return success(this.parse(summary, "{}"), result);
                 }
-                default: return ResticResult.error(result);
+                default: return fail(result);
             }
         })();
         return {
@@ -205,8 +204,8 @@ export class RepositoryClient {
         // 处理结果
         const result = (async (): Promise<ResticResult<string>> => {
             const result:Result = await process;
-            if (result.failed) return ResticResult.error(result);
-            return ResticResult.ok(result, join(dir, node.name));
+            if (result.failed) return fail(result);
+            return success(join(dir, node.name), result);
         })();
         return {
             uuid:  uuid,
@@ -245,8 +244,8 @@ export class RepositoryClient {
         // 处理结果
         const result = (async (): Promise<ResticResult<boolean>> => {
             const result:Result = await process;
-            if (result.failed) return ResticResult.error(result);
-            return ResticResult.ok(result, true);
+            if (result.failed) return fail(result);
+            return success(true, result);
         })();
         return {
             uuid:  uuid,
@@ -286,11 +285,11 @@ export class RepositoryClient {
                 console.warn("Stream processing error:", String(err));
             }
             const result:Result = await process;
-            if (result.failed) return ResticResult.error(result);
+            if (result.failed) return fail(result);
             try {
-                return ResticResult.ok(result, this.parse(lastLine, "{}"));
+                return success(this.parse(lastLine, "{}"), result);
             } catch (e:any) {
-                return ResticResult.parseError(result, e);
+                return fail(result, e);
             }
         })();
         return {
@@ -306,9 +305,7 @@ export class RepositoryClient {
 
     public async forgetBySnapId(snapshotId: string): Promise<ResticResult<boolean>> {
         const result = await execute(`restic forget ${snapshotId} --json`, { env: this._env });
-        return result.failed ?
-            ResticResult.error(result) :
-            ResticResult.ok(result, true);
+        return result.failed ? fail(result) : success(true, result);
     }
 
     public async forgetByPathWithPolicy(
@@ -338,28 +335,28 @@ export class RepositoryClient {
             command,
             { env: this._env }
         );
-        if (result.failed) return ResticResult.error(result);
+        if (result.failed) return fail(result);
         try {
-            return ResticResult.ok(result, this.parse(result.stdout as string, "{[]}"));
+            return success(this.parse(result.stdout as string, "{[]}"), result);
         } catch (error: any) {
-            return ResticResult.parseError(result, error);
+            return fail(result, error);
         }
     }
 
     public async getSnapshots(path?: string): Promise<ResticResult<Snapshot[]>> {
         let pathArg = path ? `--path ${path}` : ``;
         const result = await execute(`restic snapshots ${pathArg} --json`, { env: this._env });
-        if (result.failed) return ResticResult.error(result);
+        if (result.failed) return fail(result);
         try {
-            return ResticResult.ok(result, this.parse(result.stdout as string, "[]"));
+            return success(this.parse(result.stdout as string, "[]"), result);
         } catch (error:any) {
-            return ResticResult.parseError(result, error);
+            return fail(result, error);
         }
     }
 
     public async getSnapshotFilesByPath(snapshotId: string, path: string='/'): Promise<ResticResult<Node[]>> {
         const result = await execute(`restic ls ${snapshotId} ${path} --json`, { env: this._env });
-        if (result.failed) return ResticResult.error(result)
+        if (result.failed) return fail(result)
         let nodes: Node[] = [];
         try {
             const stdout: string = result.stdout as string
@@ -374,20 +371,18 @@ export class RepositoryClient {
                 }
             })
         } catch (error:any) {
-            return ResticResult.parseError(result, error);
+            return fail(result, error);
         }
-        return ResticResult.ok(result, nodes);
+        return success(nodes, result);
     }
 
     public async getRepoConfig(): Promise<ResticResult<RepoConfig>> {
         const result = await execute('restic cat config', { env: this._env });
-        if (mapResticCode(result.exitCode) !== ExitCode.Success) {
-            return ResticResult.error(result);
-        }
+        if (mapResticCode(result.exitCode) !== ExitCode.Success) return fail(result);
         try {
-            return ResticResult.ok(result, this.parse(result.stdout as string, "{}"));
+            return success(this.parse(result.stdout as string, "{}"), result);
         } catch (e:any) {
-            return ResticResult.parseError(result, e);
+            return fail(result, e);
         }
     }
 
@@ -395,18 +390,18 @@ export class RepositoryClient {
         const result = await execute('restic cat config', { env: this._env });
         const code:ExitCode = mapResticCode(result.exitCode)
         switch (code) {
-            case ExitCode.Success: return ResticResult.ok(result, true);
-            case ExitCode.RepositoryDoesNotExist: return ResticResult.ok(result, false);
-            default: return ResticResult.error(result);
+            case ExitCode.Success: return success(true, result);
+            case ExitCode.RepositoryDoesNotExist: return success(false, result);
+            default: return fail(result);
         }
     }
 
     public async getRepoLock(): Promise<ResticResult<Lock>> {
         const listLockResult = await execute('restic list locks --no-lock --json', { env: this._env });
         const code = mapResticCode(listLockResult.exitCode)
-        if (code !== ExitCode.Success) return ResticResult.error(listLockResult);
+        if (code !== ExitCode.Success) return fail(listLockResult);
         const lockId = listLockResult.stdout as string;
-        if (lockId === "") return ResticResult.ok(listLockResult, {
+        if (lockId === "") return success({
             time: "",
             exclusive: false,
             hostname: "",
@@ -414,23 +409,24 @@ export class RepositoryClient {
             pid: -1,
             uid: -1,
             gid: -1
-        })
+        }, listLockResult)
         const catLockResult = await execute(`restic cat lock ${lockId} --no-lock --json`, { env: this._env });
         const catLockCode = mapResticCode(catLockResult.exitCode)
-        if (catLockCode !== ExitCode.Success) return ResticResult.error(catLockResult);
-        const lock: Lock = JSON.parse(catLockResult.stdout as string);
-        return ResticResult.ok(catLockResult, lock);
+        if (catLockCode !== ExitCode.Success) return fail(catLockResult);
+        try {
+            return success(this.parse(catLockResult.stdout as string, "{}"), catLockResult);
+        } catch (e:any) {
+            return fail(catLockResult, e);
+        }
     }
 
     public async createRepo(): Promise<ResticResult<boolean>> {
         const repoExistResult = await this.isRepoExist();
         if (!repoExistResult.success) return repoExistResult; // cat config 失败
         // cat config 成功且 repo 已初始化
-        if (repoExistResult.result) return ResticResult.ok(repoExistResult.rawExecResult, true);
+        if (repoExistResult.result) return success(true, repoExistResult.rawResult);
         const result = await execute(`restic init`, { env: this._env });
-        return mapResticCode(result.exitCode) === ExitCode.Success ?
-            ResticResult.ok(result, true) :
-            ResticResult.error(result);
+        return mapResticCode(result.exitCode) === ExitCode.Success ? success(true, result) : fail(result);
     }
 
     public async createRepoWithSameChunker(fromClient: RepositoryClient): Promise<ResticResult<boolean>> {
@@ -451,9 +447,7 @@ export class RepositoryClient {
                 }
             }
         )
-        return mapResticCode(result.exitCode) === ExitCode.Success ?
-            ResticResult.ok(result, true) :
-            ResticResult.error(result);
+        return mapResticCode(result.exitCode) === ExitCode.Success ? success(true, result) : fail(result);
     }
 
     /**

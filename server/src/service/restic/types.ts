@@ -30,7 +30,39 @@ export interface Lock {
     gid: number;
 }
 
-export class ResticResult<T> {
+export class ResticError {
+    readonly cmd: string;
+    readonly exitCode: number;
+    readonly stderr: string;
+    readonly rawResult: Result;
+
+    constructor(execaResult: Result, parseError?: any) {
+        this.cmd = execaResult.command;
+        this.exitCode = execaResult.exitCode as number;
+        this.rawResult = execaResult;
+        this.stderr = parseError ?
+            parseError instanceof Error ? parseError.message : String(parseError) :
+            execaResult.stderr as string;
+    }
+
+    public toString(): string {
+        return `cmd:${this.cmd}\nexitCode:${this.exitCode}\nstderr:${this.stderr}`;
+    }
+}
+
+export type ResticResult<T> =
+    { success: true, result: T, rawResult: Result } |
+    { success: false; error: ResticError};
+
+export function success<T>(result: T, rawResult: Result): ResticResult<T> {
+    return {success: true, result, rawResult};
+}
+
+export function fail<T>(rawResult: Result, parseError?: any): ResticResult<T> {
+    return {success: false, error: new ResticError(rawResult, parseError)};
+}
+
+export class ResticResultTmp<T> {
     public success: boolean;
     public readonly rawExecResult: Result;
     public result?: T;
@@ -62,16 +94,16 @@ export class ResticResult<T> {
         }
     }
 
-    public static ok<T>(execaResult: Result, result: T): ResticResult<T> {
-        return new ResticResult<T>(execaResult, result);
+    public static ok<T>(execaResult: Result, result: T): ResticResultTmp<T> {
+        return new ResticResultTmp<T>(execaResult, result);
     }
 
-    public static error<T>(execaResult: Result): ResticResult<T> {
-        return new ResticResult<T>(execaResult);
+    public static error<T>(execaResult: Result): ResticResultTmp<T> {
+        return new ResticResultTmp<T>(execaResult);
     }
 
-    public static parseError<T>(execaResult: Result, exception: string): ResticResult<T> {
-        return new ResticResult<T>(execaResult, undefined, exception);
+    public static parseError<T>(execaResult: Result, exception: string): ResticResultTmp<T> {
+        return new ResticResultTmp<T>(execaResult, undefined, exception);
     }
 }
 

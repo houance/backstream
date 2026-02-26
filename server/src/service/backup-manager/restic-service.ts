@@ -7,7 +7,14 @@ import {
     updateRepositorySchema,
     type UpdateRepositorySchema, type UpdateSnapshotsMetadataSchema, updateSnapshotsMetadataSchema
 } from "@backstream/shared";
-import {RepositoryClient, ResticResult, type Snapshot, type Task} from "../restic";
+import {
+    ExitCode,
+    RepositoryClient,
+    ResticError,
+    type ResticResult,
+    type Snapshot,
+    type Task
+} from "../restic";
 import PQueue from "p-queue";
 import {db} from "../db";
 import {eq, and, inArray} from "drizzle-orm";
@@ -55,8 +62,8 @@ export class ResticService {
     }
 
     public async initRepo() {
-        const initSuccess = await this.repoClient.createRepo();
-        if (initSuccess) {
+        const result = await this.repoClient.createRepo();
+        if (result.success) {
             const dbResult = await db.update(repository)
                 .set({ repositoryStatus: 'Active' })
                 .where(eq(repository.id, this.repo.id))
@@ -91,9 +98,8 @@ export class ResticService {
         }
         // check if repo connected
         const result = await this.repoClient.isRepoExist();
-        const repoConn = result.success && result.result!
         const updatedResult = await db.update(repository)
-            .set({ repositoryStatus: repoConn ? 'Active' : 'Disconnected' })
+            .set({ repositoryStatus: result.success ? 'Active' : 'Disconnected' })
             .where(eq(repository.id, this.repo.id))
             .returning();
         this.repo = updateRepositorySchema.parse(updatedResult[0]);
@@ -107,32 +113,27 @@ export class ResticService {
         if (this.repo.repositoryStatus !== 'Active' || targetService.repo.repositoryStatus !== 'Active') return;
         // run remote retention policy against local in dry run mode, get what snapshot should be copy
         let keepSnapshotIds: string[] = [];
-        const retryResult = await this.checkLockAndTry(() =>
+        const retryResult = await this.retryOnLock(() =>
             this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy));
         if (!retryResult.success) {
             console.warn(`forget ${path} at ${this.repo.name} fail: ${String(retryResult.error)}`);
             return;
         }
-        const forgetResult = retryResult.result;
-        if (!forgetResult.success) {
-            console.warn(`forget ${path} at ${this.repo.name} fail: ${String(forgetResult.errorMsg!.stderr)}`);
-            return;
-        }
-        const keepSnapshots: Snapshot[] = forgetResult.result!.flatMap(group => group.keep || []);
+        const forgetGroups = retryResult.result;
+        const keepSnapshots: Snapshot[] = forgetGroups.flatMap(group => group.keep || []);
         keepSnapshotIds = keepSnapshots.map(s => s.id);
         // run copy
         const newExecution = await this.createExecution(commandType.copy, target);
         const task = await this.startJob(
             newExecution,
-            async (log, err) => {
-                return this.repoClient.copyTo(
+            (log, err) => this.repoClient.copyTo(
                     targetService.repoClient,
                     keepSnapshotIds,
                     log,
                     err,
                     newExecution.uuid
                 )
-            },
+            ,
             false,
             async () => await targetService.readLock(),
             async () => await targetService.readUnlock()
@@ -143,7 +144,7 @@ export class ResticService {
         // remote repo index snapshot
         await targetService.indexSnapshots(path);
         // run remote retention policy against remote for cleaning up old data
-        await targetService.checkLockAndTry(() =>
+        await targetService.retryOnLock(() =>
             targetService.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy));
     }
 
@@ -158,7 +159,7 @@ export class ResticService {
             false
         )
         const result = await task.result
-        if (!result.success || result.result?.snapshotId === undefined || result.result.snapshotId === null) return;
+        if (!result.success || result.result.snapshotId === undefined || result.result.snapshotId === null) return;
         // index snapshots
         await this.indexSnapshots(path);
         // update set execution id
@@ -166,25 +167,20 @@ export class ResticService {
             .set({ executionId: newExecution.id })
             .where(eq(snapshotsMetadata.snapshotId, result.result.snapshotId));
         // forget old data
-        const retryResult = await this.checkLockAndTry(() =>
+        const retryResult = await this.retryOnLock(() =>
             this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy));
         if (!retryResult.success) console.warn(`forget ${path} at ${this.repo.name} fail: ${retryResult.error}`)
     }
 
     public async indexSnapshots(path?: string) {
         if (this.repo.repositoryStatus !== 'Active') return;
-        const retryResult = await this.checkLockAndTry(() => this.repoClient.getSnapshots(path))
+        const retryResult = await this.retryOnLock(() => this.repoClient.getSnapshots(path))
         if (!retryResult.success) {
-            console.warn(`indexSnapshots ${path} wrong. ${retryResult.error}`);
+            console.warn(`indexSnapshots ${path} wrong. ${retryResult.error.toString()}`);
             return;
         }
-        const snapshotResult = retryResult.result;
-        if (!snapshotResult.success) {
-            console.warn(`indexSnapshots ${path} wrong. ${snapshotResult.errorMsg!.stderr}`);
-            return;
-        }
-        if (snapshotResult.result!.length === 0) return;
-        const resticSnapshots = snapshotResult.result!;
+        const snapshots = retryResult.result;
+        if (snapshots.length === 0) return;
         let validatedDbResult: UpdateSnapshotsMetadataSchema[];
         if (path) {
             const dbResult = await db.select().from(snapshotsMetadata)
@@ -196,7 +192,7 @@ export class ResticService {
             validatedDbResult = updateSnapshotsMetadataSchema.array().parse(dbResult);
         }
         const newSnapshots: InsertSnapshotsMetadataSchema[] = [];
-        resticSnapshots.forEach((snapshot) => {
+        snapshots.forEach((snapshot) => {
             let hit = false;
             validatedDbResult.forEach((dbResult) => {
                 if (snapshot.id === dbResult.snapshotId) {
@@ -226,7 +222,7 @@ export class ResticService {
         const deleteSnapshots: UpdateSnapshotsMetadataSchema[] = [];
         validatedDbResult.forEach((dbResult) => {
             let hit = false;
-            resticSnapshots.forEach((snapshot) => {
+            snapshots.forEach((snapshot) => {
                 if (dbResult.snapshotId === snapshot.id) {
                     hit = true;
                     return;
@@ -285,7 +281,7 @@ export class ResticService {
 
     private async startJob<T> (
         newExecution: UpdateExecutionSchema,
-        job: (log: string, err: string) => Task<ResticResult<T>> | Promise<Task<ResticResult<T>>>,
+        job: (log: string, err: string) => Task<ResticResult<T>>,
         isExclusive: boolean = true,
         lockRemote?: () => Promise<void>,
         unLockRemote?: () => Promise<void>,
@@ -302,10 +298,7 @@ export class ResticService {
             try {
                 // create log file and start
                 const { logFile, errorFile } = await this.createLogFile(null, newExecution);
-                const retryResult =
-                    await this.checkLockAndTry(() => job(logFile, errorFile))
-                if (!retryResult.success) throw new Error(`Retry failed: ${retryResult.error || 'unknown reason'}`);
-                const task = retryResult.result;
+                const task = job(logFile, errorFile)
                 this.runningJob.set(newExecution.id, task)
                 // update execution as running
                 await this.updateToRunning(newExecution, task)
@@ -328,40 +321,45 @@ export class ResticService {
         })
     }
 
-    private async checkLockAndTry<T>(
-        func: () => Promise<T> | T,
-        initialIntervalMs: number = 10000,
+    private async retryOnLock<T>(
+        func: () => Promise<ResticResult<T>>,
+        initialIntervalMs: number = 5000,
         retryCount: number = 3
     ): Promise<RetryResult<T>> {
+        let lastError: ResticError | undefined;
         for (let attempt = 0; attempt <= retryCount; attempt++) {
-            // 1. Check if the repository is locked
-            try {
-                const lockResult = await this.repoClient.getRepoLock();
-                if (!lockResult.success) {
-                    console.warn(`Attempt ${attempt + 1}: get lock at repo ${this.repo.name} failed. ${lockResult.errorMsg!.stderr}.`)
-                    continue;
-                }
-                if (lockResult.result!.exclusive) {
-                    console.warn(`Attempt ${attempt + 1}: Repository ${this.repo.name} is locked.`);
-                    continue;
-                } else {
-                    const result = await func();
-                    return { success: true, result: result };
-                }
-            } catch (e) {
-                console.warn(`Attempt ${attempt + 1}: ${String(e)}`);
+            // 1. Execute the function (could return a Result or a Task)
+            const result = await func();
+            // 3. Check for success
+            if (result.success) {
+                return {
+                    success: true,
+                    result: result.result,
+                    attempts: attempt + 1
+                };
             }
-            // 2. If we have retries left, calculate the backoff and wait
-            if (attempt < retryCount) {
-                // Formula: base * 2^attempt + jitter
-                // Adds random 0-100ms jitter to prevent "thundering herd"
-                const backoffDelay = (initialIntervalMs * Math.pow(2, attempt)) + (Math.random() * 100);
-
-                console.debug(`Retrying in ${Math.round(backoffDelay)}ms...`);
-                await new Promise(resolve => setTimeout(resolve, backoffDelay));
+            if (result.error.exitCode !== ExitCode.FailedToLockRepository) {
+                return {
+                    success: false,
+                    error: result.error,
+                    attempts: attempt + 1
+                }
+            } else {
+                // 4. Handle Failure
+                lastError = result.error;
+                // If we have retries left, wait before next attempt
+                if (attempt < retryCount) {
+                    const delay = initialIntervalMs * (attempt + 1);
+                    console.warn(`Attempt ${attempt + 1} failed. Retrying...`)
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
             }
         }
-        return { success: false, error: "exceed max retry count" };
+        return {
+            success: false,
+            error: lastError!,
+            attempts: retryCount + 1
+        };
     }
 
     private async createLogFile(baseDirPath: string | null | undefined, execution: UpdateExecutionSchema) {
@@ -416,7 +414,7 @@ export class ResticService {
 
     private async finalizeExecution(exec: UpdateExecutionSchema, result: ResticResult<any>) {
         await db.update(execution).set({
-            exitCode: result.rawExecResult.exitCode,
+            exitCode: result.success ? result.rawResult.exitCode : result.error.exitCode,
             finishedAt: Date.now(),
             executeStatus: result.success ? 'success' : 'fail'
         }).where(eq(execution.id, exec.id));
@@ -458,5 +456,5 @@ export class ResticService {
 }
 
 type RetryResult<T> =
-    { success: true, result: T } |
-    { success: false, error: any }
+    | { success: true; result: T; attempts: number }
+    | { success: false; error: ResticError; attempts: number };
