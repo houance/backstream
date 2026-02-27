@@ -101,7 +101,7 @@ export class ResticService {
         // check if repo connected
         const result = await this.repoClient.isRepoExist();
         const updatedResult = await db.update(repository)
-            .set({ repositoryStatus: result.success ? 'Active' : 'Disconnected' })
+            .set({ repositoryStatus: result.success && result.result ? 'Active' : 'Disconnected' })
             .where(eq(repository.id, this.repo.id))
             .returning();
         this.repo = updateRepositorySchema.parse(updatedResult[0]);

@@ -65,9 +65,9 @@ export class Scheduler {
         const resticService = await ResticService.create(repo, this.globalQueue);
         this.clientMap.set(repo.id, resticService);
         // add repo schedule
-        void this.addRepoHeartBeatSchedule(resticService);
-        void this.addRepoMaintainSchedule(resticService);
-        void this.addSnapshotIndexSchedule(resticService);
+        await this.addRepoHeartBeatSchedule(resticService);
+        await this.addSnapshotIndexSchedule(resticService);
+        await this.addRepoMaintainSchedule(resticService);
     }
 
     public async getResticService(repository: UpdateRepositorySchema) {
@@ -129,7 +129,7 @@ export class Scheduler {
         const job = new Cron("*/15 * * * * *", { protect: true }, async () => {
             await resticService.isConnected()
         })
-        void job.trigger();
+        await job.trigger();
         this.repoCronJob.set(heartbeatJobKey, job)
     }
 
