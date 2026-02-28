@@ -175,6 +175,7 @@ export class ResticService {
         )
         const result = await task.result
         if (!result.success || result.result.snapshotId === undefined || result.result.snapshotId === null) return;
+        console.log(`backup ${this.repo.name} success`)
         // index snapshots
         await this.indexSnapshots(path);
         // update set execution id
@@ -344,7 +345,9 @@ export class ResticService {
     ): Promise<RetryResult<T>> {
         let lastError: ResticError | undefined;
         for (let attempt = 0; attempt <= retryCount; attempt++) {
-            // 1. Execute the function (could return a Result or a Task)
+            // 1. Execute the function
+            // add random wait time for restic to clean previous lock
+            await new Promise(r => setTimeout(r, Math.random() * 1000 + 1000));
             const result = await func();
             // 3. Check for success
             if (result.success) {
@@ -366,7 +369,7 @@ export class ResticService {
                 // If we have retries left, wait before next attempt
                 if (attempt < retryCount) {
                     const delay = initialIntervalMs * (attempt + 1);
-                    console.warn(`Attempt ${attempt + 1} failed. Error: ${lastError.toString()}, Retrying...`)
+                    console.debug(`Attempt ${attempt + 1} failed. Error: ${lastError.toString()}, Retrying...`)
                     await new Promise(resolve => setTimeout(resolve, delay));
                 }
             }
