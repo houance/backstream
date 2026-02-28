@@ -30,6 +30,7 @@ export const STRATEGY_MAP: Record<StrategyType, StrategyMeta> = {
         icon: IconDatabase,
         component: LocalBackupSubForm,
         initSubForm: [{
+            backupStrategyId: 0,
             repositoryId: 0,
             retentionPolicy: {
                 type: "count",
@@ -37,7 +38,8 @@ export const STRATEGY_MAP: Record<StrategyType, StrategyMeta> = {
                 countValue: ""
             },
             schedulePolicy: "* * * * * *",
-            index: 1
+            index: 1,
+            nextBackupAt: 0
         }]
     },
     STRATEGY_321: {
@@ -47,6 +49,7 @@ export const STRATEGY_MAP: Record<StrategyType, StrategyMeta> = {
         component: Strategy321SubForm,
         initSubForm: [
             {
+                backupStrategyId: 0,
                 repositoryId: 0,
                 retentionPolicy: {
                     type: "count",
@@ -54,9 +57,11 @@ export const STRATEGY_MAP: Record<StrategyType, StrategyMeta> = {
                     countValue: ""
                 },
                 schedulePolicy: "* * * * * *",
-                index: 1
+                index: 1,
+                nextBackupAt: 0
             },
             {
+                backupStrategyId: 0,
                 repositoryId: 0,
                 retentionPolicy: {
                     type: "count",
@@ -64,7 +69,8 @@ export const STRATEGY_MAP: Record<StrategyType, StrategyMeta> = {
                     countValue: ""
                 },
                 schedulePolicy: "* * * * * *",
-                index: 2
+                index: 2,
+                nextBackupAt: 0
             }
         ]
     }

@@ -136,6 +136,7 @@ export const retentionPolicy = z.object({
 export type RetentionPolicy = z.infer<typeof retentionPolicy>
 // backup target schema
 export const insertBackupTargetSchema = createInsertSchema(backupTarget, {
+    backupStrategyId: z.any().transform(() => 0),
     retentionPolicy: retentionPolicy,
     schedulePolicy: z.string()
         .min(1, 'Schedule Policy is required')
@@ -143,7 +144,7 @@ export const insertBackupTargetSchema = createInsertSchema(backupTarget, {
     index: z.number().positive(),
     repositoryId: z.coerce.number().min(1, "Please select a value"),
     nextBackupAt: z.number().default(0),
-}).omit({ id: true, backupStrategyId: true });
+}).omit({ id: true });
 export type InsertBackupTargetSchema = z.infer<typeof insertBackupTargetSchema>;
 export const updateBackupTargetSchema = insertBackupTargetSchema.safeExtend({
     id: z.number().positive(),
@@ -178,6 +179,7 @@ export const EMPTY_BACKUP_POLICY_SCHEMA: InsertBackupPolicySchema = {
         strategyType: StrategyType.LOCAL_BACKUP
     },
     targets: [{
+        backupStrategyId: 0,
         repositoryId: 0,
         retentionPolicy: {
             type: "count",
@@ -199,7 +201,7 @@ export const updateBackupPolicySchema = z.object({
 export type UpdateBackupPolicySchema = z.infer<typeof updateBackupPolicySchema>;
 export const snapshotFile = z.object({
     name: z.string(),
-    type: z.enum(['file', 'dir']),
+    type: z.enum(['file', 'dir', 'symlink', 'dev', 'chardev', 'fifo', 'socket']),
     size: z.number().min(0),
     path: z.string(),
     mtime: z.coerce.date().transform((date) => date.getTime()),

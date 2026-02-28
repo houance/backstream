@@ -94,7 +94,7 @@ export function FileBrowser({ flatFiles }: { flatFiles: SnapshotFile[] }) {
                                     {file.type === 'file' && (
                                         <ActionIcon size="sm" variant="subtle"><IconDownload size={14} /></ActionIcon>
                                     )}
-                                    {file.type === 'dir' && <IconChevronRight size={14} c="dimmed" />}
+                                    {file.type === 'dir' && <IconChevronRight size={14} color="dimmed" />}
                                 </Group>
                             </Table.Td>
                         </Table.Tr>

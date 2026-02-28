@@ -70,12 +70,13 @@ const snapshotsRoute = new Hono<Env>()
             if (!allSnapshotsMetadata) {
                 console.warn('query finished snapshots db fail');
             } else {
-                result.finishedSnapshot = allSnapshotsMetadata.map(snapshot => ({
+                const manualConvertSnapshot = allSnapshotsMetadata.map(snapshot => ({
                     snapshotId: snapshot.snapshotId,
                     status: snapshot.snapshotStatus,
                     createdAtTimestamp: snapshot.time,
                     size: snapshot.size
                 }));
+                result.finishedSnapshot = finishedSnapshotsMetaSchema.array().parse(manualConvertSnapshot);
             }
             return c.json(result);
         })
@@ -96,7 +97,7 @@ const snapshotsRoute = new Hono<Env>()
             return c.json(result.result.map(node => snapshotFile.parse({
                 name: node.name,
                 type: node.type,
-                size: node.size,
+                size: node.size || 0, // 0 for dir
                 mtime: node.mtime,
                 path: node.path,
             })))

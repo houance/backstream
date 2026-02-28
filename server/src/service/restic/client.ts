@@ -354,8 +354,11 @@ export class RepositoryClient {
         }
     }
 
-    public async getSnapshotFilesByPath(snapshotId: string, path: string='/'): Promise<ResticResult<Node[]>> {
-        const result = await execute(`restic ls ${snapshotId} ${path} --json`, { env: this._env });
+    public async getSnapshotFilesByPath(snapshotId: string, path: string='/', recursive: boolean=true): Promise<ResticResult<Node[]>> {
+        const command = recursive ?
+            `restic ls ${snapshotId} ${path} --recursive --json` :
+            `restic ls ${snapshotId} ${path} --json` ;
+        const result = await execute(command, { env: this._env });
         if (result.failed) return fail(result)
         let nodes: Node[] = [];
         try {

@@ -158,8 +158,9 @@ export class ResticService {
         // remote repo index snapshot
         await targetService.indexSnapshots(path);
         // run remote retention policy against remote for cleaning up old data
-        await targetService.retryOnLock(() =>
+        const retryResult2 = await targetService.retryOnLock(() =>
             targetService.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy));
+        if (!retryResult2.success) console.warn(`forget ${path} at ${this.repo.name} fail: ${retryResult2.error.toString()}`)
     }
 
     public async backup(path: string, target: UpdateBackupTargetSchema) {
@@ -183,7 +184,7 @@ export class ResticService {
         // forget old data
         const retryResult = await this.retryOnLock(() =>
             this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy));
-        if (!retryResult.success) console.warn(`forget ${path} at ${this.repo.name} fail: ${retryResult.error}`)
+        if (!retryResult.success) console.warn(`forget ${path} at ${this.repo.name} fail: ${retryResult.error.toString()}`);
     }
 
     public async indexSnapshots(path?: string) {

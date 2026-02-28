@@ -113,7 +113,7 @@ const StorageLocationsPage: React.FC = () => {
             <StorageLocationModal
                 key={editingItem?.id ?? 'create-storage-location'}
                 onSubmit={(item) => submitMutation.mutate(item)}
-                isSubmitting={isLoading}
+                isSubmitting={submitMutation.isPending}
                 onConnect={(item) => testConnMutation.mutate(item)}
                 isConnecting={testConnMutation.isPending}
                 title={editingItem ? "Edit storage location" : "Create storage location"}

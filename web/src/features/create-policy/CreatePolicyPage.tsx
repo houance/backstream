@@ -14,14 +14,14 @@ import {
     Stepper,
     Paper,
     Divider,
-    Grid,
+    Grid, Center, Loader,
 } from '@mantine/core';
 import { STRATEGY_MAP } from './strategy-map.tsx'
 import {
     EMPTY_BACKUP_POLICY_SCHEMA,
     insertBackupPolicySchema,
     type InsertBackupPolicySchema,
-    type StrategyType, type UpdateRepositorySchema,
+    type StrategyType,
 } from '@backstream/shared'
 import {zod4Resolver} from "mantine-form-zod-resolver";
 import {useState} from "react";
@@ -36,15 +36,46 @@ import {
     IconTarget
 } from "@tabler/icons-react";
 import {notice} from "../../util/notification.tsx";
+import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
+import {client} from "../../api";
+import {ensureSuccess} from "../../util/api.ts";
 
 export function CreatePolicyPage() {
-    const [loading, setLoading] = useState(false);
-
     const form = useForm<InsertBackupPolicySchema>({
         initialValues: EMPTY_BACKUP_POLICY_SCHEMA,
         validate: zod4Resolver(insertBackupPolicySchema)
     });
     const [active, setActive] = useState(0);
+
+    // --- 0. FETCH DATA ---
+    const {data, isLoading} = useQuery({
+        queryKey: ['storage-locations'],
+        queryFn: async () => {
+            const res = await client.api.storage['all-storage-location'].$get();
+            if (!res.ok) throw new Error('Failed to fetch storage locations');
+            return res.json();
+        },
+    });
+    const getRepoNameById = (id: string | number): string => {
+        if (!data) return 'undefined';
+        const repo = data.find(repo => repo.id === Number(id))
+        return repo ? repo.name : "undefined";
+    }
+    // --- 1. CREATE/UPDATE MUTATION ---
+    const queryClient = useQueryClient();
+    const submitMutation = useMutation({
+        mutationFn: async (item: InsertBackupPolicySchema) => {
+            return ensureSuccess(client.api.policy.$post({json: item}))
+        },
+        onSuccess: async () => {
+            await queryClient.invalidateQueries({queryKey: ['policy']});
+            form.reset();
+            setActive(0);
+            notice(true, "Policy saved successfully");
+            close();
+        },
+        onError: () => notice(false, "Failed to save policy")
+    });
 
     const nextStep = () => {
         // If moving from Step 2 (Details) to Step 3
@@ -66,21 +97,6 @@ export function CreatePolicyPage() {
         setActive((current) => (current < 3 ? current + 1 : current));
     };
     const prevStep = () => setActive((current) => (current > 0 ? current - 1 : current));
-    const handleFinalSubmit = (values: typeof form.values) => {
-        setLoading(true);
-        try {
-            // api
-            console.info(values)
-            // clear state
-            form.reset();
-            setActive(0);
-        } catch (e) {
-            notice(false, 'create policy failed');
-        } finally {
-            setLoading(false);
-        }
-
-    };
     // clear form.targets base on type
     const handleStrategyTypeChange = (value: string) => {
         const strategyType = value as StrategyType;
@@ -90,25 +106,18 @@ export function CreatePolicyPage() {
     }
     // Dynamically select the component based on strategy
     const strategyMeta = STRATEGY_MAP[form.values.strategy.strategyType];
-    // Repository List
-    const repoList: UpdateRepositorySchema[] = [{
-        path: '/abc/d',
-        name: 'test1',
-        password: 'fdsa',
-        repositoryType: 'LOCAL',
-        usage: 0,
-        capacity: 0,
-        repositoryStatus: 'Active',
-        id: 1
-    }]
-    const getRepoNameById = (id: string | number): string => {
-        const repo = repoList.find(repo => repo.id === Number(id))
-        return repo ? repo.name : "undefined";
+
+    if (isLoading) {
+        return (
+            <Center h={400}>
+                <Loader size="xl"/>
+            </Center>
+        );
     }
 
     return (
         <Container fluid>
-            <form onSubmit={form.onSubmit(handleFinalSubmit)} >
+            <form onSubmit={form.onSubmit(values => submitMutation.mutate(values))} >
                 <Paper
                     withBorder
                     shadow="sm"
@@ -162,7 +171,7 @@ export function CreatePolicyPage() {
                                 <Text fw={600} mb="xs">Targeting: {strategyMeta.label}</Text>
                                 <Text fz="xs" c="dimmed" mb="xl">The fields below have been reset for {strategyMeta.label} configuration.</Text>
                                 {/* Strategy-specific UI (Example for Local vs S3) */}
-                                {strategyMeta.component && <strategyMeta.component form={form} repoList={repoList} />}
+                                {strategyMeta.component && <strategyMeta.component form={form} repoList={data!} />}
                             </Card>
                         </Stepper.Step>
 
@@ -257,7 +266,7 @@ export function CreatePolicyPage() {
                                     ))}
                                 </Stack>
                                 {/* Create Policy Button */}
-                                <Button mt="xl" type="submit" loading={loading}>Create Policy</Button>
+                                <Button mt="xl" type="submit" loading={submitMutation.isPending}>Create Policy</Button>
                             </Stack>
                         </Stepper.Completed>}
                     </Stepper>

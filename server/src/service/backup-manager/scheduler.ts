@@ -133,6 +133,12 @@ export class Scheduler {
         this.repoCronJob.set(heartbeatJobKey, job)
     }
 
+    public async addPolicyScheduleByStrategyId(strategyId: number) {
+        const policy = await getPolicyById(strategyId);
+        if (policy === null) return;
+        this.addPolicySchedule(policy);
+    }
+
     public addPolicySchedule(policy: Policy) {
         const validateStrategy = updateBackupStrategySchema.parse(policy);
         switch (validateStrategy.strategyType) {
@@ -207,6 +213,21 @@ export class Scheduler {
         // run index snapshot IMMEDIATELY
         void job.trigger();
     }
+}
+
+async function getPolicyById(strategyId: number): Promise<Policy | null> {
+    const result = await db.query.strategy.findFirst({
+        where: (strategy, { eq }) => eq(strategy.id, strategyId),
+        with: {
+            targets: {
+                with: {
+                    repository: true,
+                }
+            }
+        }
+    });
+    if (!result) return null;
+    return result;
 }
 
 async function getAllPolicy() {
