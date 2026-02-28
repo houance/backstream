@@ -36,9 +36,7 @@ const policyRoute = new Hono<Env>()
                 target.backupStrategyId = newStrategy.id;
                 target.nextBackupAt = new Cron(target.schedulePolicy).nextRun()!.getTime();
             })
-            const newTargets = await c.var.db.insert(backupTarget)
-                .values(targetsValid)
-                .returning();
+            await c.var.db.insert(backupTarget).values(targetsValid).returning();
             // scheduler 开始调度
             void c.var.scheduler.addPolicyScheduleByStrategyId(newStrategy.id);
             return c.json({ message: `success create policy ${newStrategy.name }`}, 200);

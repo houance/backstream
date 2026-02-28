@@ -6,7 +6,8 @@ import {
     type Node,
     type Progress,
     type RepoConfig, type ResticResult,
-    type Snapshot, type SnapshotSummary, success,
+    type Snapshot, type SnapshotStat, type SnapshotSummary, success,
+    type RepoStat,
     type Task,
 } from "./types";
 import {RepoType, type CertificateSchema, type RetentionPolicy} from "@backstream/shared"
@@ -377,6 +378,27 @@ export class RepositoryClient {
             return fail(result, error);
         }
         return success(nodes, result);
+    }
+
+    // restore-size(how much space it needs to restore snapshot to disk)
+    public async getSnapshotSize(snapshotId: string): Promise<ResticResult<SnapshotStat>> {
+        const result = await execute(`restic stats ${snapshotId} --mode restore-size --json`, { env: this._env });
+        if (mapResticCode(result.exitCode) !== ExitCode.Success) return fail(result);
+        try {
+            return success(this.parse(result.stdout as string, "{}"), result);
+        } catch (error:any) {
+            return fail(result, error);
+        }
+    }
+
+    public async getRepoSize(): Promise<ResticResult<RepoStat>> {
+        const result = await execute(`restic stats --mode raw-data --json`, { env: this._env });
+        if (mapResticCode(result.exitCode) !== ExitCode.Success) return fail(result);
+        try {
+            return success(this.parse(result.stdout as string, "{}"), result);
+        } catch (error:any) {
+            return fail(result, error);
+        }
     }
 
     public async getRepoConfig(): Promise<ResticResult<RepoConfig>> {

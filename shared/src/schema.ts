@@ -8,7 +8,7 @@ export const repository = sqliteTable("repository_table", {
     path: text("path").notNull(),
     password: text("password").notNull(),
     repositoryType: text("repository_type").notNull(),
-    usage: integer("size").notNull(),
+    usage: integer("usage").notNull(),
     capacity: integer("capacity").notNull(),
     certification: text("certification", { mode: "json" }),
     checkSchedule: text("check_schedule").notNull(),

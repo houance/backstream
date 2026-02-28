@@ -127,8 +127,12 @@ export class ResticService {
         }
         // check if repo connected
         const result = await this.repoClient.isRepoExist();
+        const status = result.success ? result.result ? 'Active' : 'Disconnected' : 'Disconnected';
+        // update repo size
+        const repoStat = await this.repoClient.getRepoSize();
+        const usage = repoStat.success ? repoStat.result.totalSize : this.repo.usage;
         const updatedResult = await db.update(repository)
-            .set({ repositoryStatus: result.success && result.result ? 'Active' : 'Disconnected' })
+            .set({ repositoryStatus: status, usage: usage })
             .where(eq(repository.id, this.repo.id))
             .returning();
         this.repo = updateRepositorySchema.parse(updatedResult[0]);
@@ -177,12 +181,12 @@ export class ResticService {
         const result = await task.result
         if (!result.success) return;
         console.log(`copyTo ${targetService.repo.name} success`)
-        // remote repo index snapshot
-        await targetService.indexSnapshots(path);
         // run remote retention policy against remote for cleaning up old data
         const retryResult2 = await targetService.retryOnLock(() =>
             targetService.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy));
         if (!retryResult2.success) console.warn(`forget ${path} at ${this.repo.name} fail: ${retryResult2.error.toString()}`)
+        // remote repo index snapshot
+        await targetService.indexSnapshots(path);
     }
 
     public async backup(path: string, target: UpdateBackupTargetSchema) {
@@ -230,7 +234,7 @@ export class ResticService {
             validatedDbResult = updateSnapshotsMetadataSchema.array().parse(dbResult);
         }
         const newSnapshots: InsertSnapshotsMetadataSchema[] = [];
-        snapshots.forEach((snapshot) => {
+        for (const snapshot of snapshots) {
             let hit = false;
             validatedDbResult.forEach((dbResult) => {
                 if (snapshot.id === dbResult.snapshotId) {
@@ -239,6 +243,8 @@ export class ResticService {
                 }
             })
             if (!hit) {
+                // get snapshot size
+                const snapshotStat = await this.repoClient.getSnapshotSize(snapshot.id);
                 const tmp = {
                     repositoryId: this.repo.id,
                     path: snapshot.paths[0],
@@ -253,11 +259,11 @@ export class ResticService {
                     time: snapshot.time,
                     snapshotStatus: 'success',
                     snapshotSummary: snapshot.summary,
-                    size: 0
+                    size: snapshotStat.success ? snapshotStat.result.totalSize : 0
                 }
                 newSnapshots.push(insertSnapshotsMetadataSchema.parse(tmp))
             }
-        })
+        }
         const deleteSnapshots: UpdateSnapshotsMetadataSchema[] = [];
         validatedDbResult.forEach((dbResult) => {
             let hit = false;
