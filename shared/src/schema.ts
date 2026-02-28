@@ -32,19 +32,37 @@ export const strategy = sqliteTable("strategy_table", {
 // 3. Backup Target Table (Links strategy to Repository)
 export const backupTarget = sqliteTable("backup_target_table", {
     id: integer("backup_target_id").primaryKey({ autoIncrement: true }),
-    backupStrategyId: integer("backup_strategy_id").references(() => strategy.id).notNull(),
-    repositoryId: integer("repository_id").references(() => repository.id).notNull(),
+    backupStrategyId: integer("backup_strategy_id").references(() => strategy.id, { onDelete: 'cascade' }).notNull(),
+    repositoryId: integer("repository_id").references(() => repository.id, { onDelete: 'cascade' }).notNull(),
     retentionPolicy: text("retention_policy", { mode: "json"}).notNull(),
     schedulePolicy: text("schedule_policy").notNull(),
     nextBackupAt: integer("next_backup_at").notNull(),
     index: integer("index").notNull(),
 });
 
-// 4. Snapshots Metadata Table
+// 4. Execution Table
+export const execution = sqliteTable("execution_table", {
+    id: integer("execution_id").primaryKey({ autoIncrement: true }),
+    uuid: text("uuid").notNull(),
+    logFile: text("log_file"),
+    errorFile: text("error_file"),
+    commandType: text("command_type").notNull(),
+    fullCommand: text("full_command"),
+    exitCode: integer("exit_code"),
+    scheduledAt: integer("scheduled_at").notNull(),
+    startedAt: integer("started_at"),
+    finishedAt: integer("finished_at"),
+    executeStatus: text("execute_status", { enum: ["success", "fail", "running", "pending", "cancel"] }).notNull(),
+    repositoryId: integer("repository_id").references(() => repository.id, { onDelete: 'cascade' }),
+    strategyId: integer("strategy_id").references(() => strategy.id, { onDelete: 'cascade' }),
+    backupTargetId: integer("backup_target_id").references(() => backupTarget.id, { onDelete: 'cascade' }),
+})
+
+// 5. Snapshots Metadata Table
 export const snapshotsMetadata = sqliteTable("snapshots_metadata_table", {
     id: integer("snapshot_db_id").primaryKey({ autoIncrement: true }),
-    repositoryId: integer("repository_id").references(() => repository.id).notNull(),
-    executionId: integer("execution_id").references(() => execution.id),
+    repositoryId: integer("repository_id").references(() => repository.id, { onDelete: 'cascade' }).notNull(),
+    executionId: integer("execution_id").references(() => execution.id, { onDelete: 'cascade' }),
     path: text("path").notNull(),
     snapshotId: text("snapshot_id").notNull().unique(), // The ID from the backup engine
     hostname: text("hostname"),
@@ -59,24 +77,6 @@ export const snapshotsMetadata = sqliteTable("snapshots_metadata_table", {
     snapshotSummary: text("snapshotSummary", { mode: "json" }).notNull(),
     size: integer("size").notNull(),
 });
-
-// 5. Execution Table
-export const execution = sqliteTable("execution_table", {
-    id: integer("execution_id").primaryKey({ autoIncrement: true }),
-    uuid: text("uuid").notNull(),
-    logFile: text("log_file"),
-    errorFile: text("error_file"),
-    commandType: text("command_type").notNull(),
-    fullCommand: text("full_command"),
-    exitCode: integer("exit_code"),
-    scheduledAt: integer("scheduled_at").notNull(),
-    startedAt: integer("started_at"),
-    finishedAt: integer("finished_at"),
-    executeStatus: text("execute_status", { enum: ["success", "fail", "running", "pending", "cancel"] }).notNull(),
-    repositoryId: integer("repository_id").references(() => repository.id),
-    strategyId: integer("strategy_id").references(() => strategy.id),
-    backupTargetId: integer("backup_target_id").references(() => backupTarget.id),
-})
 
 // 6. System Settings Table
 export const setting = sqliteTable("system_setting", {

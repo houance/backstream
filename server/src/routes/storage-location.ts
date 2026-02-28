@@ -68,14 +68,15 @@ const storageRoute = new Hono<Env>()
         })
     // delete repo
     .delete('/:id', async (c) => {
-        // todo: 需要检查关联的 policy 是否已删除
         const id = Number(c.req.param('id'));
+        const [repo] = await c.var.db.select().from(repository).where(eq(repository.id, id));
+        if (!repo) return c.json({ error: 'Not found' }, 404);
+        const validRepo = updateRepositorySchema.parse(repo);
         // scheduler 删除
-        const [dbResult] = await c.var.db.select().from(repository).where(eq(repository.id, id));
-        if (!dbResult) return c.json({ error: 'Not found'}, 404);
-        await c.var.scheduler.deleteResticService(updateRepositorySchema.parse(dbResult))
+        const result = await c.var.scheduler.deleteResticService(validRepo);
+        if (result.length > 0) return c.json({error: `policy ${result} still running, please delete them first`}, 400);
+        // db 删除
         await c.var.db.delete(repository).where(eq(repository.id, id))
-
         return c.json({ success: true, id });
     });
 

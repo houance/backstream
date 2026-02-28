@@ -63,7 +63,28 @@ export class ResticService {
         return updateRepositorySchema.parse(updatedRepo);
     }
 
-    public async initRepo() {
+    private async initRepo() {
+        // 检查 repo 是否存在
+        const isRepoExists = await this.repoClient.isRepoExist();
+        // 检查失败
+        if (!isRepoExists.success) {
+            const dbResult = await db.update(repository)
+                .set({ repositoryStatus: 'Disconnected' })
+                .where(eq(repository.id, this.repo.id))
+                .returning()
+            this.repo = updateRepositorySchema.parse(dbResult[0]);
+            return;
+        }
+        // repo 已创建
+        if (isRepoExists.result) {
+            const dbResult = await db.update(repository)
+                .set({ repositoryStatus: 'Active' })
+                .where(eq(repository.id, this.repo.id))
+                .returning()
+            this.repo = updateRepositorySchema.parse(dbResult[0]);
+            return;
+        }
+        // repo 未创建
         const result = await this.repoClient.createRepo();
         if (result.success) {
             const dbResult = await db.update(repository)
@@ -72,8 +93,9 @@ export class ResticService {
                 .returning()
             this.repo = updateRepositorySchema.parse(dbResult[0]);
         } else {
+            // 创建失败
             const dbResult = await db.update(repository)
-                .set({ repositoryStatus: 'Disconnected' })
+                .set({ repositoryStatus: 'Corrupt' })
                 .where(eq(repository.id, this.repo.id))
                 .returning()
             this.repo = updateRepositorySchema.parse(dbResult[0]);

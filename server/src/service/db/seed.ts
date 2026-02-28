@@ -96,23 +96,16 @@ async function main() {
                 strategyType: StrategyType.STRATEGY_321,
             },
             {
-                name: "数据库每日备份",
-                hostname: "db.example.com",
-                dataSource: "/var/lib/postgresql",
-                dataSourceSize: 5368709120, // 5GB
-                strategyType: StrategyType.LOCAL_BACKUP,
-            },
-            {
                 name: "文档备份",
                 hostname: "nas.example.com",
-                dataSource: "/shared/docs",
+                dataSource: "/home/nopepsi-lenovo-laptop/solo-panel",
                 dataSourceSize: 10737418240, // 10GB
                 strategyType: StrategyType.LOCAL_BACKUP,
             },
         ])
         .returning();
 
-    const [strategy1, strategy2, strategy3] = strategies;
+    const [strategy1, strategy3] = strategies;
 
     // 4. 插入 BackupTarget 数据（连接策略和仓库）
     const backupTargets = await db
@@ -131,20 +124,8 @@ async function main() {
                 index: 1,
             },
             {
-                backupStrategyId: strategy2.id,
-                repositoryId: repo1.id,
-                retentionPolicy: {
-                    type: RetentionType.duration,
-                    windowType: WindowType.hourly,
-                    durationValue: "1y2m3d"
-                },
-                schedulePolicy: "* * 0 * * *",
-                nextBackupAt: 1770969043979,
-                index: 1,
-            },
-            {
                 backupStrategyId: strategy3.id,
-                repositoryId: repo2.id,
+                repositoryId: repo3.id,
                 retentionPolicy: {
                     type: RetentionType.count,
                     windowType: WindowType.last,
@@ -304,93 +285,79 @@ async function main() {
     ]);
 
     // 6. 插入 Execution 数据
-    // await db.insert(execution).values([
-    //     {
-    //         uuid: "550e8400-e29b-41d4-a716-446655440000",
-    //         logFile: "/var/log/backups/backup-2024-01-15.log",
-    //         errorFile: null,
-    //         commandType: "backup",
-    //         fullCommand: "restic backup /etc /home /var/www",
-    //         exitCode: 0,
-    //         scheduledAt: daysAgo(1) - 300, // 计划在开始前5分钟
-    //         startedAt: daysAgo(1),
-    //         finishedAt: daysAgo(1) + 3600,
-    //         executeStatus: "success",
-    //         strategyId: strategy1.id,
-    //         backupTargetId: target1.id,
-    //     },
-    //     {
-    //         uuid: "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
-    //         logFile: "/var/log/backups/prune-2024-01-14.log",
-    //         errorFile: null,
-    //         commandType: "prune",
-    //         fullCommand: "restic forget --keep-daily 7 --prune",
-    //         exitCode: 0,
-    //         scheduledAt: daysAgo(2),
-    //         startedAt: daysAgo(2) + 60,
-    //         finishedAt: daysAgo(2) + 1200,
-    //         executeStatus: "success",
-    //         repositoryId: repo1.id,
-    //         strategyId: null,
-    //         backupTargetId: null,
-    //     },
-    //     {
-    //         uuid: "6ba7b811-9dad-11d1-80b4-00c04fd430c9",
-    //         logFile: "/var/log/backups/backup-2024-01-15-db.log",
-    //         errorFile: null,
-    //         commandType: "backup",
-    //         fullCommand: "restic backup /var/lib/postgresql",
-    //         exitCode: 0,
-    //         scheduledAt: daysAgo(0.5) - 300,
-    //         startedAt: daysAgo(0.5),
-    //         finishedAt: daysAgo(0.5) + 1800,
-    //         executeStatus: "success",
-    //         strategyId: strategy2.id,
-    //         backupTargetId: target2.id,
-    //     },
-    //     {
-    //         uuid: "6ba7b812-9dad-11d1-80b4-00c04fd430c0",
-    //         logFile: "/var/log/backups/backup-2024-01-08.log",
-    //         errorFile: null,
-    //         commandType: "backup",
-    //         fullCommand: "restic backup /shared/docs",
-    //         exitCode: 0,
-    //         scheduledAt: daysAgo(7),
-    //         startedAt: daysAgo(7),
-    //         finishedAt: daysAgo(7) + 7200,
-    //         executeStatus: "success",
-    //         strategyId: strategy3.id,
-    //         backupTargetId: target3.id,
-    //     },
-    //     {
-    //         uuid: "6ba7b813-9dad-11d1-80b4-00c04fd430c1",
-    //         logFile: "/var/log/backups/backup-failed-2024-01-15.log",
-    //         errorFile: "/var/log/backups/backup-failed-2024-01-15.err",
-    //         commandType: "backup",
-    //         fullCommand: "restic backup /etc /home /var/www",
-    //         exitCode: 1,
-    //         scheduledAt: daysAgo(0.25) - 300,
-    //         startedAt: daysAgo(0.25),
-    //         finishedAt: daysAgo(0.25) + 600,
-    //         executeStatus: "fail",
-    //         strategyId: strategy1.id,
-    //         backupTargetId: target1.id,
-    //     },
-    //     {
-    //         uuid: "6ba7b814-9dad-11d1-80b4-00c04fd430c2",
-    //         logFile: null,
-    //         errorFile: null,
-    //         commandType: "backup",
-    //         fullCommand: "restic backup /etc /home /var/www",
-    //         exitCode: null,
-    //         scheduledAt: now() + 3600, // 1小时后
-    //         startedAt: null,
-    //         finishedAt: null,
-    //         executeStatus: "pending",
-    //         strategyId: strategy1.id,
-    //         backupTargetId: target1.id,
-    //     },
-    // ]);
+    await db.insert(execution).values([
+        {
+            uuid: "550e8400-e29b-41d4-a716-446655440000",
+            logFile: "/var/log/backups/backup-2024-01-15.log",
+            errorFile: null,
+            commandType: "backup",
+            fullCommand: "restic backup /etc /home /var/www",
+            exitCode: 0,
+            scheduledAt: daysAgo(1) - 300, // 计划在开始前5分钟
+            startedAt: daysAgo(1),
+            finishedAt: daysAgo(1) + 3600,
+            executeStatus: "success",
+            strategyId: strategy1.id,
+            backupTargetId: target1.id,
+        },
+        {
+            uuid: "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+            logFile: "/var/log/backups/prune-2024-01-14.log",
+            errorFile: null,
+            commandType: "prune",
+            fullCommand: "restic forget --keep-daily 7 --prune",
+            exitCode: 0,
+            scheduledAt: daysAgo(2),
+            startedAt: daysAgo(2) + 60,
+            finishedAt: daysAgo(2) + 1200,
+            executeStatus: "success",
+            repositoryId: repo1.id,
+            strategyId: null,
+            backupTargetId: null,
+        },
+        {
+            uuid: "6ba7b812-9dad-11d1-80b4-00c04fd430c0",
+            logFile: "/var/log/backups/backup-2024-01-08.log",
+            errorFile: null,
+            commandType: "backup",
+            fullCommand: "restic backup /shared/docs",
+            exitCode: 0,
+            scheduledAt: daysAgo(7),
+            startedAt: daysAgo(7),
+            finishedAt: daysAgo(7) + 7200,
+            executeStatus: "success",
+            strategyId: strategy3.id,
+            backupTargetId: target3.id,
+        },
+        {
+            uuid: "6ba7b813-9dad-11d1-80b4-00c04fd430c1",
+            logFile: "/var/log/backups/backup-failed-2024-01-15.log",
+            errorFile: "/var/log/backups/backup-failed-2024-01-15.err",
+            commandType: "backup",
+            fullCommand: "restic backup /etc /home /var/www",
+            exitCode: 1,
+            scheduledAt: daysAgo(0.25) - 300,
+            startedAt: daysAgo(0.25),
+            finishedAt: daysAgo(0.25) + 600,
+            executeStatus: "fail",
+            strategyId: strategy1.id,
+            backupTargetId: target1.id,
+        },
+        {
+            uuid: "6ba7b814-9dad-11d1-80b4-00c04fd430c2",
+            logFile: null,
+            errorFile: null,
+            commandType: "backup",
+            fullCommand: "restic backup /etc /home /var/www",
+            exitCode: null,
+            scheduledAt: now() + 3600, // 1小时后
+            startedAt: null,
+            finishedAt: null,
+            executeStatus: "pending",
+            strategyId: strategy1.id,
+            backupTargetId: target1.id,
+        },
+    ]);
 
     // 7. 插入 Setting 数据
     await db.insert(setting).values([

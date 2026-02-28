@@ -46,21 +46,19 @@ const StorageLocationsPage: React.FC = () => {
             notice(true, "Storage location saved successfully");
             close();
         },
-        onError: () => notice(false, "Failed to save storage location")
+        onError: (error) => notice(false, `${String(error)}.`)
     });
 
     // --- 4. DELETE MUTATION ---
     const deleteMutation = useMutation({
         mutationFn: async (item: UpdateRepositorySchema) => {
-            const res = await client.api.storage[':id'].$delete({
-                param: {id: item.id.toString()},
-            });
-            return res.json();
+            return ensureSuccess(client.api.storage[':id'].$delete({param: {id: item.id.toString()}}))
         },
         onSuccess: async () => {
             await queryClient.invalidateQueries({queryKey: ['storage-locations']});
             notice(true, "Item deleted");
-        }
+        },
+        onError: (error) => notice(false, `${String(error)}.`)
     });
     // --- TEST CONNECTION MUTATION ---
     const testConnMutation = useMutation({

@@ -17,12 +17,14 @@ export type Env = {
     scheduler: Scheduler;
   };
 };
+// init scheduler once
+const scheduler = await Scheduler.create(5)
 
 const app = new Hono<Env>();
 
 app.use('*', async (c, next) => {
   c.set('db', db);
-  c.set('scheduler', await Scheduler.create(5))
+  c.set('scheduler', scheduler)
   await next();
 });
 

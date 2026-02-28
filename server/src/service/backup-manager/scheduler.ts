@@ -2,7 +2,7 @@ import {
     backupTarget,
     execution,
     repository,
-    setting, StrategyType, updateBackupStrategySchema, updateBackupTargetSchema,
+    setting, strategy, StrategyType, updateBackupStrategySchema, updateBackupTargetSchema,
     updateRepositorySchema,
     type UpdateRepositorySchema,
     updateSettingSchema,
@@ -11,7 +11,7 @@ import {
 import {db} from "../db";
 import {ResticService} from "./restic-service";
 import PQueue from "p-queue";
-import {eq} from "drizzle-orm";
+import {eq, inArray} from "drizzle-orm";
 import {Cron} from "croner";
 
 export class Scheduler {
@@ -77,26 +77,36 @@ export class Scheduler {
         return this.clientMap.get(repository.id)!;
     }
 
-    public async deleteResticService(repo: UpdateRepositorySchema) {
-        if (!this.clientMap.has(repo.id)) return;
-        // 停止所有调度
-        for(const [key, value] of this.repoCronJob) {
+    private async getRunningPolicyByRepo(repo: UpdateRepositorySchema): Promise<string[]> {
+        const strategyIds: number[] = [];
+        for (const [key, value] of this.policyCronJob) {
+            const ids = key.split(":");
+            if (ids[2] === repo.id.toString()) strategyIds.push(Number(ids[0]));
+        }
+        if (strategyIds.length === 0) return [];
+        const strategies = await db.select().from(strategy)
+            .where(inArray(strategy.id, strategyIds))
+        if (strategies.length === 0) return [];
+        return strategies.map(strategy => strategy.name);
+    }
+
+    public async deleteResticService(repo: UpdateRepositorySchema): Promise<string[]> {
+        const strategyNames = await this.getRunningPolicyByRepo(repo);
+        if (strategyNames.length !== 0) return strategyNames;
+        // 停止并删除 cron job
+        for (const [key, value] of this.repoCronJob) {
             const repoId = key.split(":")[0];
             if (repoId === repo.id.toString()) {
                 value.stop();
+                this.repoCronJob.delete(key);
             }
         }
-        for (const [key, value] of this.policyCronJob) {
-            const repoId = key.split(":")[2];
-            if (repoId === repo.id.toString()) {
-                value.stop();
-            }
-        }
-        // cancel 所有运行中的任务
-        const resticService = this.clientMap.get(repo.id)!;
-        await resticService.stopAllRunningJob();
-        // 删除 mapping 关系
+        // 停止 restic service 所有任务
+        const rs = this.clientMap.get(repo.id);
+        if (!rs) return [];
+        await rs.stopAllRunningJob();
         this.clientMap.delete(repo.id);
+        return [];
     }
 
     private async addRepoMaintainSchedule(resticService: ResticService) {

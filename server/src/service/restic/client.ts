@@ -380,7 +380,7 @@ export class RepositoryClient {
     }
 
     public async getRepoConfig(): Promise<ResticResult<RepoConfig>> {
-        const result = await execute('restic cat config', { env: this._env });
+        const result = await execute('restic cat config --json', { env: this._env });
         if (mapResticCode(result.exitCode) !== ExitCode.Success) return fail(result);
         try {
             return success(this.parse(result.stdout as string, "{}"), result);
@@ -424,10 +424,6 @@ export class RepositoryClient {
     }
 
     public async createRepo(): Promise<ResticResult<boolean>> {
-        const repoExistResult = await this.isRepoExist();
-        if (!repoExistResult.success) return repoExistResult; // cat config 失败
-        // cat config 成功且 repo 已初始化
-        if (repoExistResult.result) return success(true, repoExistResult.rawResult);
         const result = await execute(`restic init`, { env: this._env });
         return mapResticCode(result.exitCode) === ExitCode.Success ? success(true, result) : fail(result);
     }
