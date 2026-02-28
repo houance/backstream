@@ -344,8 +344,8 @@ export class RepositoryClient {
     }
 
     public async getSnapshots(path?: string): Promise<ResticResult<Snapshot[]>> {
-        let pathArg = path ? `--path ${path}` : ``;
-        const result = await execute(`restic snapshots ${pathArg} --json`, { env: this._env });
+        const command = path ? `restic snapshots ${path} --json` : `restic snapshots --json`;
+        const result = await execute(command, { env: this._env });
         if (result.failed) return fail(result);
         try {
             return success(this.parse(result.stdout as string, "[]"), result);

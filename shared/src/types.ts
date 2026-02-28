@@ -202,28 +202,27 @@ export const snapshotFile = z.object({
     type: z.enum(['file', 'dir']),
     size: z.number().min(0),
     path: z.string(),
-    mtime: z.number(),
+    mtime: z.coerce.date().transform((date) => date.getTime()),
 })
 export type SnapshotFile = z.infer<typeof snapshotFile>;
 export const finishedSnapshotsMetaSchema = z.object({
-    snapshotsId: z.string(),
-    status: z.enum(['complete', 'failed', 'partial']),
+    snapshotId: z.string(),
+    status: z.enum(['success', 'partial']),
     createdAtTimestamp: z.number().min(0),
-    files: z.array(snapshotFile),
-    size: z.number().positive(),
+    size: z.number().min(0),
 })
 export type FinishedSnapshotsMetaSchema = z.infer<typeof finishedSnapshotsMetaSchema>;
 export const onGoingSnapshotsMetaSchema = z.object({
     uuid: z.string(),
-    status: z.literal('backing up'),
+    status: z.enum(['running', 'pending']),
     createdAtTimestamp: z.number().min(0),
     progress: z.object({
         percent: z.string(),
         bytesDone: z.number().optional(),
         totalBytes: z.number().optional(),
-        logs: z.array(z.string())
-    }),
-    totalSize: z.number().positive(),
+        logs: z.array(z.string()).optional(),
+    }).optional(),
+    totalSize: z.number().nonnegative().optional(),
 })
 export type OnGoingSnapshotsMetaSchema = z.infer<typeof onGoingSnapshotsMetaSchema>;
 export const scheduledSnapshotsMetaSchema = z.object({

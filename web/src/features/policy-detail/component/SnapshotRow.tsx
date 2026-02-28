@@ -1,6 +1,11 @@
 import { Accordion, Group, Text, Badge, Loader, Paper, Stack, Grid, Center } from '@mantine/core';
 import { IconClock, IconHistory, IconAlertCircle } from '@tabler/icons-react';
-import type {OnGoingSnapshotsMetaSchema, ScheduledSnapshotsMetaSchema, FinishedSnapshotsMetaSchema } from '@backstream/shared';
+import {
+    type OnGoingSnapshotsMetaSchema,
+    type ScheduledSnapshotsMetaSchema,
+    type FinishedSnapshotsMetaSchema,
+    type SnapshotFile
+} from '@backstream/shared';
 import {FileBrowser} from "./FileBrowser.tsx";
 import {calculateCountdown, formatTimestamp} from "../../../util/format.ts";
 import {LogTerminal} from "./LogTerminal.tsx";
@@ -13,24 +18,27 @@ type SnapshotUnion =
 
 interface SnapshotRowProps {
     data: SnapshotUnion;
+    files?: SnapshotFile[];
+    isLoading?: boolean;
 }
 
-export function SnapshotRow({ data }: SnapshotRowProps) {
+export function SnapshotRow({ data, files, isLoading }: SnapshotRowProps) {
     // 1. Identify the snapshot type based on your Zod status values
-    const isOngoing = data.status === 'backing up';
+    const isOngoing = data.status === 'running' || data.status === 'pending';
     const isScheduled = data.status === 'scheduled';
     const isFinished = !isOngoing && !isScheduled;
 
     // 2. Map visual configuration
     const config = {
         // Unique ID varies between schemas: 'snapshotsId' vs 'uuid'
-        id: isFinished ? (data as FinishedSnapshotsMetaSchema).snapshotsId : (data as any).uuid,
+        id: isFinished ? (data as FinishedSnapshotsMetaSchema).snapshotId :
+            (data as ScheduledSnapshotsMetaSchema | OnGoingSnapshotsMetaSchema).uuid,
 
         icon: isOngoing ? (
             <Loader size="xs" color="blue" />
         ) : isScheduled ? (
             <IconClock size={16} color="var(--mantine-color-gray-5)" />
-        ) : data.status === 'failed' ? (
+        ) : data.status === 'partial' ? (
             <IconAlertCircle size={16} color="red" />
         ) : (
             <IconHistory size={16} color="var(--mantine-color-green-5)" />
@@ -43,11 +51,11 @@ export function SnapshotRow({ data }: SnapshotRowProps) {
                 : '4px solid var(--mantine-color-green-6)',
 
         badge: isOngoing ? (
-            <Badge variant="dot" size="sm">{`Running (${(data as OnGoingSnapshotsMetaSchema).progress.percent})`}</Badge>
+            <Badge variant="dot" size="sm">{`Running (${(data as OnGoingSnapshotsMetaSchema).progress?.percent})`}</Badge>
         ) : isScheduled ? (
             <Badge variant="outline" color="gray" size="sm">Scheduled</Badge>
         ) : (
-            <Badge variant="light" color={data.status === 'complete' ? 'green' : 'orange'} size="sm">
+            <Badge variant="light" color={data.status === 'success' ? 'green' : 'orange'} size="sm">
                 {data.status.toUpperCase()}
             </Badge>
         ),
@@ -75,7 +83,7 @@ export function SnapshotRow({ data }: SnapshotRowProps) {
                                 c={isFinished ? 'dark' : 'dimmed'}
                                 w={80} // <--- Fixed width ensures the badge starts at the same spot
                             >
-                                {config.id}
+                                {config.id.slice(0, 8)}
                             </Text>
                             {config.badge}
                         </Group>
@@ -103,11 +111,17 @@ export function SnapshotRow({ data }: SnapshotRowProps) {
                 )}
 
                 {isOngoing && (
-                    <LogTerminal logs={(data as OnGoingSnapshotsMetaSchema).progress.logs} />
+                    <LogTerminal logs={(data as OnGoingSnapshotsMetaSchema).progress?.logs} />
                 )}
 
                 {isFinished && (
-                    <FileBrowser flatFiles={(data as FinishedSnapshotsMetaSchema).files} />
+                    <Stack>
+                        {isLoading ? (
+                            <Center p="xl"><Loader size="sm" /></Center>
+                        ) : (
+                            <FileBrowser flatFiles={files || []} />
+                        )}
+                    </Stack>
                 )}
             </Accordion.Panel>
         </Accordion.Item>

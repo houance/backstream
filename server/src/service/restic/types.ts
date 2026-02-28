@@ -136,7 +136,7 @@ export interface Task<T> {
     errorFile: string;
     result: Promise<T>;
     cancel: () => void;
-    getProgress?: () => Progress;
+    getProgress: () => Progress;
 }
 
 export interface ForgetGroup {

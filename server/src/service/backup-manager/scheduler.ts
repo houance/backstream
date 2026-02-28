@@ -126,7 +126,7 @@ export class Scheduler {
     private async addRepoHeartBeatSchedule(resticService: ResticService) {
         const heartbeatJobKey = `${resticService.repo.id}:heartbeat`
         if (this.repoCronJob.has(heartbeatJobKey)) return;
-        const job = new Cron("*/15 * * * * *", { protect: true }, async () => {
+        const job = new Cron("*/30 * * * * *", { protect: true }, async () => {
             await resticService.isConnected()
         })
         await job.trigger();
@@ -136,11 +136,11 @@ export class Scheduler {
     public addPolicySchedule(policy: Policy) {
         const validateStrategy = updateBackupStrategySchema.parse(policy);
         switch (validateStrategy.strategyType) {
-            case 'LOCAL_BACKUP':
+            case StrategyType.LOCAL_BACKUP:
                 this.scheduleLocalBackupStrategy(policy);
                 break;
-            case 'STRATEGY_321':
-                this.schedule321BackupStrategy(policy);
+            case StrategyType.STRATEGY_321:
+                void this.schedule321BackupStrategy(policy);
                 break;
         }
     }
@@ -165,41 +165,42 @@ export class Scheduler {
         })
     }
 
-    private schedule321BackupStrategy(policy: Policy) {
-        let localResticService: ResticService;
+    private async schedule321BackupStrategy(policy: Policy) {
         // asc by target index, 1 is local, 2/3 is remote
-        policy.targets.sort((a, b) => a.index - b.index).forEach(async target => {
+        const targets = policy.targets.sort((a, b) => a.index - b.index);
+        const localValidateRepo = updateRepositorySchema.parse(targets[0].repository);
+        const localResticService = await this.getResticService(localValidateRepo);
+        const localBackupTarget = updateBackupTargetSchema.parse(targets[0]);
+        // 创建 cron job
+        for (const target of targets) {
             const cronJobKey = `${policy.id}:${target.id}:${target.repositoryId}`;
-            if (this.policyCronJob.has(cronJobKey)) return;
-            const targetValidRepo = updateRepositorySchema.parse(target.repository);
-            const targetResticService = await this.getResticService(targetValidRepo);
-            const validatedTarget = updateBackupTargetSchema.parse(target);
+            if (this.policyCronJob.has(cronJobKey)) continue;
             if (target.index === 1) {
-                localResticService = targetResticService;
                 this.policyCronJob.set(cronJobKey, new Cron(target.schedulePolicy, { protect: true }, async () => {
-                    await localResticService.backup(policy.dataSource, validatedTarget);
+                    await localResticService.backup(policy.dataSource, localBackupTarget);
                     // 更新下一次运行时间
                     await db.update(backupTarget)
                         .set({ nextBackupAt: new Cron(target.schedulePolicy).nextRun()!.getTime() })
                         .where(eq(backupTarget.id, target.id));
                 }))
             }
-            if ([2, 3].includes(target.index) && localResticService !== undefined) {
+            if ([2, 3].includes(target.index)) {
                 this.policyCronJob.set(cronJobKey, new Cron(target.schedulePolicy, { protect: true }, async () => {
-                    await localResticService.copyTo(policy.dataSource, targetResticService, validatedTarget);
+                    const targetResticService = await this.getResticService(updateRepositorySchema.parse(target.repository));
+                    await localResticService.copyTo(policy.dataSource, targetResticService, updateBackupTargetSchema.parse(target));
                     // 更新下一次运行时间
                     await db.update(backupTarget)
                         .set({ nextBackupAt: new Cron(target.schedulePolicy).nextRun()!.getTime() })
                         .where(eq(backupTarget.id, target.id));
                 }))
             }
-        })
+        }
     }
 
     public async addSnapshotIndexSchedule(resticService: ResticService) {
         const cronJobKey = `${resticService.repo.id}:snapshots`;
         if (this.repoCronJob.has(cronJobKey)) return;
-        const job = new Cron("* */5 * * * *", { protect: true }, async () => {
+        const job = new Cron("0 */5 * * * *", { protect: true }, async () => {
             await resticService.indexSnapshots();
         })
         this.repoCronJob.set(cronJobKey, job);

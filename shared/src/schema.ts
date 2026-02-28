@@ -57,6 +57,7 @@ export const snapshotsMetadata = sqliteTable("snapshots_metadata_table", {
     time: integer("time").notNull(),
     snapshotStatus: text("snapshotStatus", { enum: ['success', 'partial'] }).notNull(),
     snapshotSummary: text("snapshotSummary", { mode: "json" }).notNull(),
+    size: integer("size").notNull(),
 });
 
 // 5. Execution Table

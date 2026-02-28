@@ -35,7 +35,7 @@ async function main() {
         .values([
             {
                 name: "主备份仓库",
-                path: "/home/nopepsi-dev/fullstack-project/backstream/server/src/test/local-repo",
+                path: "/home/nopepsi-lenovo-laptop/backstream/server/src/test/local-repo",
                 password: "0608",
                 repositoryType: RepoType.LOCAL,
                 usage: 5368709120, // 5GB
@@ -67,7 +67,7 @@ async function main() {
             },
             {
                 name: "归档仓库",
-                path: "/home/nopepsi-dev/fullstack-project/backstream/server/src/test/second-repo",
+                path: "/home/nopepsi-lenovo-laptop/backstream/server/src/test/second-repo",
                 password: "0608",
                 repositoryType: RepoType.LOCAL,
                 usage: 3221225472, // 3GB
@@ -91,7 +91,7 @@ async function main() {
             {
                 name: "完整服务器备份",
                 hostname: "server1.example.com",
-                dataSource: "/home/nopepsi-dev/rclone-v1.70.3-linux-amd64",
+                dataSource: "/home/nopepsi-lenovo-laptop/rclone-v1.71.2-linux-amd64",
                 dataSourceSize: 21474836480, // 20GB
                 strategyType: StrategyType.STRATEGY_321,
             },
@@ -126,7 +126,7 @@ async function main() {
                     windowType: WindowType.last,
                     countValue: "123"
                 },
-                schedulePolicy: "*/30 * * * * *",
+                schedulePolicy: "0 */5 * * * *",
                 nextBackupAt: 1770969043979,
                 index: 1,
             },
@@ -162,7 +162,7 @@ async function main() {
                     windowType: WindowType.last,
                     countValue: "1"
                 },
-                schedulePolicy: "* 0 * * * *",
+                schedulePolicy: "0 */5 * * * *",
                 nextBackupAt: 1770969043979,
                 index: 2,
             },
@@ -202,7 +202,8 @@ async function main() {
                 totalFilesProcessed: 115,
                 totalBytesProcessed: 5000000,
                 snapshotId: "abc123def456",
-            }
+            },
+            size: 0
         },
         {
             repositoryId: repo1.id,
@@ -233,7 +234,8 @@ async function main() {
                 totalFilesProcessed: 115,
                 totalBytesProcessed: 5000000,
                 snapshotId: "ghi789jkl012",
-            }
+            },
+            size: 0
         },
         {
             repositoryId: repo2.id,
@@ -264,7 +266,8 @@ async function main() {
                 totalFilesProcessed: 115,
                 totalBytesProcessed: 5000000,
                 snapshotId: "mno345pqr678",
-            }
+            },
+            size: 0
         },
         {
             repositoryId: repo1.id,
@@ -295,7 +298,8 @@ async function main() {
                 totalFilesProcessed: 115,
                 totalBytesProcessed: 5000000,
                 snapshotId: "stu901vwx234",
-            }
+            },
+            size: 0
         },
     ]);
 

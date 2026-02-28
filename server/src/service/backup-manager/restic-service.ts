@@ -80,6 +80,11 @@ export class ResticService {
         }
     }
 
+    public getRunningJob(execution: UpdateExecutionSchema): Task<ResticResult<any>> | null {
+        if (!this.runningJob.has(execution.id)) return null;
+        return this.runningJob.get(execution.id)!;
+    }
+
     public async stopAllRunningJob() {
         for (const [key, value] of this.runningJob) {
             value.cancel();
@@ -105,6 +110,13 @@ export class ResticService {
             .where(eq(repository.id, this.repo.id))
             .returning();
         this.repo = updateRepositorySchema.parse(updatedResult[0]);
+    }
+
+    public async getSnapshotFiles(snapshot: UpdateSnapshotsMetadataSchema) {
+        return await this.retryOnLock(
+            () => this.repoClient.getSnapshotFilesByPath(snapshot.snapshotId),
+            3000
+        )
     }
 
     public async copyTo(
@@ -217,6 +229,7 @@ export class ResticService {
                     time: snapshot.time,
                     snapshotStatus: 'success',
                     snapshotSummary: snapshot.summary,
+                    size: 0
                 }
                 newSnapshots.push(insertSnapshotsMetadataSchema.parse(tmp))
             }
@@ -352,7 +365,7 @@ export class ResticService {
                 // If we have retries left, wait before next attempt
                 if (attempt < retryCount) {
                     const delay = initialIntervalMs * (attempt + 1);
-                    console.warn(`Attempt ${attempt + 1} failed. Retrying...`)
+                    console.warn(`Attempt ${attempt + 1} failed. Error: ${lastError.toString()}, Retrying...`)
                     await new Promise(resolve => setTimeout(resolve, delay));
                 }
             }

@@ -1,58 +1,73 @@
 import {
     TextInput,
-    Stack, Accordion,
+    Stack, Accordion, Center, Loader,
 } from '@mantine/core';
 import {
     IconSearch
 } from '@tabler/icons-react';
 import {useState} from 'react';
-import type {FinishedSnapshotsMetaSchema, OnGoingSnapshotsMetaSchema, ScheduledSnapshotsMetaSchema} from "@backstream/shared";
+import type {
+    FinishedSnapshotsMetaSchema,
+    ScheduledSnapshotsMetaSchema,
+    UpdateBackupPolicySchema
+} from "@backstream/shared";
 import {SnapshotRow} from "./SnapshotRow.tsx";
+import {useQuery} from "@tanstack/react-query";
+import {client} from "../../../api";
 
-export default function SnapshotsExplorer() {
-
+export default function SnapshotsExplorer({ policy }: { policy: UpdateBackupPolicySchema}) {
     const [search, setSearch] = useState('');
+    const [openedSnapshot, setOpenedSnapshot] = useState<FinishedSnapshotsMetaSchema | null>(null);
+    // --- 1. FETCH DATA ---
+    const {data: allSnapshots, isLoading: isSnapshotsLoading} = useQuery({
+        queryKey: ['snapshots'],
+        queryFn: async () => {
+            const res = await client.api.snapshot['all-snapshots'].$post({
+                json: policy
+            });
+            if (!res.ok) throw new Error('Failed to fetch all snapshots');
+            return res.json();
+        }
+    });
+    const {data: snapshotFiles, isLoading: isSnapshotFilesLoading} = useQuery({
+        queryKey: ['files', openedSnapshot?.snapshotId],
+        queryFn: async () => {
+            const res = await client.api.snapshot['files'].$post({
+                json: openedSnapshot!
+            });
+            if (!res.ok) throw new Error('Failed to fetch snapshot files');
+            return res.json();
+        },
+        enabled: !!openedSnapshot,
+        staleTime: Infinity
+    });
 
     const scheduledSnapshots: ScheduledSnapshotsMetaSchema[] = [{
-        uuid: "432",
+        uuid: "0",
         status: 'scheduled',
-        createdAtTimestamp: 1770192202644
+        createdAtTimestamp: policy.targets[0].nextBackupAt
     }];
 
-    const onGoingSnapshots: OnGoingSnapshotsMetaSchema[] = [{
-        uuid: "1",
-        status: 'backing up',
-        createdAtTimestamp: 1770189649727,
-        progress: {
-            percent: '45%',
-            logs: [
-                '[restic] scanning...',
-                '[restic] found 432 files',
-                '[restic] uploading blob a8f21...',
-                '[restic] 45% complete...'
-            ]
-        },
-        totalSize: 21000000
-    }]
-    const snapshots: FinishedSnapshotsMetaSchema[] = [
-        {
-            snapshotsId: 'a1b2c',
-            status: 'complete',
-            createdAtTimestamp: 1770189649727,
-            files: [
-                {
-                    name: 'config.yaml', type: 'file', size: 120000, mtime: 1770189649727, path: '/home/config.yaml',
-                },
-                {
-                    name: 'hello.yaml', type: 'file', size: 120000, mtime: 1770189649727, path: '/etc/hello.yaml',
-                },
-                {name: 'home', type: 'dir', size: 0, mtime: 1770189649727, path: '/home'},
-                {name: 'etc', type: 'dir', size: 0, mtime: 1770189649727, path: '/etc'},
-                {name: 'backup_log.txt', type: 'file', size: 450000, mtime: 1770189649727, path: '/backup_log.txt',}
-            ],
-            size: 21000000
-        }
-    ];
+    const handleFinishedSnapshotOpen = (value: string | null) => {
+        if (value === null) return;
+        if (!allSnapshots) return;
+        let hit = false;
+        allSnapshots.finishedSnapshot.forEach(snapshot => {
+            if (value === snapshot.snapshotId) {
+                hit = true;
+                setOpenedSnapshot(snapshot);
+            }
+        })
+        if (!hit) setOpenedSnapshot(null);
+    }
+
+    if (isSnapshotsLoading) {
+        return (
+            <Center h={400}>
+                <Loader size="xl"/>
+            </Center>
+        );
+    }
 
     return (
         <Stack pt="md">
@@ -63,9 +78,12 @@ export default function SnapshotsExplorer() {
                 onChange={(e) => setSearch(e.currentTarget.value)}
             />
 
-            <Accordion variant="separated">
-                {/* 1. On-Going Snapshots */}
-                {onGoingSnapshots.map(s => (
+            <Accordion
+                variant="separated"
+                onChange={handleFinishedSnapshotOpen}
+            >
+                {/* 1. Ongoing Snapshots */}
+                {allSnapshots!.onGoingSnapshot.map(s => (
                     <SnapshotRow key={s.uuid} data={s} />
                 ))}
 
@@ -75,8 +93,13 @@ export default function SnapshotsExplorer() {
                 ))}
 
                 {/* 3. Completed/Finished Snapshots */}
-                {snapshots.map(s => (
-                    <SnapshotRow key={s.snapshotsId} data={s} />
+                {allSnapshots!.finishedSnapshot.map(s => (
+                    <SnapshotRow
+                        key={s.snapshotId}
+                        data={s}
+                        files={openedSnapshot === s ? snapshotFiles : []}
+                        isLoading={openedSnapshot === s && isSnapshotFilesLoading}
+                    />
                 ))}
             </Accordion>
         </Stack>

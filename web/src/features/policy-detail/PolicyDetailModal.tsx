@@ -33,7 +33,7 @@ export function PolicyDetailModal({ opened, onClose, data }: ModalProps) {
                 </Tabs.List>
 
                 <Tabs.Panel value="summary"><PolicySummary policy={data} /></Tabs.Panel>
-                <Tabs.Panel value="snapshots"><SnapshotExplorer /></Tabs.Panel>
+                <Tabs.Panel value="snapshots"><SnapshotExplorer policy={data} /></Tabs.Panel>
                 <Tabs.Panel value="actions"><PolicyActionCenter /></Tabs.Panel>
             </Tabs>
         </Modal>
