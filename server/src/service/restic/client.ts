@@ -44,6 +44,12 @@ export class RepositoryClient {
         }
     }
 
+    public static async checkIfResticInstall(): Promise<string> {
+        const result = await execute(`restic version`, {});
+        if (result.failed || mapResticCode(result.exitCode) !== ExitCode.Success) throw new Error(`restic version failed: ${result.stderr}`);
+        return result.stdout as string;
+    }
+
     public copyTo(
         targetClient: RepositoryClient,
         snapshotIds: string[],
