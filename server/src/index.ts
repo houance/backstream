@@ -11,9 +11,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {Scheduler} from "./service/backup-manager/scheduler";
 import {RepositoryClient} from "./service/restic";
+import {RcloneClient} from "./service/rclone";
 
 // check restic installation
 console.info(await RepositoryClient.checkIfResticInstall())
+// check rclone installation
+console.info(await RcloneClient.checkIfRcloneInstall())
 
 export type Env = {
   Variables: {
