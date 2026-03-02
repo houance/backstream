@@ -12,13 +12,13 @@ export function mapResticCode(input: number | undefined): ExitCode {
     return ExitCode.UNKNOWN;
 }
 
-export function getParentPathFromNode(node: Node): string {
-    if ("/" === node.path) {
+export function getParentPathFromNode(path: string): string {
+    if ("/" === path) {
         return "/";
     }
-    return node.path.lastIndexOf("/") === 0 ?
+    return path.lastIndexOf("/") === 0 ?
         "/" :
-        node.path.substring(0, node.path.lastIndexOf("/"));
+        path.substring(0, path.lastIndexOf("/"));
 }
 
 export function createTempDir(): string {

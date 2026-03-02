@@ -8,7 +8,6 @@ import {
 import {useState} from 'react';
 import type {
     FinishedSnapshotsMetaSchema,
-    ScheduledSnapshotsMetaSchema,
     UpdateBackupPolicySchema
 } from "@backstream/shared";
 import {SnapshotRow} from "./SnapshotRow.tsx";
@@ -44,12 +43,8 @@ export default function SnapshotsExplorer({ policy }: { policy: UpdateBackupPoli
         enabled: !!openedSnapshot,
         staleTime: Infinity
     });
+    // --- 3. RESTORE FILE ---
 
-    const scheduledSnapshots: ScheduledSnapshotsMetaSchema[] = [{
-        uuid: "0",
-        status: 'scheduled',
-        createdAtTimestamp: policy.targets[0].nextBackupAt
-    }];
 
     const handleFinishedSnapshotOpen = (value: string | null) => {
         if (value === null) return;
@@ -91,7 +86,7 @@ export default function SnapshotsExplorer({ policy }: { policy: UpdateBackupPoli
                 ))}
 
                 {/* 2. Scheduled Snapshots */}
-                {scheduledSnapshots.map(s => (
+                {allSnapshots!.scheduleSnapshot.map(s => (
                     <SnapshotRow key={s.uuid} data={s} />
                 ))}
 

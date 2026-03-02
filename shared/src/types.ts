@@ -200,6 +200,7 @@ export const updateBackupPolicySchema = z.object({
 })
 export type UpdateBackupPolicySchema = z.infer<typeof updateBackupPolicySchema>;
 export const snapshotFile = z.object({
+    snapshotId: z.string(),
     name: z.string(),
     type: z.enum(['file', 'dir', 'symlink', 'dev', 'chardev', 'fifo', 'socket']),
     size: z.number().min(0),

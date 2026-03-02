@@ -2,7 +2,7 @@ import {
     commandType,
     type CommandType,
     execution, type InsertExecutionSchema, type InsertSnapshotsMetadataSchema, insertSnapshotsMetadataSchema,
-    repository, RepoType, snapshotsMetadata, type UpdateBackupTargetSchema, updateExecutionSchema,
+    repository, RepoType, type SnapshotFile, snapshotsMetadata, type UpdateBackupTargetSchema, updateExecutionSchema,
     type UpdateExecutionSchema,
     updateRepositorySchema,
     type UpdateRepositorySchema, type UpdateSnapshotsMetadataSchema, updateSnapshotsMetadataSchema
@@ -11,8 +11,7 @@ import {
     ExitCode,
     RepositoryClient,
     ResticError,
-    type ResticResult,
-    type Snapshot,
+    type ResticResult, type Snapshot,
     type Task
 } from "../restic";
 import PQueue from "p-queue";
@@ -32,10 +31,12 @@ export class ResticService {
     private reader = 0; // simple rw lock
     private readonly runningJob: Map<number, Task<ResticResult<any>>> // <executionId, Task>
     private readonly rcloneClient: RcloneClient | null;
+    private readonly restoreFiles: Map<string, string>; // <snapshotId:path, restore file path>
 
     public constructor(repo: UpdateRepositorySchema, queue: PQueue) {
         // init map
         this.runningJob = new Map();
+        this.restoreFiles = new Map();
         this.repo = repo;
         // convert to validate zod schema
         const validated = updateRepositorySchema.parse(repo);
@@ -163,6 +164,45 @@ export class ResticService {
         )
     }
 
+    // return
+    public async restoreSnapshotFile(file: SnapshotFile): Promise<{ executionId: number, restoreKey: string }> {
+        const restoreKey = `${file.snapshotId}:${file.path}`;
+        // check if restore before
+        const filePath = this.restoreFiles.get(restoreKey);
+        if (filePath) return {
+            executionId: 0,
+            restoreKey: restoreKey,
+        };
+        const newExecution = await this.createExecution(commandType.restore);
+        // start restore
+        void (async () => {
+            const task = await this.startJob(
+                newExecution,
+                (log, err) => this.repoClient.restore(
+                    file.snapshotId,
+                    {name: file.name, path: file.path},
+                    log,
+                    err,
+                    newExecution.uuid,
+                ),
+                false
+            );
+            const result = await task.result;
+            if (!result.success) return;
+            const restoreFilePath = result.result;
+            if (file.type !== 'dir') {
+                this.restoreFiles.set(restoreKey, restoreFilePath);
+            } else {
+                // todo: pack file to zip then return
+
+            }
+        })();
+        return {
+            executionId: newExecution.id,
+            restoreKey: restoreKey,
+        };
+    }
+
     public async copyTo(
         path: string,
         targetService: ResticService,
@@ -202,7 +242,7 @@ export class ResticService {
         )
         const result = await task.result
         if (!result.success) return;
-        console.log(`copyTo ${targetService.repo.name} success`)
+        console.debug(`copyTo ${path} snapshots from ${this.repo.name} to ${targetService.repo.name} success`)
         // run remote retention policy against remote for cleaning up old data
         const retryResult2 = await targetService.retryOnLock(
             () => targetService.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy),
@@ -253,7 +293,7 @@ export class ResticService {
             false
         )
         if (!retryResult.success) {
-            console.warn(`indexSnapshots ${path} wrong. ${retryResult.error.toString()}`);
+            console.warn(`indexSnapshots ${path} in ${this.repo.name} fail. ${retryResult.error.toString()}`);
             return;
         }
         const snapshots = retryResult.result;

@@ -113,6 +113,7 @@ const snapshotsRoute = new Hono<Env>()
             if (!result.success) return c.json({error: result.error.toString()}, 500);
             if (result.result.length === 0) return c.json([]);
             return c.json(result.result.map(node => snapshotFile.parse({
+                snapshotId: snapshot.snapshotId,
                 name: node.name,
                 type: node.type,
                 size: node.size || 0, // 0 for dir

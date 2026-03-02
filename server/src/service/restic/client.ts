@@ -167,12 +167,12 @@ export class RepositoryClient {
 
     public restore(
         snapshotId: string,
-        node: Node,
+        node: { name: string, path: string },
         logFile: string,
         errorFile: string,
         uuid: string): Task<ResticResult<string>> {
         const dir = createTempDir();
-        const command = `restic restore ${snapshotId}:${getParentPathFromNode(node)} ` +
+        const command = `restic restore ${snapshotId}:${getParentPathFromNode(node.path)} ` +
             `--target ${dir} --include /${node.name} --json`
         const process = executeStream(
             command,
