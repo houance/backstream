@@ -2,7 +2,7 @@ import {
     commandType,
     type CommandType,
     execution, type InsertExecutionSchema, type InsertSnapshotsMetadataSchema, insertSnapshotsMetadataSchema,
-    repository, snapshotsMetadata, type UpdateBackupTargetSchema, updateExecutionSchema,
+    repository, RepoType, snapshotsMetadata, type UpdateBackupTargetSchema, updateExecutionSchema,
     type UpdateExecutionSchema,
     updateRepositorySchema,
     type UpdateRepositorySchema, type UpdateSnapshotsMetadataSchema, updateSnapshotsMetadataSchema
@@ -23,6 +23,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import os from "node:os";
 import path from "node:path";
 import pWaitFor from "p-wait-for";
+import {RcloneClient} from "../rclone";
 
 export class ResticService {
     public repo: UpdateRepositorySchema;
@@ -30,6 +31,7 @@ export class ResticService {
     private globalQueue: PQueue; // global concurrency limit
     private reader = 0; // simple rw lock
     private readonly runningJob: Map<number, Task<ResticResult<any>>> // <executionId, Task>
+    private readonly rcloneClient: RcloneClient | null;
 
     public constructor(repo: UpdateRepositorySchema, queue: PQueue) {
         // init map
@@ -44,6 +46,12 @@ export class ResticService {
             validated.repositoryType,
             validated.certification
         )
+        // if repo is local, init rclone client
+        if (repo.repositoryType === RepoType.LOCAL) {
+            this.rcloneClient = new RcloneClient();
+        } else {
+            this.rcloneClient = null;
+        }
         // init queue
         this.globalQueue = queue
     }
@@ -114,28 +122,38 @@ export class ResticService {
         }
     }
 
-    public async isConnected() {
+    public async updateStat() {
         if (this.repo.repositoryStatus === "Corrupt") return;
-        // queue's job is running === repo is connected
-        if (this.reader !== 0) {
+        let status: 'Active' | 'Disconnected';
+        if (this.runningJob.size !== 0) {
+            status = 'Active';
+        } else {
+            const result = await this.repoClient.isRepoExist();
+            status = (result.success && result.result) ? 'Active' : 'Disconnected';
+        }
+        // shortcut later db update
+        if (status === 'Disconnected') {
             const updatedResult = await db.update(repository)
-                .set({ repositoryStatus: "Active" })
+                .set({ repositoryStatus: status })
                 .where(eq(repository.id, this.repo.id))
                 .returning()
             this.repo = updateRepositorySchema.parse(updatedResult[0]);
             return;
         }
-        // check if repo connected
-        const result = await this.repoClient.isRepoExist();
-        const status = result.success ? result.result ? 'Active' : 'Disconnected' : 'Disconnected';
-        // update repo size
-        const repoStat = await this.repoClient.getRepoSize();
-        const usage = repoStat.success ? repoStat.result.totalSize : this.repo.usage;
-        const updatedResult = await db.update(repository)
-            .set({ repositoryStatus: status, usage: usage })
+        // update repo stat
+        const repoSize = await this.repoClient.getRepoSize();
+        const usage = repoSize.success ? repoSize.result.totalSize : this.repo.usage;
+        // get repo capacity, only support local repo currently
+        let capacity = this.repo.capacity;
+        if (this.rcloneClient !== null) {
+            const repoStat = await this.rcloneClient.getBackendStat(this.repo.path);
+            if (repoStat.success && repoStat.result.total) capacity = repoStat.result.total;
+        }
+        const [updatedResult] = await db.update(repository)
+            .set({ repositoryStatus: status, usage: usage, capacity: capacity })
             .where(eq(repository.id, this.repo.id))
             .returning();
-        this.repo = updateRepositorySchema.parse(updatedResult[0]);
+        this.repo = updateRepositorySchema.parse(updatedResult);
     }
 
     public async getSnapshotFiles(snapshot: UpdateSnapshotsMetadataSchema) {

@@ -31,7 +31,7 @@ const app = new Hono<Env>();
 
 app.use('*', async (c, next) => {
   c.set('db', db);
-  c.set('scheduler', scheduler)
+  c.set('scheduler', scheduler);
   await next();
 });
 

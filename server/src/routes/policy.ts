@@ -24,7 +24,6 @@ const policyRoute = new Hono<Env>()
                 .where(eq(strategy.dataSource, strategyValid.dataSource))
             if (dbResult && dbResult.length >= 1) return c.json({error: 'duplicate datasource'}, 400);
             // 插入 policy
-            // todo: 异步更新获取 datasource size, 防止获取超时
             strategyValid.hostname = os.hostname();
             strategyValid.dataSourceSize = 0;
             const [newStrategy] = await c.var.db.insert(strategy)

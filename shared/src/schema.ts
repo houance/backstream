@@ -25,7 +25,7 @@ export const strategy = sqliteTable("strategy_table", {
     name: text("name").notNull(),
     hostname: text("hostname").notNull(),
     dataSource: text("data_source").notNull(),
-    dataSourceSize: integer("data_source_size").notNull(),
+    dataSourceSize: integer("data_source_size").notNull(), // 0 for infinity
     strategyType: text("strategy_type").notNull(),
 });
 
