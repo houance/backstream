@@ -1,10 +1,16 @@
 import type {SnapshotFile} from "@backstream/shared";
 import {useMemo, useState} from "react";
 import {ActionIcon, Anchor, Breadcrumbs, Group, Stack, Table, Text} from "@mantine/core";
-import {IconChevronRight, IconDownload, IconFile, IconFolder} from "@tabler/icons-react";
+import {IconDownload, IconFile, IconFolder} from "@tabler/icons-react";
 import {formatBytes} from "../../../util/format.ts";
 
-export function FileBrowser({ flatFiles }: { flatFiles: SnapshotFile[] }) {
+interface FileBrowserProps {
+    flatFiles: SnapshotFile[];
+    onDownload: (file: SnapshotFile) => void;
+    isDownloading: boolean;
+}
+
+export function FileBrowser({ flatFiles, onDownload, isDownloading }: FileBrowserProps ) {
     const [currentPath, setCurrentPath] = useState<string>('/');
 
     // Helper to determine the parent directory of any restic path
@@ -91,10 +97,15 @@ export function FileBrowser({ flatFiles }: { flatFiles: SnapshotFile[] }) {
                             </Table.Td>
                             <Table.Td>
                                 <Group gap={4} justify="flex-end">
-                                    {file.type === 'file' && (
-                                        <ActionIcon size="sm" variant="subtle"><IconDownload size={14} /></ActionIcon>
-                                    )}
-                                    {file.type === 'dir' && <IconChevronRight size={14} color="dimmed" />}
+                                    {/** todo: dir 点击下载按钮, 会进入文件夹而且触发下载 **/}
+                                    <ActionIcon
+                                        size="sm"
+                                        variant="subtle"
+                                        onClick={() => onDownload(file)}
+                                        loading={isDownloading}
+                                    >
+                                        <IconDownload size={14} />
+                                    </ActionIcon>
                                 </Group>
                             </Table.Td>
                         </Table.Tr>

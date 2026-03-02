@@ -201,6 +201,7 @@ export const updateBackupPolicySchema = z.object({
 export type UpdateBackupPolicySchema = z.infer<typeof updateBackupPolicySchema>;
 export const snapshotFile = z.object({
     snapshotId: z.string(),
+    repoId: z.number().positive(),
     name: z.string(),
     type: z.enum(['file', 'dir', 'symlink', 'dev', 'chardev', 'fifo', 'socket']),
     size: z.number().min(0),
@@ -287,3 +288,11 @@ export const insertSnapshotsMetadataSchema = createInsertSchema(snapshotsMetadat
 export type InsertSnapshotsMetadataSchema = z.infer<typeof insertSnapshotsMetadataSchema>;
 export const updateSnapshotsMetadataSchema = insertSnapshotsMetadataSchema.safeExtend({id: z.number().positive() })
 export type UpdateSnapshotsMetadataSchema = z.infer<typeof updateSnapshotsMetadataSchema>;
+// restore job key
+export const restoreJobKey = z.object({
+    executionId: z.number().positive().optional(),
+    snapshotId: z.string(),
+    path: z.string(),
+    repoId: z.number().positive(),
+})
+export type RestoreJobKey = z.infer<typeof restoreJobKey>;

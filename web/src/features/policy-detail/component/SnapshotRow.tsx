@@ -20,9 +20,12 @@ interface SnapshotRowProps {
     data: SnapshotUnion;
     files?: SnapshotFile[];
     isLoading?: boolean;
+    onDownload?: (file: SnapshotFile) => void;
+    isDownloading?: boolean;
 }
 
-export function SnapshotRow({ data, files, isLoading }: SnapshotRowProps) {
+export function SnapshotRow({ data, files, isLoading, onDownload, isDownloading }: SnapshotRowProps) {
+    const onDownloadFunc = onDownload ? onDownload : (_file: SnapshotFile) => {};
     // 1. Identify the snapshot type based on your Zod status values
     const isOngoing = data.status === 'running' || data.status === 'pending';
     const isScheduled = data.status === 'scheduled';
@@ -130,7 +133,7 @@ export function SnapshotRow({ data, files, isLoading }: SnapshotRowProps) {
                         {isLoading ? (
                             <Center p="xl"><Loader size="sm" /></Center>
                         ) : (
-                            <FileBrowser flatFiles={files || []} />
+                            <FileBrowser flatFiles={files || []} onDownload={onDownload || onDownloadFunc} isDownloading={isDownloading || false} />
                         )}
                     </Stack>
                 )}

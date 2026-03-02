@@ -1,4 +1,4 @@
-import {createTempDir, execute, executeStream, getParentPathFromNode, mapResticCode} from "./utils";
+import {execute, executeStream, getParentPathFromNode, mapResticCode} from "./utils";
 import {
     type CheckSummary,
     ExitCode, fail, type ForgetGroup,
@@ -168,10 +168,10 @@ export class RepositoryClient {
     public restore(
         snapshotId: string,
         node: { name: string, path: string },
+        dir: string,
         logFile: string,
         errorFile: string,
         uuid: string): Task<ResticResult<string>> {
-        const dir = createTempDir();
         const command = `restic restore ${snapshotId}:${getParentPathFromNode(node.path)} ` +
             `--target ${dir} --include /${node.name} --json`
         const process = executeStream(
@@ -344,7 +344,7 @@ export class RepositoryClient {
         );
         if (result.failed) return fail(result);
         try {
-            return success(this.parse(result.stdout as string, "{[]}"), result);
+            return success(this.parse(result.stdout as string, "[]"), result);
         } catch (error: any) {
             return fail(result, error);
         }

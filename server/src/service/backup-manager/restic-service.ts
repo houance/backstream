@@ -1,11 +1,22 @@
 import {
     commandType,
     type CommandType,
-    execution, type InsertExecutionSchema, type InsertSnapshotsMetadataSchema, insertSnapshotsMetadataSchema,
-    repository, RepoType, type SnapshotFile, snapshotsMetadata, type UpdateBackupTargetSchema, updateExecutionSchema,
+    execution,
+    type InsertExecutionSchema,
+    type InsertSnapshotsMetadataSchema,
+    insertSnapshotsMetadataSchema,
+    repository,
+    RepoType,
+    type RestoreJobKey,
+    type SnapshotFile,
+    snapshotsMetadata,
+    type UpdateBackupTargetSchema,
+    updateExecutionSchema,
     type UpdateExecutionSchema,
     updateRepositorySchema,
-    type UpdateRepositorySchema, type UpdateSnapshotsMetadataSchema, updateSnapshotsMetadataSchema
+    type UpdateRepositorySchema,
+    type UpdateSnapshotsMetadataSchema,
+    updateSnapshotsMetadataSchema
 } from "@backstream/shared";
 import {
     ExitCode,
@@ -17,12 +28,13 @@ import {
 import PQueue from "p-queue";
 import {db} from "../db";
 import {eq, and, inArray} from "drizzle-orm";
-import {existsSync} from "node:fs";
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile, mkdtemp } from 'node:fs/promises';
+import { createWriteStream, existsSync } from 'node:fs'
 import os from "node:os";
 import path from "node:path";
 import pWaitFor from "p-wait-for";
 import {RcloneClient} from "../rclone";
+import archiver from 'archiver'
 
 export class ResticService {
     public repo: UpdateRepositorySchema;
@@ -164,23 +176,42 @@ export class ResticService {
         )
     }
 
+    public getRestoreFile(key: RestoreJobKey): string {
+        const restoreKey = `${key.snapshotId}:${key.path}`;
+        return this.restoreFiles.get(restoreKey)!;
+    }
+
+    public checkRestoreStatus(key: RestoreJobKey): { status: 'running' | 'fail' | 'delete' | 'success' } {
+        // todo: 大文件夹第一次下载返回 fail, 实际 restore 成功
+        const restoreKey = `${key.snapshotId}:${key.path}`;
+        const file = this.restoreFiles.get(restoreKey);
+        if (file) return { status: 'success' };
+        if (!key.executionId) return { status: 'delete' };
+        const task = this.runningJob.get(key.executionId);
+        if (task) return { status: 'running' };
+        return { status: 'fail' }
+    }
+
     // return
-    public async restoreSnapshotFile(file: SnapshotFile): Promise<{ executionId: number, restoreKey: string }> {
+    public async restoreSnapshotFile(file: SnapshotFile): Promise<RestoreJobKey> {
         const restoreKey = `${file.snapshotId}:${file.path}`;
         // check if restore before
         const filePath = this.restoreFiles.get(restoreKey);
         if (filePath) return {
-            executionId: 0,
-            restoreKey: restoreKey,
+            snapshotId: file.snapshotId,
+            path: file.path,
+            repoId: this.repo.id,
         };
         const newExecution = await this.createExecution(commandType.restore);
         // start restore
         void (async () => {
+            const dir = await this.createTmpFolder();
             const task = await this.startJob(
                 newExecution,
                 (log, err) => this.repoClient.restore(
                     file.snapshotId,
                     {name: file.name, path: file.path},
+                    dir,
                     log,
                     err,
                     newExecution.uuid,
@@ -193,13 +224,19 @@ export class ResticService {
             if (file.type !== 'dir') {
                 this.restoreFiles.set(restoreKey, restoreFilePath);
             } else {
-                // todo: pack file to zip then return
-
+                const result = await this.zip(restoreFilePath, `backstream-${Date.now().toString()}`);
+                if (result.success) {
+                    this.restoreFiles.set(restoreKey, result.result);
+                } else {
+                    console.warn(`restore ${file.name} fail. ${String(result.error)}`);
+                }
             }
         })();
         return {
             executionId: newExecution.id,
-            restoreKey: restoreKey,
+            snapshotId: file.snapshotId,
+            path: file.path,
+            repoId: this.repo.id,
         };
     }
 
@@ -496,6 +533,39 @@ export class ResticService {
                 await this.readUnlock();
             }
         }
+    }
+
+    private async zip(file: string, zipName: string):
+        Promise<{ success: true, result: string } | { success: false, error: any }> {
+
+        const zipPath = path.join(path.dirname(file), `${zipName}.zip`);
+        const output = createWriteStream(zipPath);
+        const archive = archiver('zip', { zlib: { level: 5 } });
+
+        return new Promise((resolve) => {
+            // 1. Listen for the 'close' event on the output stream (True completion)
+            output.on('close', () => {
+                resolve({ success: true, result: zipPath });
+            });
+
+            // 2. Handle errors from both the archiver and the write stream
+            output.on('error', (err) => resolve({ success: false, error: err }));
+            archive.on('error', (err) => resolve({ success: false, error: err }));
+
+            // 3. Pipe and finalize
+            archive.pipe(output);
+            archive.directory(file, false);
+            archive.finalize(); // No need to await this inside the Promise
+        });
+    }
+
+    private async createTmpFolder(baseDirPath?: string | null) {
+        // 1. Determine Root (Default to system temp)
+        const root = baseDirPath && existsSync(baseDirPath)
+            ? baseDirPath
+            : os.tmpdir();
+        // create random folder
+        return await mkdtemp(path.join(root, 'backstream-'));
     }
 
     private async createLogFile(baseDirPath: string | null | undefined, execution: UpdateExecutionSchema) {

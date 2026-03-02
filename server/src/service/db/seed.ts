@@ -35,16 +35,16 @@ async function main() {
         .values([
             {
                 name: "主备份仓库",
-                path: "/home/nopepsi-lenovo-laptop/backstream/server/src/test/local-repo",
+                path: "/home/nopepsi-dev/fullstack-project/backstream/server/src/test/local-repo",
                 password: "0608",
                 repositoryType: RepoType.LOCAL,
                 usage: 5368709120, // 5GB
                 capacity: 10737418240, // 10GB
                 repositoryStatus: "Active",
-                checkSchedule: "* * 0 * * *",
+                checkSchedule: "20 30 1 * * *",
                 checkPercentage: 0.2,
                 nextCheckAt: 0,
-                pruneSchedule: "* * 0 * * *",
+                pruneSchedule: "0 10 1 * * *",
                 nextPruneAt: 0
             },
             {
@@ -67,7 +67,7 @@ async function main() {
             },
             {
                 name: "归档仓库",
-                path: "/home/nopepsi-lenovo-laptop/backstream/server/src/test/second-repo",
+                path: "/home/nopepsi-dev/fullstack-project/backstream/server/src/test/second-repo",
                 password: "0608",
                 repositoryType: RepoType.LOCAL,
                 usage: 3221225472, // 3GB
@@ -91,14 +91,14 @@ async function main() {
             {
                 name: "完整服务器备份",
                 hostname: "server1.example.com",
-                dataSource: "/home/nopepsi-lenovo-laptop/rclone-v1.71.2-linux-amd64",
+                dataSource: "/home/nopepsi-dev/rclone-v1.70.3-linux-amd64",
                 dataSourceSize: 21474836480, // 20GB
                 strategyType: StrategyType.STRATEGY_321,
             },
             {
                 name: "文档备份",
                 hostname: "nas.example.com",
-                dataSource: "/home/nopepsi-lenovo-laptop/solo-panel",
+                dataSource: "/home/nopepsi-dev/fullstack-project/backstream",
                 dataSourceSize: 10737418240, // 10GB
                 strategyType: StrategyType.LOCAL_BACKUP,
             },
@@ -119,7 +119,7 @@ async function main() {
                     windowType: WindowType.last,
                     countValue: "1"
                 },
-                schedulePolicy: "23 */5 * * * *",
+                schedulePolicy: "23 */2 * * * *",
                 nextBackupAt: 1770969043979,
                 index: 1,
             },
@@ -131,7 +131,7 @@ async function main() {
                     windowType: WindowType.last,
                     countValue: "123"
                 },
-                schedulePolicy: "* * 0 * * *",
+                schedulePolicy: "10 */2 * * * *",
                 nextBackupAt: 1770969043979,
                 index: 1,
             },
@@ -143,7 +143,7 @@ async function main() {
                     windowType: WindowType.last,
                     countValue: "1"
                 },
-                schedulePolicy: "20 */5 * * * *",
+                schedulePolicy: "20 */2 * * * *",
                 nextBackupAt: 1770969043979,
                 index: 2,
             },
