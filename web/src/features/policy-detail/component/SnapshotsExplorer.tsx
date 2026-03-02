@@ -27,8 +27,11 @@ export default function SnapshotsExplorer({ policy }: { policy: UpdateBackupPoli
             });
             if (!res.ok) throw new Error('Failed to fetch all snapshots');
             return res.json();
-        }
+        },
+        staleTime: 0,
+        refetchInterval: 3000
     });
+    // --- 2. FETCH DATA ---
     const {data: snapshotFiles, isLoading: isSnapshotFilesLoading} = useQuery({
         queryKey: ['files', openedSnapshot?.snapshotId],
         queryFn: async () => {

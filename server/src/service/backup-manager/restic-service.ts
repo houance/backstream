@@ -171,8 +171,12 @@ export class ResticService {
         if (this.repo.repositoryStatus !== 'Active' || targetService.repo.repositoryStatus !== 'Active') return;
         // run remote retention policy against local in dry run mode, get what snapshot should be copy
         let keepSnapshotIds: string[] = [];
-        const retryResult = await this.retryOnLock(() =>
-            this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy));
+        const retryResult = await this.retryOnLock(
+            () => this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy),
+            3000,
+            3,
+            true
+        );
         if (!retryResult.success) {
             console.warn(`forget ${path} at ${this.repo.name} fail: ${retryResult.error.toString()}`);
             return;
@@ -200,8 +204,12 @@ export class ResticService {
         if (!result.success) return;
         console.log(`copyTo ${targetService.repo.name} success`)
         // run remote retention policy against remote for cleaning up old data
-        const retryResult2 = await targetService.retryOnLock(() =>
-            targetService.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy));
+        const retryResult2 = await targetService.retryOnLock(
+            () => targetService.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy),
+            3000,
+            3,
+            true
+        );
         if (!retryResult2.success) console.warn(`forget ${path} at ${this.repo.name} fail: ${retryResult2.error.toString()}`)
         // remote repo index snapshot
         await targetService.indexSnapshots(path);
@@ -227,14 +235,23 @@ export class ResticService {
             .set({ executionId: newExecution.id })
             .where(eq(snapshotsMetadata.snapshotId, result.result.snapshotId));
         // forget old data
-        const retryResult = await this.retryOnLock(() =>
-            this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy));
+        const retryResult = await this.retryOnLock(
+            () => this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy),
+            3000,
+            3,
+            true
+        );
         if (!retryResult.success) console.warn(`forget ${path} at ${this.repo.name} fail: ${retryResult.error.toString()}`);
     }
 
     public async indexSnapshots(path?: string) {
         if (this.repo.repositoryStatus !== 'Active') return;
-        const retryResult = await this.retryOnLock(() => this.repoClient.getSnapshots(path))
+        const retryResult = await this.retryOnLock(
+            () => this.repoClient.getSnapshots(path),
+            3000,
+            3,
+            false
+        )
         if (!retryResult.success) {
             console.warn(`indexSnapshots ${path} wrong. ${retryResult.error.toString()}`);
             return;
@@ -301,6 +318,7 @@ export class ResticService {
                 snapshotsMetadata.id,
                 deleteSnapshots.map(dbResult => dbResult.id)
             ));
+        console.debug(`index repo ${this.repo.name} success`);
     }
 
     public async check() {
@@ -387,44 +405,57 @@ export class ResticService {
     private async retryOnLock<T>(
         func: () => Promise<ResticResult<T>>,
         initialIntervalMs: number = 5000,
-        retryCount: number = 3
+        retryCount: number = 3,
+        isExclusive: boolean = false,
     ): Promise<RetryResult<T>> {
-        let lastError: ResticError | undefined;
-        for (let attempt = 0; attempt <= retryCount; attempt++) {
-            // 1. Execute the function
-            // add random wait time for restic to clean previous lock
-            await new Promise(r => setTimeout(r, Math.random() * 1000 + 1000));
-            const result = await func();
-            // 3. Check for success
-            if (result.success) {
-                return {
-                    success: true,
-                    result: result.result,
-                    attempts: attempt + 1
-                };
-            }
-            if (result.error.exitCode !== ExitCode.FailedToLockRepository) {
-                return {
-                    success: false,
-                    error: result.error,
-                    attempts: attempt + 1
-                }
+        try {
+            if (isExclusive) {
+                await this.writeLock();
             } else {
-                // 4. Handle Failure
-                lastError = result.error;
-                // If we have retries left, wait before next attempt
-                if (attempt < retryCount) {
-                    const delay = initialIntervalMs * (attempt + 1);
-                    console.debug(`Attempt ${attempt + 1} failed. Error: ${lastError.toString()}, Retrying...`)
-                    await new Promise(resolve => setTimeout(resolve, delay));
+                await this.readLock();
+            }
+            let lastError: ResticError | undefined;
+            for (let attempt = 0; attempt <= retryCount; attempt++) {
+                // 1. Execute the function
+                // add random wait time for restic to clean previous lock
+                await new Promise(r => setTimeout(r, Math.random() * 1000 + 1000));
+                const result = await func();
+                // 3. Check for success
+                if (result.success) {
+                    return {
+                        success: true,
+                        result: result.result,
+                        attempts: attempt + 1
+                    };
                 }
+                if (result.error.exitCode !== ExitCode.FailedToLockRepository) {
+                    return {
+                        success: false,
+                        error: result.error,
+                        attempts: attempt + 1
+                    }
+                } else {
+                    // 4. Handle Failure
+                    lastError = result.error;
+                    // If we have retries left, wait before next attempt
+                    if (attempt < retryCount) {
+                        const delay = initialIntervalMs * (attempt + 1);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    }
+                }
+            }
+            return {
+                success: false,
+                error: lastError!,
+                attempts: retryCount + 1
+            };
+        } finally {
+            if (isExclusive) {
+                await this.writeUnlock();
+            } else {
+                await this.readUnlock();
             }
         }
-        return {
-            success: false,
-            error: lastError!,
-            attempts: retryCount + 1
-        };
     }
 
     private async createLogFile(baseDirPath: string | null | undefined, execution: UpdateExecutionSchema) {

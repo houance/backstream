@@ -215,11 +215,12 @@ export const finishedSnapshotsMetaSchema = z.object({
 })
 export type FinishedSnapshotsMetaSchema = z.infer<typeof finishedSnapshotsMetaSchema>;
 export const onGoingSnapshotsMetaSchema = z.object({
+    executionId: z.number().nonnegative(),
     uuid: z.string(),
     status: z.enum(['running', 'pending']),
     createdAtTimestamp: z.number().min(0),
     progress: z.object({
-        percent: z.string(),
+        percent: z.number(),
         bytesDone: z.number().optional(),
         totalBytes: z.number().optional(),
         logs: z.array(z.string()).optional(),

@@ -28,6 +28,17 @@ export function SnapshotRow({ data, files, isLoading }: SnapshotRowProps) {
     const isScheduled = data.status === 'scheduled';
     const isFinished = !isOngoing && !isScheduled;
 
+    const toClampedPercent = (value: number | undefined): string => {
+        if (!value) return `0%`
+        // 1. Convert decimal to whole percentage
+        const percentage = value * 100;
+
+        // 2. Clamp between 0 and 100
+        const clamped = Math.min(Math.max(percentage, 0), 100);
+
+        return `${clamped.toFixed(2)}%`;
+    };
+
     // 2. Map visual configuration
     const config = {
         // Unique ID varies between schemas: 'snapshotsId' vs 'uuid'
@@ -51,7 +62,7 @@ export function SnapshotRow({ data, files, isLoading }: SnapshotRowProps) {
                 : '4px solid var(--mantine-color-green-6)',
 
         badge: isOngoing ? (
-            <Badge variant="dot" size="sm">{`Running (${(data as OnGoingSnapshotsMetaSchema).progress?.percent})`}</Badge>
+            <Badge variant="dot" size="sm">{`Running (${toClampedPercent((data as OnGoingSnapshotsMetaSchema).progress?.percent)})`}</Badge>
         ) : isScheduled ? (
             <Badge variant="outline" color="gray" size="sm">Scheduled</Badge>
         ) : (

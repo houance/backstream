@@ -49,7 +49,8 @@ export function executeStream(
         timeout: Math.max(options.timeout ?? 7200000, 7200000), // timout 2 hours
         env: {
             ...options.env,
-            RESTIC_PROGRESS_FPS: '60'
+            RESTIC_PROGRESS_FPS: '0.2', // 5 second report rate
+            GOMAXPROCS: '2',
         }
     });
 }

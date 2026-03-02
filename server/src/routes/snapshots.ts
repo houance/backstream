@@ -1,11 +1,12 @@
 import {Hono} from 'hono';
 import {type Env} from '../index'
 import {
+    backupTarget,
     execution,
     type FinishedSnapshotsMetaSchema,
     finishedSnapshotsMetaSchema,
     type OnGoingSnapshotsMetaSchema,
-    repository, snapshotFile,
+    repository, type ScheduledSnapshotsMetaSchema, snapshotFile,
     snapshotsMetadata,
     updateBackupPolicySchema, updateExecutionSchema,
     updateRepositorySchema,
@@ -13,6 +14,9 @@ import {
 } from "@backstream/shared";
 import {zValidator} from "@hono/zod-validator";
 import {and, desc, eq, inArray} from "drizzle-orm";
+import type {ResticResult, Task} from "../service/restic";
+import { readFile } from 'node:fs/promises';
+
 
 const snapshotsRoute = new Hono<Env>()
     .post('/all-snapshots',
@@ -21,9 +25,11 @@ const snapshotsRoute = new Hono<Env>()
             const validated = c.req.valid('json');
             const firstTarget = validated.targets.sort((a, b) => a.index - b.index)[0];
             const result: {
+                scheduleSnapshot: ScheduledSnapshotsMetaSchema[],
                 onGoingSnapshot: OnGoingSnapshotsMetaSchema[],
                 finishedSnapshot: FinishedSnapshotsMetaSchema[]
             } = {
+                scheduleSnapshot: [],
                 onGoingSnapshot: [],
                 finishedSnapshot: []
             }
@@ -36,11 +42,12 @@ const snapshotsRoute = new Hono<Env>()
                 .orderBy(desc(execution.scheduledAt))
                 .limit(1)
             if (exec) {
-                // 获取 progress
+                // 判断 exec 是 pending 还是 running
                 const rs = await c.var.scheduler.getResticService(firstTarget.repository);
                 const runningJob = rs.getRunningJob(updateExecutionSchema.parse(exec));
                 if (runningJob === null) {
                     result.onGoingSnapshot.push({
+                        executionId: exec.id,
                         uuid: exec.uuid,
                         status: 'pending',
                         createdAtTimestamp: exec.startedAt || exec.scheduledAt,
@@ -48,15 +55,18 @@ const snapshotsRoute = new Hono<Env>()
                 } else {
                     // 获取 progress
                     const progress = runningJob.getProgress()
+                    // 获取 logs
+                    const logs = await getLogs(runningJob);
                     result.onGoingSnapshot.push({
+                        executionId: exec.id,
                         uuid: exec.uuid,
                         status: 'running',
                         createdAtTimestamp: exec.startedAt || exec.scheduledAt,
                         progress: {
-                            percent: `${progress.percentDone * 100}%`,
+                            percent: progress.percentDone,
                             bytesDone: progress.bytesDone,
                             totalBytes: progress.totalBytes,
-                            logs: ['not supported']
+                            logs: logs
                         },
                         totalSize: progress.totalBytes || 0,
                     })
@@ -78,6 +88,14 @@ const snapshotsRoute = new Hono<Env>()
                 }));
                 result.finishedSnapshot = finishedSnapshotsMetaSchema.array().parse(manualConvertSnapshot);
             }
+            // 查询 schedule snapshot
+            const [dbResult] = await c.var.db.select().from(backupTarget)
+                .where(eq(backupTarget.id, firstTarget.id));
+            result.scheduleSnapshot.push({
+                uuid: '0',
+                status: 'scheduled',
+                createdAtTimestamp: dbResult?.nextBackupAt || firstTarget.nextBackupAt
+            })
             return c.json(result);
         })
     .post('/files',
@@ -102,5 +120,27 @@ const snapshotsRoute = new Hono<Env>()
                 path: node.path,
             })))
         })
+
+async function getLogs(task: Task<ResticResult<any>>): Promise<string[]> {
+    try {
+        // Read both files concurrently to save time
+        const [stdoutRaw, stderrRaw] = await Promise.all([
+            readFile(task.logFile, 'utf-8'),
+            readFile(task.errorFile, 'utf-8')
+        ]);
+
+        // Split by newline (handles \n and \r\n)
+        const stdoutLines = stdoutRaw.split(/\r?\n/);
+        const stderrLines = stderrRaw.split(/\r?\n/);
+
+        // Remove the trailing empty line often left by loggers at the end of a file
+        const cleanStdout = stdoutLines.filter((line, i) => line !== "" || i !== stdoutLines.length - 1);
+        const cleanStderr = stderrLines.filter((line, i) => line !== "" || i !== stderrLines.length - 1);
+
+        return [...cleanStdout, ...cleanStderr];
+    } catch (error) {
+        return [`Failed to combine logs: ${(error as Error).message}`];
+    }
+}
 
 export default snapshotsRoute;

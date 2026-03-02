@@ -117,9 +117,9 @@ async function main() {
                 retentionPolicy: {
                     type: RetentionType.count,
                     windowType: WindowType.last,
-                    countValue: "123"
+                    countValue: "1"
                 },
-                schedulePolicy: "0 */1 * * * *",
+                schedulePolicy: "23 */5 * * * *",
                 nextBackupAt: 1770969043979,
                 index: 1,
             },
@@ -143,7 +143,7 @@ async function main() {
                     windowType: WindowType.last,
                     countValue: "1"
                 },
-                schedulePolicy: "0 */1 * * * *",
+                schedulePolicy: "20 */5 * * * *",
                 nextBackupAt: 1770969043979,
                 index: 2,
             },

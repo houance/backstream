@@ -2,7 +2,11 @@ import {
     backupTarget,
     execution,
     repository,
-    setting, strategy, StrategyType, updateBackupStrategySchema, updateBackupTargetSchema,
+    setting,
+    strategy,
+    StrategyType,
+    updateBackupStrategySchema,
+    updateBackupTargetSchema,
     updateRepositorySchema,
     type UpdateRepositorySchema,
     updateSettingSchema,
@@ -120,18 +124,18 @@ export class Scheduler {
         const pruneJobKey = `${repoId}:prune`
         if (checkSchedule !== "manual" && !this.repoCronJob.has(checkJobKey)) {
             this.repoCronJob.set(checkJobKey, new Cron(checkSchedule, { protect: true }, async () => {
-                await resticService.check()
                 await db.update(repository)
                     .set({ nextCheckAt: new Cron(checkSchedule).nextRun()!.getTime() })
                     .where(eq(repository.id, repoId))
+                await resticService.check();
             }))
         }
         if (pruneSchedule !== "manual" && !this.repoCronJob.has(pruneJobKey)) {
             this.repoCronJob.set(pruneJobKey, new Cron(pruneSchedule, { protect: true }, async () => {
-                await resticService.prune()
                 await db.update(repository)
                     .set({ nextPruneAt: new Cron(pruneSchedule).nextRun()!.getTime() })
-                    .where(eq(repository.id, repoId))
+                    .where(eq(repository.id, repoId));
+                await resticService.prune();
             }))
         }
     }
@@ -139,7 +143,7 @@ export class Scheduler {
     private async addRepoStatSchedule(resticService: ResticService) {
         const cronJobKey = `${resticService.repo.id}:stat`
         if (this.repoCronJob.has(cronJobKey)) return;
-        const job = new Cron("? */1 * * * *", { protect: true }, async () => {
+        const job = new Cron("25 */2 * * * *", { protect: true }, async () => {
             await resticService.updateStat()
         })
         await job.trigger();
@@ -149,7 +153,7 @@ export class Scheduler {
     private addDatasourceSizeUpdate(policy: Policy) {
         const cronJobKey = `${policy.id}`;
         if (this.strategyCronJob.has(cronJobKey)) return;
-        this.strategyCronJob.set(cronJobKey, new Cron('? */5 * * * *', { protect: true }, async () => {
+        this.strategyCronJob.set(cronJobKey, new Cron('15 */5 * * * *', { protect: true }, async () => {
             const rc = new RcloneClient(); // local rclone
             const sizeResult = await rc.getSize(policy.dataSource);
             const size = sizeResult.success ? sizeResult.result.bytes : policy.dataSourceSize;
@@ -186,13 +190,13 @@ export class Scheduler {
             if (this.targetCronJob.has(cronJobKey)) return;
             const validRepo = updateRepositorySchema.parse(target.repository);
             this.targetCronJob.set(cronJobKey, new Cron(target.schedulePolicy, { protect: true }, async () => {
-                const resticService = await this.getResticService(validRepo);
-                const validatedTarget = updateBackupTargetSchema.parse(target);
-                await resticService.backup(policy.dataSource, validatedTarget);
                 // 更新下一次运行时间
                 await db.update(backupTarget)
                     .set({ nextBackupAt: new Cron(target.schedulePolicy).nextRun()!.getTime() })
                     .where(eq(backupTarget.id, target.id));
+                const resticService = await this.getResticService(validRepo);
+                const validatedTarget = updateBackupTargetSchema.parse(target);
+                await resticService.backup(policy.dataSource, validatedTarget);
             }))
         })
     }
@@ -209,21 +213,21 @@ export class Scheduler {
             if (this.targetCronJob.has(cronJobKey)) continue;
             if (target.index === 1) {
                 this.targetCronJob.set(cronJobKey, new Cron(target.schedulePolicy, { protect: true }, async () => {
-                    await localResticService.backup(policy.dataSource, localBackupTarget);
                     // 更新下一次运行时间
                     await db.update(backupTarget)
                         .set({ nextBackupAt: new Cron(target.schedulePolicy).nextRun()!.getTime() })
                         .where(eq(backupTarget.id, target.id));
+                    await localResticService.backup(policy.dataSource, localBackupTarget);
                 }))
             }
             if ([2, 3].includes(target.index)) {
                 this.targetCronJob.set(cronJobKey, new Cron(target.schedulePolicy, { protect: true }, async () => {
-                    const targetResticService = await this.getResticService(updateRepositorySchema.parse(target.repository));
-                    await localResticService.copyTo(policy.dataSource, targetResticService, updateBackupTargetSchema.parse(target));
                     // 更新下一次运行时间
                     await db.update(backupTarget)
                         .set({ nextBackupAt: new Cron(target.schedulePolicy).nextRun()!.getTime() })
                         .where(eq(backupTarget.id, target.id));
+                    const targetResticService = await this.getResticService(updateRepositorySchema.parse(target.repository));
+                    await localResticService.copyTo(policy.dataSource, targetResticService, updateBackupTargetSchema.parse(target));
                 }))
             }
         }
@@ -232,7 +236,7 @@ export class Scheduler {
     public async addSnapshotIndexSchedule(resticService: ResticService) {
         const cronJobKey = `${resticService.repo.id}:snapshots`;
         if (this.repoCronJob.has(cronJobKey)) return;
-        const job = new Cron("? */5 * * * *", { protect: true }, async () => {
+        const job = new Cron("5 */5 * * * *", { protect: true }, async () => {
             await resticService.indexSnapshots();
         })
         this.repoCronJob.set(cronJobKey, job);
