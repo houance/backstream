@@ -18,10 +18,10 @@ export class RcloneClient {
         }
     }
 
-    public static async checkIfRcloneInstall(): Promise<RcloneResult<string>> {
+    public static async checkIfRcloneInstall(): Promise<string> {
         const result = await execute(`rclone --version`, {});
-        if (result.failed || result.exitCode !== RcloneExitCode.SUCCESS) return fail(result);
-        return success(result.stdout as string, result);
+        if (result.failed || result.exitCode !== RcloneExitCode.SUCCESS) throw new Error(`rclone is not install. ${result.stderr}`);
+        return result.stdout as string;
     }
 
     public async getSize(path: string): Promise<RcloneResult<Size>> {
