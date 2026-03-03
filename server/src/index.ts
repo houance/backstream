@@ -12,16 +12,19 @@ import { fileURLToPath } from 'node:url';
 import {Scheduler} from "./service/backup-manager/scheduler";
 import {RepositoryClient} from "./service/restic";
 import {RcloneClient} from "./service/rclone";
+import { pinoLogger } from 'hono-pino'
+import { logger } from './service/log/logger'
 
 // check restic installation
-console.info(await RepositoryClient.checkIfResticInstall())
+logger.info(await RepositoryClient.checkIfResticInstall())
 // check rclone installation
-console.info(await RcloneClient.checkIfRcloneInstall())
+logger.info(await RcloneClient.checkIfRcloneInstall())
 
 export type Env = {
   Variables: {
     db: typeof db;
     scheduler: Scheduler;
+    logger: typeof logger;
   };
 };
 // init scheduler once
@@ -29,6 +32,7 @@ const scheduler = await Scheduler.create(5)
 
 const app = new Hono<Env>();
 
+app.use('*', pinoLogger({ pino: logger }))
 app.use('*', async (c, next) => {
   c.set('db', db);
   c.set('scheduler', scheduler);
@@ -64,6 +68,6 @@ if (process.env.NODE_ENV === 'production') {
     port: 3000,
     hostname: '0.0.0.0',
   }, (info) => {
-    console.log(`Server is running on http://${info.address}:${info.port}`)
+    logger.info(`Server is running on http://${info.address}:${info.port}`)
   })
 }

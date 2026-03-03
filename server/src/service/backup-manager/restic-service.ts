@@ -31,6 +31,7 @@ import {eq, and, inArray} from "drizzle-orm";
 import pWaitFor from "p-wait-for";
 import {RcloneClient} from "../rclone";
 import {FileManager} from "./file-manager";
+import { logger } from '../log/logger'
 
 export class ResticService {
     public repo: UpdateRepositorySchema;
@@ -250,7 +251,7 @@ export class ResticService {
                 if (result.success) {
                     this.restoreFiles.set(restoreKey, result.result);
                 } else {
-                    console.warn(`restore ${file.name} fail. ${String(result.error)}`);
+                    logger.warn(result.error, `restore ${file.name} fail`);
                 }
                 // remove zipping
                 this.zippingExecution.delete(newExecution.id);
@@ -279,7 +280,7 @@ export class ResticService {
             true
         );
         if (!retryResult.success) {
-            console.warn(`forget ${path} at ${this.repo.name} fail: ${retryResult.error.toString()}`);
+            logger.warn(retryResult.error, `forget ${path} at ${this.repo.name} fail:`);
             return;
         }
         const forgetGroups = retryResult.result;
@@ -304,7 +305,7 @@ export class ResticService {
         if (!task) return;
         const result = await task.result
         if (!result.success) return;
-        console.debug(`copyTo ${path} snapshots from ${this.repo.name} to ${targetService.repo.name} success`)
+        logger.debug(`copyTo ${path} snapshots from ${this.repo.name} to ${targetService.repo.name} success`)
         // run remote retention policy against remote for cleaning up old data
         const retryResult2 = await targetService.retryOnLock(
             () => targetService.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy),
@@ -312,7 +313,7 @@ export class ResticService {
             3,
             true
         );
-        if (!retryResult2.success) console.warn(`forget ${path} at ${this.repo.name} fail: ${retryResult2.error.toString()}`)
+        if (!retryResult2.success) logger.warn(retryResult2.error, `forget ${path} at ${this.repo.name} fail:`)
         // remote repo index snapshot
         await targetService.indexSnapshots(path);
     }
@@ -330,7 +331,7 @@ export class ResticService {
         if (!task) return;
         const result = await task.result
         if (!result.success || result.result.snapshotId === undefined || result.result.snapshotId === null) return;
-        console.log(`backup ${this.repo.name} success`)
+        logger.debug(`backup ${this.repo.name} success`)
         // index snapshots
         await this.indexSnapshots(path);
         // update set execution id
@@ -344,7 +345,7 @@ export class ResticService {
             3,
             true
         );
-        if (!retryResult.success) console.warn(`forget ${path} at ${this.repo.name} fail: ${retryResult.error.toString()}`);
+        if (!retryResult.success) logger.warn(`forget ${path} at ${this.repo.name} fail: ${retryResult.error.toString()}`);
     }
 
     public async indexSnapshots(path?: string) {
@@ -356,7 +357,7 @@ export class ResticService {
             false
         )
         if (!retryResult.success) {
-            console.warn(`indexSnapshots ${path} in ${this.repo.name} fail. ${retryResult.error.toString()}`);
+            logger.warn(retryResult.error, `indexSnapshots ${path} in ${this.repo.name} fail.`);
             return;
         }
         const snapshots = retryResult.result;
@@ -421,7 +422,7 @@ export class ResticService {
                 snapshotsMetadata.id,
                 deleteSnapshots.map(dbResult => dbResult.id)
             ));
-        console.debug(`index repo ${this.repo.name} success`);
+        logger.debug(`index repo ${this.repo.name} success`);
     }
 
     public async check() {
@@ -444,10 +445,10 @@ export class ResticService {
                 .where(eq(repository.id, this.repo.id))
                 .returning()
             this.repo = updateRepositorySchema.parse(updatedResult[0]);
-            console.info(`check repo ${this.repo.name} with num error > 0`)
+            logger.debug(`check repo ${this.repo.name} with num error > 0`)
             return;
         }
-        console.info(`check repo ${this.repo.name} with num error = 0`)
+        logger.debug(`check repo ${this.repo.name} with num error = 0`)
     }
 
     public async prune() {
@@ -462,7 +463,7 @@ export class ResticService {
         if (!task) return;
         const result = await task.result;
         if (!result.success) return;
-        console.info(`repo ${this.repo.name} prune at ${this.repo.nextPruneAt} success`)
+        logger.debug(`repo ${this.repo.name} prune at ${this.repo.nextPruneAt} success`)
     }
 
     private async startJob<T> (
@@ -509,7 +510,7 @@ export class ResticService {
                 }
             }, { signal: controller.signal });
         } catch (error) {
-            if (!(error instanceof DOMException)) console.warn(`error before execution ${newExecution.id} added`);
+            if (!(error instanceof DOMException)) logger.warn(error, `error before execution ${newExecution.id} added`);
             await this.cancelExecution(newExecution.id);
             return undefined;
         } finally {

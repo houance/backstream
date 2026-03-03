@@ -19,6 +19,7 @@ import {eq, inArray} from "drizzle-orm";
 import {Cron} from "croner";
 import {RcloneClient} from "../rclone";
 import {FileManager} from "./file-manager";
+import { logger } from '../log/logger'
 
 export class Scheduler {
     private readonly clientMap: Map<number, ResticService>; // <repoId, ResticService>
@@ -277,9 +278,9 @@ export class Scheduler {
             const logRetentionDays = this.setting.logRetentionDays;
             const errors = await FileManager.clearTmpFolder(logRetentionDays);
             if (errors.length > 0) {
-                console.warn(`clean tmp folder fail.\n` + errors.join('\n'));
+                logger.warn(`clean tmp folder fail.\n` + errors.join('\n'));
             } else {
-                console.debug(`clean tmp folder success.`);
+                logger.debug(`clean tmp folder success.`);
             }
         }))
     }

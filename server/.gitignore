@@ -33,3 +33,4 @@ lerna-debug.log*
 /backup_app.db
 /db/
 /src/test/
+/log/

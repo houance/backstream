@@ -80,7 +80,7 @@ const snapshotsRoute = new Hono<Env>()
                     eq(snapshotsMetadata.repositoryId, firstTarget.repositoryId),
                     eq(snapshotsMetadata.path, validated.strategy.dataSource)))
             if (!allSnapshotsMetadata) {
-                console.warn('query finished snapshots db fail');
+                c.var.logger.warn('query finished snapshots db fail');
             } else {
                 const manualConvertSnapshot = allSnapshotsMetadata.map(snapshot => ({
                     snapshotId: snapshot.snapshotId,
@@ -178,7 +178,7 @@ const snapshotsRoute = new Hono<Env>()
                         await stream.write(buffer.subarray(0, bytesRead))
                     }
                 } catch (e) {
-                    console.warn(`Streaming ${path.basename(filePath)} error (likely disconnect):`, e)
+                    c.var.logger.warn(e, `Streaming ${path.basename(filePath)} error (likely disconnect):`)
                 }finally {
                     await file.close()
                 }

@@ -14,6 +14,7 @@ import {RepoType, type CertificateSchema, type RetentionPolicy} from "@backstrea
 import type {Result} from "execa";
 import {join} from "node:path";
 import camelcaseKeys from "camelcase-keys";
+import { logger } from '../log/logger'
 
 export class RepositoryClient {
     private readonly _env: Record<string, string>;
@@ -85,7 +86,7 @@ export class RepositoryClient {
                     // todo: regex from stdout, get process and snapshot id
                 }
             } catch (err) {
-                console.error("Stream processing error:", err);
+                logger.warn(err, "Stream processing error:");
             }
         })();
         // 处理结果
@@ -140,7 +141,7 @@ export class RepositoryClient {
                     }
                 }
             } catch (err) {
-                console.error("Stream processing error:", err);
+                logger.warn(err, "Stream processing error:");
             }
         })();
         const result = (async (): Promise<ResticResult<SnapshotSummary>> => {
@@ -205,7 +206,7 @@ export class RepositoryClient {
                     }
                 }
             } catch (err) {
-                console.error("Stream processing error:", err);
+                logger.warn(err, "Stream processing error:");
             }
         })();
         // 处理结果
@@ -245,7 +246,7 @@ export class RepositoryClient {
                     // todo: regex from stdout
                 }
             } catch (err) {
-                console.warn("Stream processing error:", err);
+                logger.warn(err, "Stream processing error:");
             }
         })();
         // 处理结果
@@ -289,7 +290,7 @@ export class RepositoryClient {
                     lastLine = line as string;
                 }
             } catch (err) {
-                console.warn("Stream processing error:", String(err));
+                logger.warn(err, "Stream processing error:");
             }
             const result:Result = await process;
             if (result.failed) return fail(result);
