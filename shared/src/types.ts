@@ -174,7 +174,7 @@ export const EMPTY_BACKUP_POLICY_SCHEMA: InsertBackupPolicySchema = {
     strategy: {
         name: "",
         hostname: "",
-        dataSource: "",
+        dataSource: "/",
         dataSourceSize: 0,
         strategyType: StrategyType.LOCAL_BACKUP
     },

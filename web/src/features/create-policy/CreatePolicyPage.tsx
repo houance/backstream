@@ -39,6 +39,7 @@ import {notice} from "../../util/notification.tsx";
 import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {client} from "../../api";
 import {ensureSuccess} from "../../util/api.ts";
+import PathSuggestion from "../../component/PathSuggestion.tsx";
 
 export function CreatePolicyPage() {
     const form = useForm<InsertBackupPolicySchema>({
@@ -160,7 +161,12 @@ export function CreatePolicyPage() {
                             <Card withBorder p="lg" mt="xl" radius="md">
                                 <Stack>
                                     <TextInput label="Plan Name" placeholder="Production Daily" {...form.getInputProps('strategy.name')} required />
-                                    <TextInput label="Source Path" placeholder="/data/mysql" {...form.getInputProps('strategy.dataSource')} required />
+                                    <PathSuggestion
+                                        label="Source Path"
+                                        placeholder="/data/mysql"
+                                        required={true}
+                                        {...form.getInputProps('strategy.dataSource')}
+                                    />
                                 </Stack>
                             </Card>
                         </Stepper.Step>

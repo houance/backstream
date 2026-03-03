@@ -11,6 +11,7 @@ import {
 } from '@backstream/shared'
 import {PROVIDER_MAP} from "../provider-map.tsx";
 import MaintainPolicyConfig from "./MaintainPolicyConfig.tsx";
+import PathSuggestion from "../../../component/PathSuggestion.tsx";
 
 interface ModalProps {
     opened: boolean;
@@ -52,13 +53,26 @@ function StorageLocationModal({ opened, onClose, data, onSubmit, onConnect, titl
                         {...form.getInputProps('name')}
                         withAsterisk
                     />
-                    <TextInput
-                        label="Path"
-                        placeholder="/mnt/nas/..."
-                        {...form.getInputProps('path')}
-                        disabled={!!data}
-                        withAsterisk
-                    />
+                    {form.values.repositoryType === 'LOCAL'
+                        ? (
+                            <PathSuggestion
+                                label="Path"
+                                placeholder="/mnt/nas/..."
+                                required={true}
+                                disabled={!!data}
+                                {...form.getInputProps('path')}
+                            />
+                        )
+                        : (
+                            <TextInput
+                                label="Path"
+                                placeholder="/mnt/nas/..."
+                                {...form.getInputProps('path')}
+                                disabled={!!data}
+                                withAsterisk
+                            />
+                        )
+                    }
                     <PasswordInput
                         variant={data ? "filled" : "default"}
                         label="Password"

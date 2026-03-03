@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import {type Activity} from "@backstream/shared";
 import {type Env} from '../index'
+import path from "node:path";
+import { promises as fs } from 'fs'
 
 const infoRoute = new Hono<Env>()
     .get('/health', (c) => c.json({ message:'OK'}))
@@ -64,5 +66,48 @@ const infoRoute = new Hono<Env>()
                 : 0
         });
     })
+    .get('/path-suggestion', async (c) => {
+        const { path: queryPath = '/', type, caseSensitive } = c.req.query();
+        const safeQueryPath = queryPath && queryPath.trim() !== '' ? queryPath : '/';
+        const isCS = caseSensitive === 'true';
+
+        try {
+            const fullPath = path.resolve('/', safeQueryPath);
+            // Determine if we are inside a directory or matching a prefix
+            const isDir = (await fs.stat(fullPath).catch(() => null))?.isDirectory() && safeQueryPath.endsWith('/');
+            const dir = isDir ? fullPath : path.dirname(fullPath);
+            const term = isDir ? '' : path.basename(fullPath);
+
+            const entries = await fs.readdir(dir, { withFileTypes: true });
+
+            const results = entries
+                .filter(e => (!type || (type === 'dir' ? e.isDirectory() : e.isFile())) &&
+                    e.name.toLowerCase().includes(term.toLowerCase()))
+                .map(e => ({
+                    fullPath: path.join(dir, e.name),
+                    name: e.name,
+                    type: e.isDirectory() ? 'dir' : 'file',
+                    dist: term ? getLevenshteinDistance(isCS ? term : term.toLowerCase(), isCS ? e.name : e.name.toLowerCase()) : 0
+                }))
+                .sort((a, b) => a.dist - b.dist)
+
+            return c.json({ results });
+        } catch {
+            return c.json({ error: 'Not found' }, 404);
+        }
+    })
+
+function getLevenshteinDistance(a: string, b: string): number {
+    const tmp = Array(b.length + 1).fill(null).map(() => Array(a.length + 1).fill(null));
+    for (let i = 0; i <= a.length; i++) tmp[0][i] = i;
+    for (let j = 0; j <= b.length; j++) tmp[j][0] = j;
+    for (let j = 1; j <= b.length; j++) {
+        for (let i = 1; i <= a.length; i++) {
+            const substitutionCost = a[i - 1] === b[j - 1] ? 0 : 1;
+            tmp[j][i] = Math.min(tmp[j - 1][i] + 1, tmp[j][i - 1] + 1, tmp[j - 1][i - 1] + substitutionCost);
+        }
+    }
+    return tmp[b.length][a.length];
+}
 
 export default infoRoute;
