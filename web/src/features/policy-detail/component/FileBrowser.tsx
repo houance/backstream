@@ -97,11 +97,13 @@ export function FileBrowser({ flatFiles, onDownload, isDownloading }: FileBrowse
                             </Table.Td>
                             <Table.Td>
                                 <Group gap={4} justify="flex-end">
-                                    {/** todo: dir 点击下载按钮, 会进入文件夹而且触发下载 **/}
                                     <ActionIcon
                                         size="sm"
                                         variant="subtle"
-                                        onClick={() => onDownload(file)}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onDownload(file);
+                                        }}
                                         loading={isDownloading}
                                     >
                                         <IconDownload size={14} />
