@@ -44,11 +44,13 @@ export class ResticService {
     private readonly runningJob: Map<number, Task<ResticResult<any>>> // <executionId, Task>
     private readonly rcloneClient: RcloneClient | null;
     private readonly restoreFiles: Map<string, string>; // <snapshotId:path, restore file path>
+    private readonly zippingExecution: Set<number>; // <executionId>
 
     public constructor(repo: UpdateRepositorySchema, queue: PQueue) {
         // init map
         this.runningJob = new Map();
         this.restoreFiles = new Map();
+        this.zippingExecution = new Set<number>();
         this.repo = repo;
         // convert to validate zod schema
         const validated = updateRepositorySchema.parse(repo);
@@ -182,13 +184,16 @@ export class ResticService {
     }
 
     public checkRestoreStatus(key: RestoreJobKey): { status: 'running' | 'fail' | 'delete' | 'success' } {
-        // todo: 大文件夹第一次下载返回 fail, 实际 restore 成功
         const restoreKey = `${key.snapshotId}:${key.path}`;
         const file = this.restoreFiles.get(restoreKey);
         if (file) return { status: 'success' };
         if (!key.executionId) return { status: 'delete' };
+        // check if restoring
         const task = this.runningJob.get(key.executionId);
         if (task) return { status: 'running' };
+        // check if zipping
+        if (this.zippingExecution.has(key.executionId)) return { status: 'running' };
+        // neither then return fail
         return { status: 'fail' }
     }
 
@@ -224,12 +229,17 @@ export class ResticService {
             if (file.type !== 'dir') {
                 this.restoreFiles.set(restoreKey, restoreFilePath);
             } else {
+                // set zippingExecution
+                this.zippingExecution.add(newExecution.id);
+                // start zipping
                 const result = await this.zip(restoreFilePath, `backstream-${Date.now().toString()}`);
                 if (result.success) {
                     this.restoreFiles.set(restoreKey, result.result);
                 } else {
                     console.warn(`restore ${file.name} fail. ${String(result.error)}`);
                 }
+                // remove zipping
+                this.zippingExecution.delete(newExecution.id);
             }
         })();
         return {
@@ -537,7 +547,7 @@ export class ResticService {
 
     private async zip(file: string, zipName: string):
         Promise<{ success: true, result: string } | { success: false, error: any }> {
-
+        // todo: linux 平台引入 zip cli, fallback to archiver. window 平台允许用户选择路径直接 restore
         const zipPath = path.join(path.dirname(file), `${zipName}.zip`);
         const output = createWriteStream(zipPath);
         const archive = archiver('zip', { zlib: { level: 5 } });
