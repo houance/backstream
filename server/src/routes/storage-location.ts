@@ -73,7 +73,7 @@ const storageRoute = new Hono<Env>()
         if (!repo) return c.json({ error: 'Not found' }, 404);
         const validRepo = updateRepositorySchema.parse(repo);
         // scheduler 删除
-        const result = await c.var.scheduler.deleteResticService(validRepo);
+        const result = await c.var.scheduler.stopResticService(validRepo);
         if (result.length > 0) return c.json({error: `policy ${result} still running, please delete them first`}, 400);
         // db 删除
         await c.var.db.delete(repository).where(eq(repository.id, id))

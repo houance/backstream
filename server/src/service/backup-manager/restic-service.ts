@@ -28,13 +28,8 @@ import {
 import PQueue from "p-queue";
 import {db} from "../db";
 import {eq, and, inArray} from "drizzle-orm";
-import { mkdir, writeFile, mkdtemp } from 'node:fs/promises';
-import { createWriteStream, existsSync } from 'node:fs'
-import os from "node:os";
-import path from "node:path";
 import pWaitFor from "p-wait-for";
 import {RcloneClient} from "../rclone";
-import archiver from 'archiver'
 import {FileManager} from "./file-manager";
 
 export class ResticService {
@@ -42,6 +37,7 @@ export class ResticService {
     private repoClient: RepositoryClient;
     private globalQueue: PQueue; // global concurrency limit
     private reader = 0; // simple rw lock
+    private readonly waitingJob: Map<number, AbortController>; // <executionId, AbortController>
     private readonly runningJob: Map<number, Task<ResticResult<any>>> // <executionId, Task>
     private readonly rcloneClient: RcloneClient | null;
     private readonly restoreFiles: Map<string, string>; // <snapshotId:path, restore file path>
@@ -49,6 +45,7 @@ export class ResticService {
 
     public constructor(repo: UpdateRepositorySchema, queue: PQueue) {
         // init map
+        this.waitingJob = new Map();
         this.runningJob = new Map();
         this.restoreFiles = new Map();
         this.zippingExecution = new Set<number>();
@@ -131,11 +128,26 @@ export class ResticService {
         return this.runningJob.get(execution.id)!;
     }
 
-    public async stopAllRunningJob() {
-        for (const [key, value] of this.runningJob) {
-            value.cancel();
-            await this.cancelExecution(key)
-        }
+    public stopAllRunningJob() {
+        this.runningJob.forEach((value) => value.cancel());
+        this.runningJob.clear();
+        this.waitingJob.forEach((value) => value.abort());
+        this.waitingJob.clear();
+    }
+
+    public async stopPolicyRunningJob(targetId: number) {
+        const dbResult = await db.select().from(execution)
+            .where(and(
+                eq(execution.backupTargetId, targetId),
+                inArray(execution.executeStatus, ['running', 'pending'])
+            ));
+        if (!dbResult || dbResult.length === 0) return;
+        dbResult.forEach(exec => {
+            this.waitingJob.get(exec.id)?.abort();
+            this.waitingJob.delete(exec.id);
+            this.runningJob.get(exec.id)?.cancel();
+            this.runningJob.delete(exec.id);
+        })
     }
 
     public async updateStat() {
@@ -224,6 +236,7 @@ export class ResticService {
                 ),
                 false
             );
+            if (!task) return;
             const result = await task.result;
             if (!result.success) return;
             const restoreFilePath = result.result;
@@ -288,6 +301,7 @@ export class ResticService {
             async () => await targetService.readLock(),
             async () => await targetService.readUnlock()
         )
+        if (!task) return;
         const result = await task.result
         if (!result.success) return;
         console.debug(`copyTo ${path} snapshots from ${this.repo.name} to ${targetService.repo.name} success`)
@@ -313,6 +327,7 @@ export class ResticService {
                 this.repoClient.backup(path, log, err, newExecution.uuid),
             false
         )
+        if (!task) return;
         const result = await task.result
         if (!result.success || result.result.snapshotId === undefined || result.result.snapshotId === null) return;
         console.log(`backup ${this.repo.name} success`)
@@ -419,6 +434,7 @@ export class ResticService {
             (log, err) =>
                 this.repoClient.check(log, err, this.repo.checkPercentage, newExecution.uuid),
         )
+        if (!task) return;
         // update repo as corrupt if check failed
         const result = await task.result;
         if (!result.success) return;
@@ -443,6 +459,7 @@ export class ResticService {
             newExecution,
             (log, err) => this.repoClient.prune(log, err, newExecution.uuid)
         )
+        if (!task) return;
         const result = await task.result;
         if (!result.success) return;
         console.info(`repo ${this.repo.name} prune at ${this.repo.nextPruneAt} success`)
@@ -454,40 +471,50 @@ export class ResticService {
         isExclusive: boolean = true,
         lockRemote?: () => Promise<void>,
         unLockRemote?: () => Promise<void>,
-    ): Promise<Task<ResticResult<T>>> {
-        return this.globalQueue.add(async () => {
-            if (isExclusive) {
-                await this.writeLock();
-            } else {
-                await this.readLock();
-            }
-            if (lockRemote) {
-                await lockRemote();
-            }
-            try {
-                // create log file and start
-                const { logFile, errorFile } = await FileManager.createLogFile();
-                const task = job(logFile, errorFile)
-                this.runningJob.set(newExecution.id, task)
-                // update execution as running
-                await this.updateToRunning(newExecution, task)
-                // await the task finish then update final result
-                await this.finalizeExecution(newExecution, await task.result);
-                return task;
-            } catch (e) {
-                throw new Error(`execution ${newExecution.id} failed: ${String(e)}`);
-            } finally {
+    ): Promise<Task<ResticResult<T>> | undefined> {
+        const controller = new AbortController();
+        this.waitingJob.set(newExecution.id, controller);
+        try {
+            return this.globalQueue.add(async () => {
                 if (isExclusive) {
-                    await this.writeUnlock();
+                    await this.writeLock();
                 } else {
-                    await this.readUnlock();
+                    await this.readLock();
                 }
-                if (unLockRemote) {
-                    await unLockRemote();
+                if (lockRemote) {
+                    await lockRemote();
                 }
-                this.runningJob.delete(newExecution.id);
-            }
-        })
+                try {
+                    // create log file and start
+                    const { logFile, errorFile } = await FileManager.createLogFile();
+                    const task = job(logFile, errorFile)
+                    this.runningJob.set(newExecution.id, task)
+                    // update execution as running
+                    await this.updateToRunning(newExecution, task)
+                    // await the task finish then update final result
+                    await this.finalizeExecution(newExecution, await task.result);
+                    return task;
+                } catch (e) {
+                    throw new Error(`execution ${newExecution.id} failed: ${String(e)}`);
+                } finally {
+                    if (isExclusive) {
+                        await this.writeUnlock();
+                    } else {
+                        await this.readUnlock();
+                    }
+                    if (unLockRemote) {
+                        await unLockRemote();
+                    }
+                    this.runningJob.delete(newExecution.id);
+                }
+            }, { signal: controller.signal });
+        } catch (error) {
+            if (!(error instanceof DOMException)) console.warn(`error before execution ${newExecution.id} added`);
+            await this.cancelExecution(newExecution.id);
+            return undefined;
+        } finally {
+            this.waitingJob.delete(newExecution.id);
+        }
     }
 
     private async retryOnLock<T>(
@@ -565,6 +592,10 @@ export class ResticService {
         return updateExecutionSchema.parse(row);
     }
 
+    private async cancelExecution(execId: number): Promise<void> {
+        await db.update(execution).set({ executeStatus: "cancel" }).where(eq(execution.id, execId));
+    }
+
     private async updateToRunning(exec: UpdateExecutionSchema, task: Task<any>) {
         await db.update(execution).set({
             logFile: task.logFile,
@@ -581,10 +612,6 @@ export class ResticService {
             finishedAt: Date.now(),
             executeStatus: result.success ? 'success' : 'fail'
         }).where(eq(execution.id, exec.id));
-    }
-
-    private async cancelExecution(execId: number): Promise<void> {
-        await db.update(execution).set({ executeStatus: "cancel" }).where(eq(execution.id, execId));
     }
 
     public async readLock() {

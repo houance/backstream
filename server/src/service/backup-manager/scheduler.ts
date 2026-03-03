@@ -26,7 +26,7 @@ export class Scheduler {
     private readonly globalQueue: PQueue; // all working job
     private readonly repoCronJob: Map<string, Cron> // <repoId:check/prune/stat/snapshots, Cron>
     private readonly targetCronJob: Map<string, Cron> // <strategyId:backupTargetId:repoId, Cron>
-    private readonly dataSizeCronJob: Map<string, Cron> // <strategyId, Cron>
+    private readonly dataSizeCronJob: Map<number, Cron> // <strategyId, Cron>
     private readonly systemCronJob: Map<string, Cron>; // <clean/xxx, Cron>
 
     private constructor(setting: UpdateSystemSettingSchema, globalQueue: PQueue) {
@@ -101,7 +101,7 @@ export class Scheduler {
         return strategies.map(strategy => strategy.name);
     }
 
-    public async deleteResticService(repo: UpdateRepositorySchema): Promise<string[]> {
+    public async stopResticService(repo: UpdateRepositorySchema): Promise<string[]> {
         const strategyNames = await this.getRunningPolicyByRepo(repo);
         if (strategyNames.length !== 0) return strategyNames;
         // 停止并删除 cron job
@@ -115,9 +115,31 @@ export class Scheduler {
         // 停止 restic service 所有任务
         const rs = this.clientMap.get(repo.id);
         if (!rs) return [];
-        await rs.stopAllRunningJob();
+        rs.stopAllRunningJob();
         this.clientMap.delete(repo.id);
         return [];
+    }
+
+    public async stopPolicy(strategyId: number): Promise<{ status: 'success' | 'Not found' }> {
+        const dbResult = await getPolicyById(strategyId);
+        if (!dbResult) return { status: 'Not found' };
+        // 停止 datasource 更新
+        const dataSizeCronJob = this.dataSizeCronJob.get(strategyId);
+        if (dataSizeCronJob) {
+            dataSizeCronJob.stop();
+            this.dataSizeCronJob.delete(strategyId);
+        }
+        for (const target of dbResult.targets) {
+            // 停止 target 调度
+            const cronJobKey = `${strategyId}:${target.id}:${target.repositoryId}`;
+            this.targetCronJob.get(cronJobKey)?.stop();
+            this.targetCronJob.delete(cronJobKey);
+            // 停止 target 正在运行的任务
+            const rs = this.clientMap.get(target.repositoryId);
+            if (!rs) continue;
+            await rs.stopPolicyRunningJob(target.id);
+        }
+        return { status: 'success' };
     }
 
     private async addRepoMaintainSchedule(resticService: ResticService) {
@@ -166,7 +188,7 @@ export class Scheduler {
     }
 
     private addDatasourceSizeUpdate(policy: Policy) {
-        const cronJobKey = `${policy.id}`;
+        const cronJobKey = policy.id;
         if (this.dataSizeCronJob.has(cronJobKey)) return;
         this.dataSizeCronJob.set(cronJobKey, new Cron('15 */5 * * * *', { protect: true }, async () => {
             const rc = new RcloneClient(); // local rclone

@@ -1,11 +1,13 @@
-import {Card, Text, Badge, Group, Stack, Progress, Tooltip, Box} from '@mantine/core';
-import {IconAlertTriangle, IconCloud, IconDeviceSdCard} from '@tabler/icons-react';
+import {Card, Text, Badge, Group, Stack, Progress, Tooltip, Box, ActionIcon} from '@mantine/core';
+import {IconAlertTriangle, IconCloud, IconDeviceSdCard, IconTrash} from '@tabler/icons-react';
 import {formatTimestamp, getRepositoryStats} from "../../../util/format.ts";
 import {type UpdateBackupPolicySchema} from '@backstream/shared'
 
-export function BackupPolicyCard({ policy, onDetail }: {
+export function BackupPolicyCard({ policy, onDetail, onDelete, isDeleting }: {
     policy: UpdateBackupPolicySchema,
     onDetail: () => void,
+    onDelete: (policy: UpdateBackupPolicySchema) => void,
+    isDeleting: boolean
 }) {
     // Determine if ANY repository is near capacity
     const isCritical = policy.targets.some(t => (t.repository.usage / t.repository.capacity) > 0.8);
@@ -23,15 +25,31 @@ export function BackupPolicyCard({ policy, onDetail }: {
                   cursor: 'pointer',
               }}>
             {/* 备份计划名称和类型  */}
-            <Group justify="space-between" mb="md">
-                <div>
+            <Group justify="space-between" mb="md" wrap="nowrap">
+                <Box style={{ flex: 1 }}>
                     <Tooltip label={policy.strategy.dataSource}>
-                        <Text fw={700} size="lg">{policy.strategy.name}</Text>
+                        <Text fw={700} size="lg" truncate>{policy.strategy.name}</Text>
                     </Tooltip>
-                </div>
-                <Badge color={isCritical ? "red" : "blue"} variant="light" size="sm">
-                    {policy.strategy.strategyType}
-                </Badge>
+                </Box>
+
+                <Group gap="xs">
+                    <Badge color={isCritical ? "red" : "blue"} variant="light" size="sm">
+                        {policy.strategy.strategyType}
+                    </Badge>
+
+                    {/* Delete Action Icon */}
+                    <ActionIcon
+                        variant="subtle"
+                        color="red"
+                        loading={isDeleting}
+                        onClick={(e) => {
+                            e.stopPropagation(); // Prevents onDetail from firing
+                            onDelete(policy);
+                        }}
+                    >
+                        <IconTrash size={18} />
+                    </ActionIcon>
+                </Group>
             </Group>
 
             {/* 备份目标健康度 */}

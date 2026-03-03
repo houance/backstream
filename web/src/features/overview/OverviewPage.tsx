@@ -6,8 +6,10 @@ import {RecentActivityCard} from "./components/RecentActivityCard.tsx";
 import type { UpdateBackupPolicySchema } from '@backstream/shared';
 import {PolicyDetailModal} from "../policy-detail/PolicyDetailModal.tsx";
 import {useDisclosure} from "@mantine/hooks";
-import {useQuery} from "@tanstack/react-query";
+import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {client} from "../../api";
+import {ensureSuccess} from "../../util/api.ts";
+import {notice} from "../../util/notification.tsx";
 
 const OverviewPage: React.FC = () => {
     const [opened, { open, close }] = useDisclosure(false);
@@ -25,6 +27,22 @@ const OverviewPage: React.FC = () => {
             return res.json();
         },
     });
+    // --- DELETE POLICY ---
+    const queryClient = useQueryClient();
+    const mutate = useMutation(({
+        mutationFn: async (policy: UpdateBackupPolicySchema) => {
+            return ensureSuccess(
+                client.api.policy[':id'].$delete({
+                    param: {id: policy.strategy.id.toString()}
+                })
+            )
+        },
+        onSuccess: async () => {
+            await queryClient.invalidateQueries({queryKey: ['policy']});
+            notice(true, 'policy delete success');
+        },
+        onError: (error) => notice(false, `${String(error)}`)
+    }))
     // --- FETCH ACTIVITY DATA ---
     const {data: activity, isLoading: isActivityLoading} = useQuery({
         queryKey: ['activity'],
@@ -72,7 +90,12 @@ const OverviewPage: React.FC = () => {
                             (<Grid gutter="md">
                             {policy!.map((policy: UpdateBackupPolicySchema) => (
                                 <Grid.Col key={policy.strategy.id} span={{ sm: 4}}>
-                                    <BackupPolicyCard policy={policy} onDetail={() => openModal(policy)} />
+                                    <BackupPolicyCard
+                                        policy={policy}
+                                        onDetail={() => openModal(policy)}
+                                        onDelete={(policy: UpdateBackupPolicySchema) => mutate.mutate(policy)}
+                                        isDeleting={mutate.isPending}
+                                    />
                                 </Grid.Col>
                             ))}
                         </Grid>)}

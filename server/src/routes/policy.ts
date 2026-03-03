@@ -40,6 +40,15 @@ const policyRoute = new Hono<Env>()
             void c.var.scheduler.addPolicyScheduleByStrategyId(newStrategy.id);
             return c.json({ message: `success create policy ${newStrategy.name }`}, 200);
         })
+    .delete('/:id', async (c) => {
+        const id = Number(c.req.param('id'));
+        // scheduler 停止调度
+        const result = await c.var.scheduler.stopPolicy(id);
+        if (result.status === 'Not found') return c.json({error: 'Not found'}, 404);
+        // 级联删除 strategy
+        await c.var.db.delete(strategy).where(eq(strategy.id, id));
+        return c.json({ message: `success delete policy ${id}`}, 200);
+    })
 
 
 async function getStrategyData(db: Env['Variables']['db']) {
