@@ -365,7 +365,7 @@ async function main() {
             ioPriority: "normal",
             minDiskSpaceGB: 10,
             email: "admin@example.com",
-            logRetentionDays: 90,
+            logRetentionDays: 7,
         },
     ]);
 

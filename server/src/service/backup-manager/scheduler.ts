@@ -18,6 +18,7 @@ import PQueue from "p-queue";
 import {eq, inArray} from "drizzle-orm";
 import {Cron} from "croner";
 import {RcloneClient} from "../rclone";
+import {FileManager} from "./file-manager";
 
 export class Scheduler {
     private readonly clientMap: Map<number, ResticService>; // <repoId, ResticService>
@@ -25,13 +26,15 @@ export class Scheduler {
     private readonly globalQueue: PQueue; // all working job
     private readonly repoCronJob: Map<string, Cron> // <repoId:check/prune/stat/snapshots, Cron>
     private readonly targetCronJob: Map<string, Cron> // <strategyId:backupTargetId:repoId, Cron>
-    private readonly strategyCronJob: Map<string, Cron> // <strategyId, Cron>
+    private readonly dataSizeCronJob: Map<string, Cron> // <strategyId, Cron>
+    private readonly systemCronJob: Map<string, Cron>; // <clean/xxx, Cron>
 
     private constructor(setting: UpdateSystemSettingSchema, globalQueue: PQueue) {
-        this.clientMap = new Map<number, ResticService>();
+        this.clientMap = new Map();
         this.repoCronJob = new Map();
         this.targetCronJob = new Map();
-        this.strategyCronJob = new Map();
+        this.dataSizeCronJob = new Map();
+        this.systemCronJob = new Map();
         this.setting = setting;
         this.globalQueue = globalQueue;
     }
@@ -64,6 +67,8 @@ export class Scheduler {
         // init policy schedule
         const allPolicy = await getAllPolicy();
         allPolicy.forEach(policy => scheduler.addPolicySchedule(policy))
+        // start system schedule
+        void scheduler.addTmpFolderCleanSchedule();
         return scheduler;
     }
 
@@ -72,9 +77,8 @@ export class Scheduler {
         const resticService = await ResticService.create(repo, this.globalQueue);
         this.clientMap.set(repo.id, resticService);
         // add repo schedule
-        await this.addRepoStatSchedule(resticService);
-        await this.addSnapshotIndexSchedule(resticService);
         await this.addRepoMaintainSchedule(resticService);
+        await this.addRepoIndexSchedule(resticService);
     }
 
     public async getResticService(repository: UpdateRepositorySchema) {
@@ -117,11 +121,10 @@ export class Scheduler {
     }
 
     private async addRepoMaintainSchedule(resticService: ResticService) {
-        const checkSchedule = resticService.repo.checkSchedule;
-        const pruneSchedule = resticService.repo.pruneSchedule;
         const repoId = resticService.repo.id;
+        // check schedule
+        const checkSchedule = resticService.repo.checkSchedule;
         const checkJobKey = `${repoId}:check`
-        const pruneJobKey = `${repoId}:prune`
         if (checkSchedule !== "manual" && !this.repoCronJob.has(checkJobKey)) {
             this.repoCronJob.set(checkJobKey, new Cron(checkSchedule, { protect: true }, async () => {
                 await db.update(repository)
@@ -130,6 +133,9 @@ export class Scheduler {
                 await resticService.check();
             }))
         }
+        // prune schedule
+        const pruneSchedule = resticService.repo.pruneSchedule;
+        const pruneJobKey = `${repoId}:prune`
         if (pruneSchedule !== "manual" && !this.repoCronJob.has(pruneJobKey)) {
             this.repoCronJob.set(pruneJobKey, new Cron(pruneSchedule, { protect: true }, async () => {
                 await db.update(repository)
@@ -138,22 +144,31 @@ export class Scheduler {
                 await resticService.prune();
             }))
         }
-    }
-
-    private async addRepoStatSchedule(resticService: ResticService) {
-        const cronJobKey = `${resticService.repo.id}:stat`
+        // stat(repo status, usage, capacity) schedule
+        const cronJobKey = `${repoId}:stat`
         if (this.repoCronJob.has(cronJobKey)) return;
-        const job = new Cron("25 */2 * * * *", { protect: true }, async () => {
+        const repoStatJob = new Cron("25 */2 * * * *", { protect: true }, async () => {
             await resticService.updateStat()
         })
-        await job.trigger();
-        this.repoCronJob.set(cronJobKey, job)
+        void repoStatJob.trigger();
+        this.repoCronJob.set(cronJobKey, repoStatJob)
+    }
+
+    public async addRepoIndexSchedule(resticService: ResticService) {
+        const cronJobKey = `${resticService.repo.id}:snapshots`;
+        if (this.repoCronJob.has(cronJobKey)) return;
+        const job = new Cron("5 */5 * * * *", { protect: true }, async () => {
+            await resticService.indexSnapshots();
+        })
+        this.repoCronJob.set(cronJobKey, job);
+        // run index snapshot IMMEDIATELY
+        void job.trigger();
     }
 
     private addDatasourceSizeUpdate(policy: Policy) {
         const cronJobKey = `${policy.id}`;
-        if (this.strategyCronJob.has(cronJobKey)) return;
-        this.strategyCronJob.set(cronJobKey, new Cron('15 */5 * * * *', { protect: true }, async () => {
+        if (this.dataSizeCronJob.has(cronJobKey)) return;
+        this.dataSizeCronJob.set(cronJobKey, new Cron('15 */5 * * * *', { protect: true }, async () => {
             const rc = new RcloneClient(); // local rclone
             const sizeResult = await rc.getSize(policy.dataSource);
             const size = sizeResult.success ? sizeResult.result.bytes : policy.dataSourceSize;
@@ -233,15 +248,18 @@ export class Scheduler {
         }
     }
 
-    public async addSnapshotIndexSchedule(resticService: ResticService) {
-        const cronJobKey = `${resticService.repo.id}:snapshots`;
-        if (this.repoCronJob.has(cronJobKey)) return;
-        const job = new Cron("5 */5 * * * *", { protect: true }, async () => {
-            await resticService.indexSnapshots();
-        })
-        this.repoCronJob.set(cronJobKey, job);
-        // run index snapshot IMMEDIATELY
-        void job.trigger();
+    private async addTmpFolderCleanSchedule() {
+        const cronJobKey = `clean`;
+        if (this.systemCronJob.has(cronJobKey)) return;
+        this.systemCronJob.set(cronJobKey, new Cron('13 */1 * * * *', { protect: true }, async () => {
+            const logRetentionDays = this.setting.logRetentionDays;
+            const errors = await FileManager.clearTmpFolder(logRetentionDays);
+            if (errors.length > 0) {
+                console.warn(`clean tmp folder fail.\n` + errors.join('\n'));
+            } else {
+                console.debug(`clean tmp folder success.`);
+            }
+        }))
     }
 }
 

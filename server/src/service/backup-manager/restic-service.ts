@@ -35,6 +35,7 @@ import path from "node:path";
 import pWaitFor from "p-wait-for";
 import {RcloneClient} from "../rclone";
 import archiver from 'archiver'
+import {FileManager} from "./file-manager";
 
 export class ResticService {
     public repo: UpdateRepositorySchema;
@@ -210,7 +211,7 @@ export class ResticService {
         const newExecution = await this.createExecution(commandType.restore);
         // start restore
         void (async () => {
-            const dir = await this.createTmpFolder();
+            const dir = await FileManager.createTmpFolder();
             const task = await this.startJob(
                 newExecution,
                 (log, err) => this.repoClient.restore(
@@ -232,7 +233,7 @@ export class ResticService {
                 // set zippingExecution
                 this.zippingExecution.add(newExecution.id);
                 // start zipping
-                const result = await this.zip(restoreFilePath, `backstream-${Date.now().toString()}`);
+                const result = await FileManager.zip(restoreFilePath, `backstream-${Date.now().toString()}`);
                 if (result.success) {
                     this.restoreFiles.set(restoreKey, result.result);
                 } else {
@@ -465,7 +466,7 @@ export class ResticService {
             }
             try {
                 // create log file and start
-                const { logFile, errorFile } = await this.createLogFile(null, newExecution);
+                const { logFile, errorFile } = await FileManager.createLogFile();
                 const task = job(logFile, errorFile)
                 this.runningJob.set(newExecution.id, task)
                 // update execution as running
@@ -543,60 +544,6 @@ export class ResticService {
                 await this.readUnlock();
             }
         }
-    }
-
-    private async zip(file: string, zipName: string):
-        Promise<{ success: true, result: string } | { success: false, error: any }> {
-        // todo: linux 平台引入 zip cli, fallback to archiver. window 平台允许用户选择路径直接 restore
-        const zipPath = path.join(path.dirname(file), `${zipName}.zip`);
-        const output = createWriteStream(zipPath);
-        const archive = archiver('zip', { zlib: { level: 5 } });
-
-        return new Promise((resolve) => {
-            // 1. Listen for the 'close' event on the output stream (True completion)
-            output.on('close', () => {
-                resolve({ success: true, result: zipPath });
-            });
-
-            // 2. Handle errors from both the archiver and the write stream
-            output.on('error', (err) => resolve({ success: false, error: err }));
-            archive.on('error', (err) => resolve({ success: false, error: err }));
-
-            // 3. Pipe and finalize
-            archive.pipe(output);
-            archive.directory(file, false);
-            archive.finalize(); // No need to await this inside the Promise
-        });
-    }
-
-    private async createTmpFolder(baseDirPath?: string | null) {
-        // 1. Determine Root (Default to system temp)
-        const root = baseDirPath && existsSync(baseDirPath)
-            ? baseDirPath
-            : os.tmpdir();
-        // create random folder
-        return await mkdtemp(path.join(root, 'backstream-'));
-    }
-
-    private async createLogFile(baseDirPath: string | null | undefined, execution: UpdateExecutionSchema) {
-        // 1. Determine Root (Default to system temp)
-        const root = baseDirPath && existsSync(baseDirPath)
-            ? baseDirPath
-            : os.tmpdir();
-        // log folder
-        const logFolder = path.join(root, `backstream-${execution.uuid}`);
-        // create folder
-        await mkdir(logFolder, { recursive: true });
-        // 3. Create Files
-        const logFile = path.join(logFolder, `stdout.log`);
-        const errorFile = path.join(logFolder, `stderr.log`);
-        await writeFile(logFile, '');
-        await writeFile(errorFile, '');
-
-        return {
-            logFile,
-            errorFile,
-        };
     }
 
     private async createExecution(
