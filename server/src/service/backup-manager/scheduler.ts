@@ -90,7 +90,7 @@ export class Scheduler {
 
     private async getRunningPolicyByRepo(repo: UpdateRepositorySchema): Promise<string[]> {
         const strategyIds: number[] = [];
-        for (const [key, value] of this.targetCronJob) {
+        for (const [key, _value] of this.targetCronJob) {
             const ids = key.split(":");
             if (ids[2] === repo.id.toString()) strategyIds.push(Number(ids[0]));
         }
@@ -273,7 +273,7 @@ export class Scheduler {
     private async addTmpFolderCleanSchedule() {
         const cronJobKey = `clean`;
         if (this.systemCronJob.has(cronJobKey)) return;
-        this.systemCronJob.set(cronJobKey, new Cron('13 */1 * * * *', { protect: true }, async () => {
+        this.systemCronJob.set(cronJobKey, new Cron('13 21 4 * * *', { protect: true }, async () => {
             const logRetentionDays = this.setting.logRetentionDays;
             const errors = await FileManager.clearTmpFolder(logRetentionDays);
             if (errors.length > 0) {
