@@ -14,6 +14,7 @@ import {RepositoryClient} from "./service/restic";
 import {RcloneClient} from "./service/rclone";
 import { pinoLogger } from 'hono-pino'
 import { logger } from './service/log/logger'
+import { env } from './config/env'
 
 // check restic installation
 logger.info(await RepositoryClient.checkIfResticInstall())
@@ -42,7 +43,7 @@ app.use('*', async (c, next) => {
 // Get absolute path to the current file's directory
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Serve static files ONLY in production
-if (process.env.NODE_ENV === 'production') {
+if (env.NODE_ENV === 'production') {
   // Use absolute paths to avoid CWD confusion
   const staticPath = path.resolve(__dirname, '../../web/dist');
 
@@ -62,10 +63,10 @@ const routes = app.basePath('/api')
 export default app
 export type AppType = typeof routes
 
-if (process.env.NODE_ENV === 'production') {
+if (env.NODE_ENV === 'production') {
   serve({
     fetch: app.fetch,
-    port: 3000,
+    port: env.PORT,
     hostname: '0.0.0.0',
   }, (info) => {
     logger.info(`Server is running on http://${info.address}:${info.port}`)

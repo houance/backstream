@@ -34,3 +34,4 @@ lerna-debug.log*
 /db/
 /src/test/
 /log/
+/audit_restic/

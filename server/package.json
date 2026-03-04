@@ -2,9 +2,9 @@
   "name": "@backstream/server",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "start": "node dist/index.js",
+    "dev": "vite --mode development",
+    "build": "vite build --mode production",
+    "start": "node --env-file=.env.production dist/index.js",
     "init": "npx drizzle-kit generate --name create_table && tsx ./src/service/db/seed.ts",
     "db": "npx drizzle-kit studio"
   },

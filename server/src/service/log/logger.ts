@@ -1,7 +1,8 @@
 import pino from 'pino'
 import path from 'path'
+import { env } from '../../config/env'
 
-const logFile = path.resolve(process.cwd(), 'log', 'app.log');
+const logFile = path.resolve(env.LOG_FOLDER, 'app.log');
 
 const transport = pino.transport({
     targets: [
@@ -9,7 +10,7 @@ const transport = pino.transport({
         {
             target: 'pino-pretty',
             options: { colorize: true },
-            level: 'info' // Only send info and above to console
+            level: env.LOG_LEVEL
         },
         // Target 2: Rotating File (Production)
         {
@@ -21,16 +22,9 @@ const transport = pino.transport({
                 mkdir: true,
                 limit: { count: 7 }
             },
-            level: 'info'
+            level: ['debug', 'trace', 'silent'].includes(env.LOG_LEVEL) ? 'info' : env.LOG_LEVEL,
         }
-    ],
-    options: {
-        file: logFile,
-        frequency: 'daily',
-        size: '10m',
-        mkdir: true,
-        limit: { count: 7 } // Keep 1 week of logs
-    }
+    ]
 })
 
-export const logger = pino(transport)
+export const logger = pino({ level: 'trace' }, transport)

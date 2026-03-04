@@ -15,7 +15,8 @@
   },
   "include": [
     "src",
-    "../shared/src"
+    "../shared/src",
+    "vite.config.ts"
   ],
   "exclude": ["node_modules", "src/test", "src/**/*.test.ts"]
 }

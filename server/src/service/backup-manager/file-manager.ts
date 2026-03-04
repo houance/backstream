@@ -1,23 +1,23 @@
 import {createWriteStream, existsSync} from "node:fs";
-import os from "node:os";
-import {mkdtemp, writeFile, readdir, stat, rm} from "node:fs/promises";
+import {mkdtemp, writeFile, readdir, stat, rm, mkdir} from "node:fs/promises";
 import path from "node:path";
-import type {UpdateExecutionSchema} from "@backstream/shared";
 import archiver from "archiver";
+import { env } from '../../config/env'
 
 export class FileManager {
-    public static baseDirPath = null; // todo: read from env
+    public static baseTmpDir = env.TMP_FOLDER;
     private static tmpFolderPrefix = "backstream-";
 
-    public static getTmpFolderPath(): string {
-        return FileManager.baseDirPath && existsSync(FileManager.baseDirPath)
-            ? FileManager.baseDirPath
-            : os.tmpdir();
+    public static async getTmpFolderPath(): Promise<string> {
+        if (!existsSync(FileManager.baseTmpDir)) {
+            await mkdir(FileManager.baseTmpDir, { recursive: true });
+        }
+        return FileManager.baseTmpDir;
     }
 
     public static async createTmpFolder() {
         // 1. Determine Root (Default to system temp)
-        const root = FileManager.getTmpFolderPath();
+        const root = await FileManager.getTmpFolderPath();
         // create random folder with six figure suffix
         return await mkdtemp(path.join(root, FileManager.tmpFolderPrefix));
     }
@@ -65,7 +65,7 @@ export class FileManager {
      * @returns A list of error messages, if any occurred.
      */
     public static async clearTmpFolder(retentionDays: number): Promise<string[]> {
-        const tmpFolder = FileManager.getTmpFolderPath();
+        const tmpFolder = await FileManager.getTmpFolderPath();
         const tmpFolderPrefix = FileManager.tmpFolderPrefix;
 
         const cutoff = Date.now() - (retentionDays * 24 * 60 * 60 * 1000);
