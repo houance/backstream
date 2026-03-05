@@ -188,7 +188,7 @@ export class ResticService {
     public async getSnapshotFiles(snapshot: UpdateSnapshotsMetadataSchema) {
         return await this.retryOnLock(
             () => this.repoClient.getSnapshotFilesByPath(snapshot.snapshotId),
-            3000
+            false
         )
     }
 
@@ -275,8 +275,6 @@ export class ResticService {
         let keepSnapshotIds: string[] = [];
         const retryResult = await this.retryOnLock(
             () => this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy),
-            3000,
-            3,
             true
         );
         if (!retryResult.success) {
@@ -309,13 +307,11 @@ export class ResticService {
         // run remote retention policy against remote for cleaning up old data
         const retryResult2 = await targetService.retryOnLock(
             () => targetService.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy),
-            3000,
-            3,
             true
         );
         if (!retryResult2.success) logger.warn(retryResult2.error, `forget ${path} at ${this.repo.name} fail:`)
         // remote repo index snapshot
-        await targetService.indexSnapshots(path);
+        void targetService.indexSnapshots(path);
     }
 
     public async backup(path: string, target: UpdateBackupTargetSchema) {
@@ -341,9 +337,7 @@ export class ResticService {
         // forget old data
         const retryResult = await this.retryOnLock(
             () => this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy),
-            3000,
-            3,
-            true
+            true,
         );
         if (!retryResult.success) logger.warn(`forget ${path} at ${this.repo.name} fail: ${retryResult.error.toString()}`);
     }
@@ -352,9 +346,9 @@ export class ResticService {
         if (this.repo.repositoryStatus !== 'Active') return;
         const retryResult = await this.retryOnLock(
             () => this.repoClient.getSnapshots(path),
-            3000,
-            3,
-            false
+            false,
+            2500,
+            4,
         )
         if (!retryResult.success) {
             logger.warn(retryResult.error, `indexSnapshots ${path} in ${this.repo.name} fail.`);
@@ -518,23 +512,22 @@ export class ResticService {
         }
     }
 
+    // design to be fail fast, used for short living restic command: forget, snapshots, ls ......
     private async retryOnLock<T>(
         func: () => Promise<ResticResult<T>>,
-        initialIntervalMs: number = 5000,
-        retryCount: number = 3,
         isExclusive: boolean = false,
+        initialIntervalMs: number = 1000,
+        retryCount: number = 3,
     ): Promise<RetryResult<T>> {
-        try {
-            if (isExclusive) {
-                await this.writeLock();
-            } else {
-                await this.readLock();
-            }
-            let lastError: ResticError | undefined;
-            for (let attempt = 0; attempt <= retryCount; attempt++) {
+        let lastError: ResticError | any;
+        for (let attempt = 0; attempt <= retryCount; attempt++) {
+            try {
+                if (isExclusive) {
+                    await this.writeLock(initialIntervalMs, 1);
+                } else {
+                    await this.readLock(initialIntervalMs, 1);
+                }
                 // 1. Execute the function
-                // add random wait time for restic to clean previous lock
-                await new Promise(r => setTimeout(r, Math.random() * 1000 + 1000));
                 const result = await func();
                 // 3. Check for success
                 if (result.success) {
@@ -559,19 +552,21 @@ export class ResticService {
                         await new Promise(resolve => setTimeout(resolve, delay));
                     }
                 }
-            }
-            return {
-                success: false,
-                error: lastError!,
-                attempts: retryCount + 1
-            };
-        } finally {
-            if (isExclusive) {
-                await this.writeUnlock();
-            } else {
-                await this.readUnlock();
+            } catch (error) {
+                lastError = error;
+            } finally {
+                if (isExclusive) {
+                    await this.writeUnlock();
+                } else {
+                    await this.readUnlock();
+                }
             }
         }
+        return {
+            success: false,
+            error: lastError!,
+            attempts: retryCount + 1
+        };
     }
 
     private async createExecution(
@@ -615,7 +610,10 @@ export class ResticService {
         }).where(eq(execution.id, exec.id));
     }
 
-    public async readLock() {
+    public async readLock(
+        intervalMs?: number,
+        maxRetry?: number,
+    ) {
         await pWaitFor(() => {
             if (this.reader >= 0) {
                 this.reader++;
@@ -623,14 +621,17 @@ export class ResticService {
             } else {
                 return false;
             }
-        }, { interval: 5000 })
+        }, { interval: intervalMs || 10 * 1000, timeout: maxRetry ? maxRetry * (intervalMs || 10 * 1000) : 60 * 60 * 1000 }); // default wait 1 hours
     }
 
     public async readUnlock() {
         this.reader--;
     }
 
-    private async writeLock() {
+    private async writeLock(
+        intervalMs?: number,
+        maxRetry?: number,
+    ) {
         await pWaitFor(() => {
             if (this.reader === 0) {
                 this.reader = -1;
@@ -638,7 +639,7 @@ export class ResticService {
             } else {
                 return false;
             }
-        }, { interval: 5000 })
+        }, { interval: intervalMs || 10 * 1000, timeout: maxRetry ? maxRetry * (intervalMs || 10 * 1000) : 60 * 60 * 1000 });
     }
 
     private async writeUnlock() {
