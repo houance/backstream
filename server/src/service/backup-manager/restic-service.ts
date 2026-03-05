@@ -70,10 +70,11 @@ export class ResticService {
         this.globalQueue = queue
     }
 
-    public static async create(repo: UpdateRepositorySchema, queue: PQueue): Promise<ResticService> {
+    public static async create(repo: UpdateRepositorySchema, queue: PQueue): Promise<ResticService | ResticError> {
         const resticService = new ResticService(repo, queue);
         // create repo if not exist
-        await resticService.initRepo();
+        const initResult = await resticService.initRepo();
+        if (!initResult.success) return initResult.error;
         return resticService;
     }
 
@@ -90,38 +91,39 @@ export class ResticService {
         const isRepoExists = await this.repoClient.isRepoExist();
         // 检查失败
         if (!isRepoExists.success) {
-            const dbResult = await db.update(repository)
+            const [dbResult] = await db.update(repository)
                 .set({ repositoryStatus: 'Disconnected' })
                 .where(eq(repository.id, this.repo.id))
                 .returning()
-            this.repo = updateRepositorySchema.parse(dbResult[0]);
-            return;
+            this.repo = updateRepositorySchema.parse(dbResult);
+            return isRepoExists;
         }
         // repo 已创建
         if (isRepoExists.result) {
-            const dbResult = await db.update(repository)
+            const [dbResult] = await db.update(repository)
                 .set({ repositoryStatus: 'Active' })
                 .where(eq(repository.id, this.repo.id))
                 .returning()
-            this.repo = updateRepositorySchema.parse(dbResult[0]);
-            return;
+            this.repo = updateRepositorySchema.parse(dbResult);
+            return isRepoExists;
         }
         // repo 未创建
         const result = await this.repoClient.createRepo();
         if (result.success) {
-            const dbResult = await db.update(repository)
+            const [dbResult] = await db.update(repository)
                 .set({ repositoryStatus: 'Active' })
                 .where(eq(repository.id, this.repo.id))
                 .returning()
-            this.repo = updateRepositorySchema.parse(dbResult[0]);
+            this.repo = updateRepositorySchema.parse(dbResult);
         } else {
             // 创建失败
-            const dbResult = await db.update(repository)
+            const [dbResult] = await db.update(repository)
                 .set({ repositoryStatus: 'Corrupt' })
                 .where(eq(repository.id, this.repo.id))
                 .returning()
-            this.repo = updateRepositorySchema.parse(dbResult[0]);
+            this.repo = updateRepositorySchema.parse(dbResult);
         }
+        return result;
     }
 
     public getRunningJob(execution: UpdateExecutionSchema): Task<ResticResult<any>> | null {
@@ -174,7 +176,7 @@ export class ResticService {
         const usage = repoSize.success ? repoSize.result.totalSize : this.repo.usage;
         // get repo capacity, only support local repo currently
         let capacity = this.repo.capacity;
-        if (this.rcloneClient !== null) {
+        if (this.rcloneClient !== null && this.rcloneClient !== undefined) {
             const repoStat = await this.rcloneClient.getBackendStat(this.repo.path);
             if (repoStat.success && repoStat.result.total) capacity = repoStat.result.total;
         }

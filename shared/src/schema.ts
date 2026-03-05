@@ -9,7 +9,7 @@ export const repository = sqliteTable("repository_table", {
     password: text("password").notNull(),
     repositoryType: text("repository_type").notNull(),
     usage: integer("usage").notNull(),
-    capacity: integer("capacity").notNull(),
+    capacity: integer("capacity"), // null for infinity or not retrievable
     certification: text("certification", { mode: "json" }),
     checkSchedule: text("check_schedule").notNull(),
     checkPercentage: real("check_percentage").notNull(),
@@ -25,7 +25,7 @@ export const strategy = sqliteTable("strategy_table", {
     name: text("name").notNull(),
     hostname: text("hostname").notNull(),
     dataSource: text("data_source").notNull(),
-    dataSourceSize: integer("data_source_size").notNull(), // 0 for infinity
+    dataSourceSize: integer("data_source_size").notNull(), // 0 for unavailable
     strategyType: text("strategy_type").notNull(),
 });
 

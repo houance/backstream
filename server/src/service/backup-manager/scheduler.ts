@@ -20,6 +20,7 @@ import {Cron} from "croner";
 import {RcloneClient} from "../rclone";
 import {FileManager} from "./file-manager";
 import { logger } from '../log/logger'
+import {ResticError} from "../restic";
 
 export class Scheduler {
     private readonly clientMap: Map<number, ResticService>; // <repoId, ResticService>
@@ -75,11 +76,15 @@ export class Scheduler {
 
     public async addResticService(repo: UpdateRepositorySchema) {
         if (this.clientMap.has(repo.id)) return;
-        const resticService = await ResticService.create(repo, this.globalQueue);
-        this.clientMap.set(repo.id, resticService);
+        const createResult = await ResticService.create(repo, this.globalQueue);
+        if (createResult instanceof ResticError) {
+            logger.warn(createResult, `create restic service with ${repo.name} fail.`)
+            return createResult.toString();
+        }
+        this.clientMap.set(repo.id, createResult);
         // add repo schedule
-        await this.addRepoMaintainSchedule(resticService);
-        await this.addRepoIndexSchedule(resticService);
+        void this.addRepoMaintainSchedule(createResult);
+        void this.addRepoIndexSchedule(createResult);
     }
 
     public async getResticService(repository: UpdateRepositorySchema) {

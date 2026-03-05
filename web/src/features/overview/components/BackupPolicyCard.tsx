@@ -10,7 +10,7 @@ export function BackupPolicyCard({ policy, onDetail, onDelete, isDeleting }: {
     isDeleting: boolean
 }) {
     // Determine if ANY repository is near capacity
-    const isCritical = policy.targets.some(t => (t.repository.usage / t.repository.capacity) > 0.8);
+    const isCritical = policy.targets.some(t => (t.repository.usage / (t.repository.capacity || Infinity)) > 0.8);
 
     return (
         <Card shadow="sm"
@@ -57,7 +57,7 @@ export function BackupPolicyCard({ policy, onDetail, onDelete, isDeleting }: {
             {/* by 备份目标展示 progress 和 backup time */}
             <Stack gap="sm">
                 {policy.targets.map((target) => {
-                    const { percentage } = getRepositoryStats(target.repository.usage, target.repository.capacity);
+                    const { percentage } = getRepositoryStats(target.repository.usage, target.repository.capacity || Infinity);
 
                     return (
                         <Box key={target.repositoryId}>

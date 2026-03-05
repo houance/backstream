@@ -83,7 +83,7 @@ function StorageLocationModal({ opened, onClose, data, onSubmit, onConnect, titl
                         description="Required to encrypt/decrypt your backups"
                         autoComplete="new-password"
                     />
-                    <MaintainPolicyConfig form={form} />
+                    <MaintainPolicyConfig form={form} isEdit={!!data} />
                     <Select
                         label="Type"
                         data={Object.values(RepoType)}

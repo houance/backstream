@@ -20,9 +20,9 @@ const policyRoute = new Hono<Env>()
             const strategyValid = validated.strategy;
             const targetsValid = validated.targets;
             // 校验 datasource 重复
-            const dbResult = await c.var.db.select().from(strategy)
+            const [dbResult] = await c.var.db.select().from(strategy)
                 .where(eq(strategy.dataSource, strategyValid.dataSource))
-            if (dbResult && dbResult.length >= 1) return c.json({error: 'duplicate datasource'}, 400);
+            if (dbResult !== undefined) return c.json({error: 'duplicate datasource'}, 400);
             // 插入 policy
             strategyValid.hostname = os.hostname();
             strategyValid.dataSourceSize = 0;

@@ -5,8 +5,9 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 // This is required to unlock the .fromNow() functionality
 dayjs.extend(relativeTime);
 
-export function formatBytes(bytes: number, decimals: number = 2): string {
-    if (!+bytes) return '0 Bytes';
+export function formatBytes(bytes: number | null | undefined, decimals: number = 2): string {
+    if (bytes === null || bytes === undefined) return '∞';
+    if (!+bytes || bytes === 0) return '0 Bytes';
     const k = 1024;
     const dm = decimals < 0 ? 0 : decimals;
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB'];

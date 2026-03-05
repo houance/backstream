@@ -60,7 +60,6 @@ const routes = app.basePath('/api')
     .route('/snapshot', snapshotRoute)
 
 // Export the AppType for the frontend
-export default app
 export type AppType = typeof routes
 
 if (env.NODE_ENV === 'production') {
@@ -72,3 +71,5 @@ if (env.NODE_ENV === 'production') {
     logger.info(`Server is running on http://${info.address}:${info.port}`)
   })
 }
+
+export default app

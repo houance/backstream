@@ -84,13 +84,12 @@ export const EMPTY_REPOSITORY_SCHEMA: InsertRepositorySchema = {
     repositoryType: RepoType.LOCAL,
     repositoryStatus: 'Disconnected',
     usage: 0,
-    capacity: 1,
     certification: null,
-    checkSchedule: "0 0 0 * * *",
+    checkSchedule: "manual",
     checkPercentage: 0.20,
-    nextCheckAt: 1770967868630,
-    pruneSchedule: "0 0 0 * * *",
-    nextPruneAt: 1770967868630,
+    nextCheckAt: 0,
+    pruneSchedule: "manual",
+    nextPruneAt: 0,
 }
 // strategy type
 export const StrategyType = {

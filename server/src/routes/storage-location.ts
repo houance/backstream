@@ -37,10 +37,10 @@ const storageRoute = new Hono<Env>()
         async (c) => {
             const values = c.req.valid('json');
             // 校验重复 repo
-            const dbResult = await c.var.db.select()
+            const [dbResult] = await c.var.db.select()
                 .from(repository)
                 .where(eq(repository.path, values.path));
-            if (dbResult) {
+            if (dbResult !== undefined) {
                 return c.json({ error: `duplicate path` }, 400);
             }
             // 数据库新增记录
@@ -49,7 +49,10 @@ const storageRoute = new Hono<Env>()
                 .values(values)
                 .returning();
             // scheduler 创建仓库并开始调度
-            await c.var.scheduler.addResticService(updateRepositorySchema.parse(newRepo))
+            const createResult = await c.var.scheduler.addResticService(updateRepositorySchema.parse(newRepo));
+            if (createResult !== undefined) {
+                return c.json({error: createResult}, 500);
+            }
             return c.json(newRepo, 201);
         })
     // update repo, currently support rename
