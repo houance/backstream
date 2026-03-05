@@ -38,7 +38,7 @@ export function RepoSelector({form, repoList, index}: {
             searchable
             {...form.getInputProps(fieldPath)}
             // 2. Custom rendering for options in the dropdown
-            renderOption={({ option, checked }) => {
+            renderOption={({ option }) => {
                 const isUnsafe = driveWarnings.includes(Number(option.value));
 
                 return (

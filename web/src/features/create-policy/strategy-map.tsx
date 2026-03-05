@@ -24,7 +24,7 @@ interface StrategyMeta {
 
 export const STRATEGY_MAP: Record<StrategyType, StrategyMeta> = {
     MULTI_VERSION_BACKUP: {
-        label: 'Multi Version Backup',
+        label: 'Multi-Version Backup',
         description: 'Historical snapshots for reliable data restoration',
         icon: IconDatabase,
         component: MultiVersionBackupForm,

@@ -174,8 +174,7 @@ export function CreatePolicyPage() {
                         {/* Step 3: Target Config */}
                         <Stepper.Step label="Configuration">
                             <Card withBorder p="lg" mt="xl" radius="md">
-                                <Text fw={600} mb="xs">Targeting: {strategyMeta.label}</Text>
-                                <Text fz="xs" c="dimmed" mb="xl">The fields below have been reset for {strategyMeta.label} configuration.</Text>
+                                <Text fw={600} mb="xs">Strategy: {strategyMeta.label}</Text>
                                 {/* Strategy-specific UI (Example for Local vs S3) */}
                                 {strategyMeta.component && <strategyMeta.component form={form} repoList={data!} />}
                             </Card>

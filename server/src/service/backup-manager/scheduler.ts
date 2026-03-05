@@ -263,7 +263,7 @@ export class Scheduler {
                     await localResticService.backup(policy.dataSource, localBackupTarget);
                 }))
             }
-            if ([2, 3].includes(target.index)) {
+            if (target.index === 2) {
                 this.targetCronJob.set(cronJobKey, new Cron(target.schedulePolicy, { protect: true }, async () => {
                     // 更新下一次运行时间
                     await db.update(backupTarget)

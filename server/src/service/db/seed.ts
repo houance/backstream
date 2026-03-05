@@ -91,14 +91,14 @@ async function main() {
             {
                 name: "完整服务器备份",
                 hostname: "server1.example.com",
-                dataSource: "/home/nopepsi-dev/rclone-v1.70.3-linux-amd64",
+                dataSource: "/home/nopepsi-lenovo-laptop/rclone-v1.71.2-linux-amd64",
                 dataSourceSize: 21474836480, // 20GB
                 strategyType: StrategyType.STRATEGY_321,
             },
             {
                 name: "文档备份",
                 hostname: "nas.example.com",
-                dataSource: "/home/nopepsi-dev/fullstack-project/backstream",
+                dataSource: "/home/nopepsi-lenovo-laptop/solo-panel",
                 dataSourceSize: 10737418240, // 10GB
                 strategyType: StrategyType.MULTI_VERSION_BACKUP,
             },
