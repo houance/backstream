@@ -1,8 +1,11 @@
 import { Hono } from 'hono';
-import {type Activity} from "@backstream/shared";
+import {type Activity, repository, sameDriveRepoRequest, updateRepositorySchema} from "@backstream/shared";
 import {type Env} from '../index'
 import path from "node:path";
 import { promises as fs } from 'fs'
+import {FileManager} from "../service/backup-manager/file-manager";
+import {zValidator} from "@hono/zod-validator";
+import {inArray} from "drizzle-orm";
 
 const infoRoute = new Hono<Env>()
     .get('/health', (c) => c.json({ message:'OK'}))
@@ -95,6 +98,22 @@ const infoRoute = new Hono<Env>()
         } catch {
             return c.json({ error: 'Not found' }, 404);
         }
+    })
+    .post('/same-drive-repo',
+        zValidator('json', sameDriveRepoRequest),
+        async (c) => {
+            const validated = c.req.valid('json');
+            const result: number[] = [];
+            if (validated.repoIds.length === 0) return c.json(result);
+            const dbResult = await c.var.db.select().from(repository)
+                .where(inArray(repository.id, validated.repoIds))
+            if (dbResult.length === 0) return c.json(result);
+            for (const repo of dbResult) {
+                const repoValid = updateRepositorySchema.parse(repo);
+                if (repoValid.repositoryType !== 'LOCAL') continue;
+                if (await FileManager.isSameDrive(validated.dataSource, repoValid.path)) result.push(repo.id)
+            }
+            return c.json(result);
     })
 
 function getLevenshteinDistance(a: string, b: string): number {

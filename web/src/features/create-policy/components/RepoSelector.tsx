@@ -1,6 +1,9 @@
 import type {UseFormReturnType} from "@mantine/form";
 import type {InsertBackupPolicySchema, UpdateRepositorySchema} from "@backstream/shared";
-import {Select} from "@mantine/core";
+import {Group, Select, Tooltip, Text} from "@mantine/core";
+import { useQuery } from "@tanstack/react-query";
+import { client } from '../../../api'
+import {IconAlertTriangle} from "@tabler/icons-react";
 
 export function RepoSelector({form, repoList, index}: {
     form: UseFormReturnType<InsertBackupPolicySchema>,
@@ -8,6 +11,21 @@ export function RepoSelector({form, repoList, index}: {
     index: number;
 }) {
     const fieldPath = `targets.${index}.repositoryId`;
+    const dataSource = form.values.strategy.dataSource;
+
+    // 1. Fetch a map of which repos are "unsafe" (same drive)
+    // Sending the full list IDs once is more efficient than individual calls
+    const { data: driveWarnings = [] } = useQuery({
+        queryKey: ['driveConflictMap', dataSource, repoList.map(r => r.id)],
+        queryFn: async () => {
+            const res = await client.api.info['same-drive-repo'].$post({
+                json: { dataSource: dataSource, repoIds: repoList.map(r => r.id) }
+            })
+            if (!res.ok) return [];
+            return res.json();
+        },
+        enabled: !!dataSource && repoList.length > 0,
+    });
 
     return (
         <Select
@@ -18,9 +36,27 @@ export function RepoSelector({form, repoList, index}: {
                 value: String(repo.id)
             }))}
             searchable
-            nothingFoundMessage="No repositories found"
             {...form.getInputProps(fieldPath)}
-            withAsterisk
+            // 2. Custom rendering for options in the dropdown
+            renderOption={({ option, checked }) => {
+                const isUnsafe = driveWarnings.includes(Number(option.value));
+
+                return (
+                    <Group justify="space-between" gap="xs" style={{ width: '100%' }}>
+                        <Text size="sm">{option.label}</Text>
+                        {isUnsafe && (
+                            <Tooltip
+                                label="Source and backup share one failure"
+                                color="yellow"
+                                position="right"
+                                withArrow
+                            >
+                                <IconAlertTriangle size={16} color="red" />
+                            </Tooltip>
+                        )}
+                    </Group>
+                );
+            }}
         />
-    )
+    );
 }

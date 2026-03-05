@@ -2,7 +2,7 @@ import {Fieldset, TextInput} from "@mantine/core";
 import type {InsertBackupPolicySchema} from "@backstream/shared";
 import type {UseFormReturnType} from "@mantine/form";
 
-export function Strategy321SubForm ({ form }: { form: UseFormReturnType<InsertBackupPolicySchema> }) {
+export function Strategy321Form ({ form }: { form: UseFormReturnType<InsertBackupPolicySchema> }) {
     return (
         <Fieldset legend="Local Target (On-site)">
             <TextInput
@@ -18,4 +18,4 @@ export function Strategy321SubForm ({ form }: { form: UseFormReturnType<InsertBa
     )
 }
 
-export default Strategy321SubForm;
+export default Strategy321Form;

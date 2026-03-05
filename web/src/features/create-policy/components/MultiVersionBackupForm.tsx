@@ -5,7 +5,7 @@ import {RepoSelector} from "./RepoSelector.tsx";
 import {ScheduleConfig} from "./ScheduleConfig.tsx";
 import {RetentionPolicyConfig} from "./RetentionPolicyConfig.tsx";
 
-export function LocalBackupSubForm ({ form, repoList }: {
+export function MultiVersionBackupForm ({ form, repoList }: {
     form: UseFormReturnType<InsertBackupPolicySchema>,
     repoList: UpdateRepositorySchema[]
 }) {
@@ -25,4 +25,4 @@ export function LocalBackupSubForm ({ form, repoList }: {
     )
 }
 
-export default LocalBackupSubForm;
+export default MultiVersionBackupForm;

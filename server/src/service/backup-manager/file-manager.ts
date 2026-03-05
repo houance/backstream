@@ -1,8 +1,9 @@
-import {createWriteStream, existsSync} from "node:fs";
-import {mkdtemp, writeFile, readdir, stat, rm, mkdir} from "node:fs/promises";
+import {createWriteStream, existsSync, constants} from "node:fs";
+import {mkdtemp, writeFile, readdir, stat, rm, mkdir, realpath, access} from "node:fs/promises";
 import path from "node:path";
 import archiver from "archiver";
 import { env } from '../../config/env'
+import {logger} from "../log/logger";
 
 export class FileManager {
     public static baseTmpDir = env.TMP_FOLDER;
@@ -93,6 +94,43 @@ export class FileManager {
         } catch (error: any) {
             // Handle top-level errors (like readdir failing)
             return [`Top-level directory error: ${error.message}`];
+        }
+    }
+
+    public static async getExistingDevId(targetPath: string): Promise<number> {
+        const absolutePath = path.resolve(targetPath);
+
+        try {
+            // Check if path exists and is accessible
+            await access(absolutePath, constants.F_OK);
+            // Get real path (resolves symlinks) and its device ID
+            const realPath = await realpath(absolutePath);
+            const stats = await stat(realPath);
+            return stats.dev;
+        } catch (error: any) {
+            // If path doesn't exist (ENOENT), try the parent directory
+            if (error.code === 'ENOENT') {
+                const parent = path.dirname(absolutePath);
+                if (parent === absolutePath) {
+                    throw new Error(`Root reached: could not find existing parent for ${targetPath}`);
+                }
+                return FileManager.getExistingDevId(parent);
+            }
+            throw error;
+        }
+    }
+
+    public static async isSameDrive(dataSource: string, repoPath: string): Promise<boolean> {
+        try {
+            // Run both checks in parallel for better performance
+            const [dev1, dev2] = await Promise.all([
+                FileManager.getExistingDevId(dataSource),
+                FileManager.getExistingDevId(repoPath)
+            ]);
+            return dev1 === dev2;
+        } catch (error) {
+            logger.error(error, `Error comparing drives.`);
+            return false;
         }
     }
 }

@@ -213,8 +213,8 @@ export class Scheduler {
     public addPolicySchedule(policy: Policy) {
         const validateStrategy = updateBackupStrategySchema.parse(policy);
         switch (validateStrategy.strategyType) {
-            case StrategyType.LOCAL_BACKUP:
-                this.scheduleLocalBackupStrategy(policy);
+            case StrategyType.MULTI_VERSION_BACKUP:
+                this.scheduleMultiVersionBackupStrategy(policy);
                 break;
             case StrategyType.STRATEGY_321:
                 void this.schedule321BackupStrategy(policy);
@@ -224,7 +224,7 @@ export class Scheduler {
         this.addDatasourceSizeUpdate(policy);
     }
 
-    private scheduleLocalBackupStrategy(policy: Policy) {
+    private scheduleMultiVersionBackupStrategy(policy: Policy) {
         policy.targets.forEach(target => {
             if (target.index !== 1) {
                 return;

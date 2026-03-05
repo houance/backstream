@@ -94,7 +94,7 @@ export const EMPTY_REPOSITORY_SCHEMA: InsertRepositorySchema = {
 // strategy type
 export const StrategyType = {
     STRATEGY_321: "STRATEGY_321",
-    LOCAL_BACKUP: "LOCAL_BACKUP",
+    MULTI_VERSION_BACKUP: "MULTI_VERSION_BACKUP",
 } as const;
 export type StrategyType = typeof StrategyType[keyof typeof StrategyType];
 // retention enum
@@ -175,7 +175,7 @@ export const EMPTY_BACKUP_POLICY_SCHEMA: InsertBackupPolicySchema = {
         hostname: "",
         dataSource: "/",
         dataSourceSize: 0,
-        strategyType: StrategyType.LOCAL_BACKUP
+        strategyType: StrategyType.MULTI_VERSION_BACKUP
     },
     targets: [{
         backupStrategyId: 0,
@@ -295,3 +295,9 @@ export const restoreJobKey = z.object({
     repoId: z.number().positive(),
 })
 export type RestoreJobKey = z.infer<typeof restoreJobKey>;
+// post to get same drive repo
+export const sameDriveRepoRequest = z.object({
+    dataSource: z.string(),
+    repoIds: z.array(z.number().positive()),
+})
+export type SameDriveRepoRequest = z.infer<typeof sameDriveRepoRequest>;

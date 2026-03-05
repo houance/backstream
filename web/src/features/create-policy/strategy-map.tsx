@@ -6,10 +6,10 @@ import {
     type UpdateRepositorySchema
 } from '@backstream/shared'
 import React from "react";
-import LocalBackupSubForm from "./components/LocalBackupSubForm.tsx";
+import MultiVersionBackupForm from "./components/MultiVersionBackupForm.tsx";
 
 import type {UseFormReturnType} from "@mantine/form";
-import Strategy321SubForm from "./components/Strategy321SubForm.tsx";
+import Strategy321Form from "./components/Strategy321Form.tsx";
 
 interface StrategyMeta {
     label: string,
@@ -23,12 +23,11 @@ interface StrategyMeta {
 }
 
 export const STRATEGY_MAP: Record<StrategyType, StrategyMeta> = {
-
-    LOCAL_BACKUP: {
-        label: 'Local Backup',
-        description: 'versioned backup to local disk',
+    MULTI_VERSION_BACKUP: {
+        label: 'Multi Version Backup',
+        description: 'Historical snapshots for reliable data restoration',
         icon: IconDatabase,
-        component: LocalBackupSubForm,
+        component: MultiVersionBackupForm,
         initSubForm: [{
             backupStrategyId: 0,
             repositoryId: 0,
@@ -44,9 +43,9 @@ export const STRATEGY_MAP: Record<StrategyType, StrategyMeta> = {
     },
     STRATEGY_321: {
         label: '3-2-1 Strategy',
-        description: 'local + cloud redundancy.',
+        description: 'Three copies, two media, one offsite',
         icon: IconCloudUpload,
-        component: Strategy321SubForm,
+        component: Strategy321Form,
         initSubForm: [
             {
                 backupStrategyId: 0,

@@ -41,10 +41,10 @@ async function main() {
                 usage: 5368709120, // 5GB
                 capacity: 10737418240, // 10GB
                 repositoryStatus: "Active",
-                checkSchedule: "20 30 1 * * *",
+                checkSchedule: "manual",
                 checkPercentage: 0.2,
                 nextCheckAt: 0,
-                pruneSchedule: "0 10 1 * * *",
+                pruneSchedule: "manual",
                 nextPruneAt: 0
             },
             {
@@ -100,7 +100,7 @@ async function main() {
                 hostname: "nas.example.com",
                 dataSource: "/home/nopepsi-dev/fullstack-project/backstream",
                 dataSourceSize: 10737418240, // 10GB
-                strategyType: StrategyType.LOCAL_BACKUP,
+                strategyType: StrategyType.MULTI_VERSION_BACKUP,
             },
         ])
         .returning();
@@ -119,7 +119,7 @@ async function main() {
                     windowType: WindowType.last,
                     countValue: "1"
                 },
-                schedulePolicy: "23 */2 * * * *",
+                schedulePolicy: "23 */2 0 2 * *",
                 nextBackupAt: 1770969043979,
                 index: 1,
             },
@@ -131,7 +131,7 @@ async function main() {
                     windowType: WindowType.last,
                     countValue: "123"
                 },
-                schedulePolicy: "10 */2 * * * *",
+                schedulePolicy: "10 */2 0 2 * *",
                 nextBackupAt: 1770969043979,
                 index: 1,
             },
@@ -143,7 +143,7 @@ async function main() {
                     windowType: WindowType.last,
                     countValue: "1"
                 },
-                schedulePolicy: "20 */2 * * * *",
+                schedulePolicy: "20 */2 0 2 * *",
                 nextBackupAt: 1770969043979,
                 index: 2,
             },
