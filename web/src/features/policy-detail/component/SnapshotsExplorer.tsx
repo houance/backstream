@@ -1,5 +1,4 @@
 import {
-    TextInput,
     Stack, Accordion, Center, Loader, Text,
     Box,
     Badge,
@@ -8,10 +7,10 @@ import {
 } from '@mantine/core';
 import {
     IconCloud, IconDatabase,
-    IconSearch
 } from '@tabler/icons-react';
 import {useState} from 'react';
 import {
+    type FilterQuery,
     type FinishedSnapshotsMetaSchema, RepoType, type SnapshotFile,
     type UpdateBackupPolicySchema
 } from "@backstream/shared";
@@ -21,7 +20,13 @@ import {client} from "../../../api";
 import { notice } from 'src/util/notification.tsx';
 
 export default function SnapshotsExplorer({ policy }: { policy: UpdateBackupPolicySchema}) {
-    const [search, setSearch] = useState('');
+    // filter query state
+    const [filter, setFilter] = useState<FilterQuery>({
+        page: 0,
+        pageSize: 15,
+        startTime: 0,
+        endTime: 0
+    });
     const [openedSnapshot, setOpenedSnapshot] = useState<FinishedSnapshotsMetaSchema | null>(null);
     const targets = policy.targets || [];
     // 1. Initialize state with the first target's ID
@@ -30,10 +35,13 @@ export default function SnapshotsExplorer({ policy }: { policy: UpdateBackupPoli
     );
     // --- 1. FETCH DATA ---
     const {data: allSnapshots, isLoading: isSnapshotsLoading} = useQuery({
-        queryKey: ['snapshots', policy.strategy.id, selectedTargetId],
+        queryKey: ['snapshots', policy.strategy.id, selectedTargetId, filter],
         queryFn: async () => {
-            const res = await client.api.snapshot['all-snapshots'][':targetId'].$get({
-                param: { targetId: String(selectedTargetId) }
+            const res = await client.api.snapshot['all-snapshots'].$post({
+                json: {
+                    targetId: Number(selectedTargetId),
+                    filterQuery: filter
+                }
             });
             if (!res.ok) throw new Error('Failed to fetch all snapshots');
             return res.json();
@@ -166,12 +174,6 @@ export default function SnapshotsExplorer({ policy }: { policy: UpdateBackupPoli
             )}
 
             <Stack gap="xs">
-                <TextInput
-                    placeholder="Search snapshots..."
-                    leftSection={<IconSearch size={16} />}
-                    value={search}
-                    onChange={(e) => setSearch(e.currentTarget.value)}
-                />
 
                 {isSnapshotsLoading ? (
                     <Center h={300}><Loader size="xl" variant="dots" /></Center>
@@ -192,7 +194,6 @@ export default function SnapshotsExplorer({ policy }: { policy: UpdateBackupPoli
 
                         {/* 3. Finished */}
                         {allSnapshots?.finishedSnapshot
-                            .filter(s => s.snapshotId.includes(search)) // Simple local filter
                             .map(s => (
                                 <SnapshotRow
                                     key={s.snapshotId}

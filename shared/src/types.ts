@@ -301,3 +301,11 @@ export const sameDriveRepoRequest = z.object({
     repoIds: z.array(z.number().positive()),
 })
 export type SameDriveRepoRequest = z.infer<typeof sameDriveRepoRequest>;
+// general filter
+export const filterQuery = z.object({
+    page: z.number().int().min(1).default(1),
+    pageSize: z.number().int().max(30).default(15),
+    startTime: z.number().min(0).optional(),
+    endTime: z.number().min(0).optional(),
+})
+export type FilterQuery = z.infer<typeof filterQuery>;

@@ -2,7 +2,7 @@ import {Hono} from 'hono';
 import {type Env} from '../index'
 import {
     backupTarget,
-    execution,
+    execution, filterQuery, type FilterQuery,
     type FinishedSnapshotsMetaSchema,
     finishedSnapshotsMetaSchema,
     type OnGoingSnapshotsMetaSchema,
@@ -13,17 +13,26 @@ import {
     updateSnapshotsMetadataSchema
 } from "@backstream/shared";
 import {zValidator} from "@hono/zod-validator";
-import {and, desc, eq, inArray} from "drizzle-orm";
+import {and, desc, eq, inArray, gte, lte, count} from "drizzle-orm";
 import type {ResticResult, Task} from "../service/restic";
 import { readFile, open } from 'node:fs/promises';
 import { stream } from 'hono/streaming'
 import path from "node:path";
+import { z } from "zod";
 
 
 const snapshotsRoute = new Hono<Env>()
-    .get('/all-snapshots/:targetId',
+    .post('/all-snapshots',
+        zValidator('json', z.object({
+            targetId: z.number().positive(),
+            filterQuery: filterQuery
+        })),
         async (c) => {
-            const targetId = Number(c.req.param("targetId"));
+            const validated = c.req.valid('json');
+            // get start and end time range
+            const filter = validated.filterQuery;
+            const {start, end} = getTimeRange(filter);
+            const targetId = validated.targetId;
             // get policy
             const policy = await getPolicyByTargetId(c.var.db, targetId);
             if (policy === undefined || policy.targets.length === 0) return c.json({ message: 'Not found'}, 404);
@@ -32,17 +41,19 @@ const snapshotsRoute = new Hono<Env>()
             const result: {
                 scheduleSnapshot: ScheduledSnapshotsMetaSchema[],
                 onGoingSnapshot: OnGoingSnapshotsMetaSchema[],
-                finishedSnapshot: FinishedSnapshotsMetaSchema[]
+                finishedSnapshot: FinishedSnapshotsMetaSchema[],
+                totalFinishedCount: number
             } = {
                 scheduleSnapshot: [],
                 onGoingSnapshot: [],
-                finishedSnapshot: []
+                finishedSnapshot: [],
+                totalFinishedCount: 0
             };
             // 查询 ongoing snapshot
             const [exec] = await c.var.db.select().from(execution)
                 .where(and(
                     eq(execution.backupTargetId, target.id),
-                    inArray(execution.executeStatus, ['running', 'pending'])
+                    inArray(execution.executeStatus, ['running', 'pending']),
                 ))
                 .orderBy(desc(execution.scheduledAt))
                 .limit(1)
@@ -78,11 +89,25 @@ const snapshotsRoute = new Hono<Env>()
                 }
             }
             // 查询 finished snapshots
-            const allSnapshotsMetadata = await c.var.db.select().from(snapshotsMetadata)
-                .where(and(
-                    eq(snapshotsMetadata.repositoryId, target.repositoryId),
-                    eq(snapshotsMetadata.path, policy.dataSource)))
-            if (!allSnapshotsMetadata) {
+            const [allSnapshotsMetadata, totalCountResult] = await Promise.all([
+                c.var.db.select().from(snapshotsMetadata)
+                    .where(and(
+                        eq(snapshotsMetadata.repositoryId, target.repositoryId),
+                        eq(snapshotsMetadata.path, policy.dataSource),
+                        gte(snapshotsMetadata.time, start),
+                        lte(snapshotsMetadata.time, end)
+                    ))
+                    .limit(filter.pageSize)
+                    .offset(filter.page - 1 < 0 ? 0 : filter.page - 1),
+                c.var.db.select({ count: count() }).from(snapshotsMetadata)
+                    .where(and(
+                        eq(snapshotsMetadata.repositoryId, target.repositoryId),
+                        eq(snapshotsMetadata.path, policy.dataSource),
+                        gte(snapshotsMetadata.time, start),
+                        lte(snapshotsMetadata.time, end)
+                    ))
+            ])
+            if (!allSnapshotsMetadata || !totalCountResult) {
                 c.var.logger.warn('query finished snapshots db fail');
             } else {
                 const manualConvertSnapshot = allSnapshotsMetadata.map(snapshot => ({
@@ -92,6 +117,7 @@ const snapshotsRoute = new Hono<Env>()
                     size: snapshot.size
                 }));
                 result.finishedSnapshot = finishedSnapshotsMetaSchema.array().parse(manualConvertSnapshot);
+                result.totalFinishedCount = totalCountResult[0].count;
             }
             // 查询 schedule snapshot
             const [dbResult] = await c.var.db.select().from(backupTarget)
@@ -232,6 +258,15 @@ async function getPolicyByTargetId(db: Env['Variables']['db'], targetId: number)
             },
         },
     });
+}
+
+function getTimeRange(filter: FilterQuery) {
+    const start = Math.max(0, filter.startTime ?? 0);
+    let end = Date.now();
+    if (filter.endTime !== undefined && filter.endTime !== 0) {
+        end = filter.endTime;
+    }
+    return { start, end };
 }
 
 export default snapshotsRoute;
