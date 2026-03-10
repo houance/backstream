@@ -25,7 +25,7 @@ interface SnapshotRowProps {
 }
 
 export function SnapshotRow({ data, files, isLoading, onDownload, isDownloading }: SnapshotRowProps) {
-    const onDownloadFunc = onDownload ? onDownload : (_file: SnapshotFile) => {};
+    const onDownloadFunc = onDownload ? onDownload : () => {};
     // 1. Identify the snapshot type based on your Zod status values
     const isOngoing = data.status === 'running' || data.status === 'pending';
     const isScheduled = data.status === 'scheduled';
@@ -81,7 +81,7 @@ export function SnapshotRow({ data, files, isLoading, onDownload, isDownloading 
 
     return (
         <Accordion.Item value={config.id} style={{ borderLeft: config.border }}>
-            <Accordion.Control>
+            <Accordion.Control disabled={isScheduled} style={{ cursor: isScheduled ? 'default' : 'pointer' }}>
                 <Grid justify="flex-start" align="center" gutter="xs" pr="md">
                     {/* 1. Icon Section */}
                     <Grid.Col span="content">

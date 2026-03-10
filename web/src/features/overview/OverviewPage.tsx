@@ -1,25 +1,23 @@
-import React, {useState} from 'react';
-import {Grid, Container, Stack, Center, Loader} from '@mantine/core';
-import {BackupPolicyCard} from "./components/BackupPolicyCard.tsx";
-import {StatsCardGroup} from "./components/StatsCardGroup.tsx";
-import {RecentActivityCard} from "./components/RecentActivityCard.tsx";
+import React from 'react';
+import { Grid, Container, Stack, Center, Loader } from '@mantine/core';
+import { useNavigate } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+import { BackupPolicyCard } from "./components/BackupPolicyCard.tsx";
+import { StatsCardGroup } from "./components/StatsCardGroup.tsx";
+import { RecentActivityCard } from "./components/RecentActivityCard.tsx";
 import type { UpdateBackupPolicySchema } from '@backstream/shared';
-import {PolicyDetailModal} from "../policy-detail/PolicyDetailModal.tsx";
-import {useDisclosure} from "@mantine/hooks";
-import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
-import {client} from "../../api";
-import {ensureSuccess} from "../../util/api.ts";
-import {notice} from "../../util/notification.tsx";
+
+import { client } from "../../api";
+import { ensureSuccess } from "../../util/api.ts";
+import { notice } from "../../util/notification.tsx";
 
 const OverviewPage: React.FC = () => {
-    const [opened, { open, close }] = useDisclosure(false);
-    const [detailPolicy, setDetailPolicy] = useState<UpdateBackupPolicySchema | null>(null)
-    const openModal = (policy: UpdateBackupPolicySchema) => {
-        setDetailPolicy(policy);
-        open()
-    }
+    const navigate = useNavigate();
+    const queryClient = useQueryClient();
+
     // --- FETCH POLICY DATA ---
-    const {data: policy, isLoading: isPolicyLoading} = useQuery({
+    const { data: policy, isLoading: isPolicyLoading } = useQuery({
         queryKey: ['policy'],
         queryFn: async () => {
             const res = await client.api.policy['all-policy'].$get();
@@ -27,24 +25,25 @@ const OverviewPage: React.FC = () => {
             return res.json();
         },
     });
+
     // --- DELETE POLICY ---
-    const queryClient = useQueryClient();
     const mutate = useMutation(({
         mutationFn: async (policy: UpdateBackupPolicySchema) => {
             return ensureSuccess(
                 client.api.policy[':id'].$delete({
-                    param: {id: policy.strategy.id.toString()}
+                    param: { id: policy.strategy.id.toString() }
                 })
             )
         },
         onSuccess: async () => {
-            await queryClient.invalidateQueries({queryKey: ['policy']});
+            await queryClient.invalidateQueries({ queryKey: ['policy'] });
             notice(true, 'policy delete success');
         },
         onError: (error) => notice(false, `${String(error)}`)
     }))
+
     // --- FETCH ACTIVITY DATA ---
-    const {data: activity, isLoading: isActivityLoading} = useQuery({
+    const { data: activity, isLoading: isActivityLoading } = useQuery({
         queryKey: ['activity'],
         queryFn: async () => {
             const res = await client.api.info['activity'].$get();
@@ -52,8 +51,9 @@ const OverviewPage: React.FC = () => {
             return res.json();
         },
     });
+
     // --- FETCH STATS DATA ---
-    const {data: stats, isLoading: isStatsLoading} = useQuery({
+    const { data: stats, isLoading: isStatsLoading } = useQuery({
         queryKey: ['stats'],
         queryFn: async () => {
             const res = await client.api.info['stats'].$get();
@@ -65,12 +65,9 @@ const OverviewPage: React.FC = () => {
     return (
         <Container fluid p={0}>
             <Stack gap="xl">
-                {/* 三个卡片, 所有备份策略的 overview */}
                 {isStatsLoading ? (
-                    <Center h={400}>
-                        <Loader size="xl"/>
-                    </Center>
-                    ) : (
+                    <Center h={400}><Loader size="xl" /></Center>
+                ) : (
                     <StatsCardGroup
                         activeCount={stats!.activeCount}
                         totalSize={stats!.totalSize}
@@ -78,44 +75,35 @@ const OverviewPage: React.FC = () => {
                     />)
                 }
 
-                {/* by backupPolicy 展示汇总信息 */}
                 <Grid gutter="xl">
-                    {/* backup backupPolicy status */}
                     <Grid.Col span={{ md: 8 }}>
-                        {isPolicyLoading ? ((
-                            <Center h={400}>
-                                <Loader size="xl"/>
-                            </Center>
-                        )) :
-                            (<Grid gutter="md">
-                            {policy!.map((policy: UpdateBackupPolicySchema) => (
-                                <Grid.Col key={policy.strategy.id} span={{ sm: 4}}>
-                                    <BackupPolicyCard
-                                        policy={policy}
-                                        onDetail={() => openModal(policy)}
-                                        onDelete={(policy: UpdateBackupPolicySchema) => mutate.mutate(policy)}
-                                        isDeleting={mutate.isPending}
-                                    />
-                                </Grid.Col>
-                            ))}
-                        </Grid>)}
+                        {isPolicyLoading ? (
+                            <Center h={400}><Loader size="xl" /></Center>
+                        ) : (
+                            <Grid gutter="md">
+                                {policy!.map((policy: UpdateBackupPolicySchema) => (
+                                    <Grid.Col key={policy.strategy.id} span={{ sm: 4 }}>
+                                        <BackupPolicyCard
+                                            policy={policy}
+                                            onDetail={() => navigate(`/policy/${policy.strategy.id}`)}
+                                            onDelete={(p) => mutate.mutate(p)}
+                                            isDeleting={mutate.isPending}
+                                        />
+                                    </Grid.Col>
+                                ))}
+                            </Grid>
+                        )}
                     </Grid.Col>
 
-                    {/* 3. recent activity */}
-                    {isActivityLoading ? (
-                        <Center h={400}>
-                            <Loader size="xl"/>
-                        </Center>
-                    ) : (
-                        <Grid.Col span={{ md: 4 }}>
+                    <Grid.Col span={{ md: 4 }}>
+                        {isActivityLoading ? (
+                            <Center h={400}><Loader size="xl" /></Center>
+                        ) : (
                             <RecentActivityCard activities={activity!} />
-                        </Grid.Col>
-                    )}
-
+                        )}
+                    </Grid.Col>
                 </Grid>
             </Stack>
-            {/* Detail Modal */}
-            {detailPolicy && <PolicyDetailModal opened={opened} onClose={close} data={detailPolicy} />}
         </Container>
     );
 };

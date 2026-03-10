@@ -1,6 +1,6 @@
 import { AppShell, Title, NavLink, Avatar, Box, useMantineTheme, useComputedColorScheme } from '@mantine/core';
 import { Routes, Route, useLocation, Link } from 'react-router-dom';
-import { APP_ROUTES } from '../router/config';
+import {ALL_ROUTES, NAV_ROUTES} from '../router/config';
 
 export default function DashboardLayout() {
     const location = useLocation();
@@ -8,7 +8,7 @@ export default function DashboardLayout() {
     const colorScheme = useComputedColorScheme();
 
     // SSoT: Find current page metadata
-    const activeRoute = APP_ROUTES.find(route => route.path === location.pathname);
+    const activeRoute = NAV_ROUTES.find(route => route.path === location.pathname);
 
     return (
         <AppShell
@@ -27,7 +27,7 @@ export default function DashboardLayout() {
                 <Title order={4} mb="xl" px="sm" c="blue">BackStream</Title>
 
                 <Box component="nav">
-                    {APP_ROUTES.map((item) => (
+                    {NAV_ROUTES.map((item) => (
                         <NavLink
                             key={item.path}
                             component={Link}
@@ -36,7 +36,6 @@ export default function DashboardLayout() {
                             leftSection={<item.icon size="1.1rem" stroke={1.5} />}
                             active={location.pathname === item.path}
                             variant="light"
-                            radius="md"
                             mb={4}
                         />
                     ))}
@@ -54,7 +53,7 @@ export default function DashboardLayout() {
             {/* Main Content: Routes are mapped from SSoT */}
             <AppShell.Main bg={colorScheme === 'dark' ? theme.colors.dark[8] : theme.colors.gray[0]}>
                 <Routes>
-                    {APP_ROUTES.map((route) => (
+                    {ALL_ROUTES.map((route) => (
                         <Route key={route.path} path={route.path} element={route.element} />
                     ))}
                 </Routes>

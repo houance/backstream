@@ -9,7 +9,12 @@ const transport = pino.transport({
         // Target 1: Readable Console (Development)
         {
             target: 'pino-pretty',
-            options: { colorize: true },
+            options: {
+                colorize: true,
+                // This ensures the multi-line SQL doesn't get squashed into one line
+                messageFormat: '{msg} \n\x1b[36m{sql}\x1b[0m',
+                ignore: 'pid,hostname,sql' // Hide the raw 'sql' key since we put it in messageFormat
+            },
             level: env.LOG_LEVEL
         },
         // Target 2: Rotating File (Production)

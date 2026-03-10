@@ -1,14 +1,19 @@
 import {
     TextInput,
-    Stack, Accordion, Center, Loader,
+    Stack, Accordion, Center, Loader, Text,
+    Box,
+    Badge,
+    Group,
+    SegmentedControl,
 } from '@mantine/core';
 import {
+    IconCloud, IconDatabase,
     IconSearch
 } from '@tabler/icons-react';
 import {useState} from 'react';
-import type {
-    FinishedSnapshotsMetaSchema, SnapshotFile,
-    UpdateBackupPolicySchema
+import {
+    type FinishedSnapshotsMetaSchema, RepoType, type SnapshotFile,
+    type UpdateBackupPolicySchema
 } from "@backstream/shared";
 import {SnapshotRow} from "./SnapshotRow.tsx";
 import {useMutation, useQuery} from "@tanstack/react-query";
@@ -18,18 +23,23 @@ import { notice } from 'src/util/notification.tsx';
 export default function SnapshotsExplorer({ policy }: { policy: UpdateBackupPolicySchema}) {
     const [search, setSearch] = useState('');
     const [openedSnapshot, setOpenedSnapshot] = useState<FinishedSnapshotsMetaSchema | null>(null);
+    const targets = policy.targets || [];
+    // 1. Initialize state with the first target's ID
+    const [selectedTargetId, setSelectedTargetId] = useState<string>(
+        targets.length > 0 ? targets[0].id.toString() : ''
+    );
     // --- 1. FETCH DATA ---
     const {data: allSnapshots, isLoading: isSnapshotsLoading} = useQuery({
-        queryKey: ['snapshots'],
+        queryKey: ['snapshots', policy.strategy.id, selectedTargetId],
         queryFn: async () => {
-            const res = await client.api.snapshot['all-snapshots'].$post({
-                json: policy
+            const res = await client.api.snapshot['all-snapshots'][':targetId'].$get({
+                param: { targetId: String(selectedTargetId) }
             });
             if (!res.ok) throw new Error('Failed to fetch all snapshots');
             return res.json();
         },
-        staleTime: 0,
-        refetchInterval: 3000
+        enabled: !!selectedTargetId,
+        staleTime: 5000,
     });
     // --- 2. FETCH DATA ---
     const {data: snapshotFiles, isLoading: isSnapshotFilesLoading} = useQuery({
@@ -41,7 +51,7 @@ export default function SnapshotsExplorer({ policy }: { policy: UpdateBackupPoli
             if (!res.ok) throw new Error('Failed to fetch snapshot files');
             return res.json();
         },
-        enabled: !!openedSnapshot,
+        enabled: !!openedSnapshot && !!allSnapshots,
         staleTime: Infinity
     });
     // --- 3. RESTORE FILE ---
@@ -119,42 +129,83 @@ export default function SnapshotsExplorer({ policy }: { policy: UpdateBackupPoli
             </Center>
         );
     }
+    if (targets.length === 0) return (
+        <Center h={200}>
+            <Text c="dimmed">No targets defined for this policy.</Text>
+        </Center>
+    );
 
     return (
-        <Stack pt="md">
-            <TextInput
-                placeholder="Search snapshots by ID or Date..."
-                leftSection={<IconSearch size={16}/>}
-                value={search}
-                onChange={(e) => setSearch(e.currentTarget.value)}
-            />
-
-            <Accordion
-                variant="separated"
-                onChange={handleFinishedSnapshotOpen}
-            >
-                {/* 1. Ongoing Snapshots */}
-                {allSnapshots!.onGoingSnapshot.map(s => (
-                    <SnapshotRow key={s.uuid} data={s} />
-                ))}
-
-                {/* 2. Scheduled Snapshots */}
-                {allSnapshots!.scheduleSnapshot.map(s => (
-                    <SnapshotRow key={s.uuid} data={s} />
-                ))}
-
-                {/* 3. Completed/Finished Snapshots */}
-                {allSnapshots!.finishedSnapshot.map(s => (
-                    <SnapshotRow
-                        key={s.snapshotId}
-                        data={s}
-                        files={openedSnapshot === s ? snapshotFiles : []}
-                        isLoading={openedSnapshot === s && isSnapshotFilesLoading}
-                        onDownload={restoreMutate.mutate}
-                        isDownloading={restoreMutate.isPending}
+        <Stack pt="md" gap="lg">
+            {/* MULTI-TARGET SELECTOR (Only shows if > 1 target) */}
+            {targets.length > 1 && (
+                <Box>
+                    <Group justify="space-between" mb="xs">
+                        <Text size="sm" fw={600} c="dimmed">Select Storage Destination</Text>
+                        <Badge variant="outline">{targets.length} Targets</Badge>
+                    </Group>
+                    <SegmentedControl
+                        fullWidth
+                        size="md"
+                        value={selectedTargetId}
+                        onChange={(val) => {
+                            setSelectedTargetId(val);
+                            handleFinishedSnapshotOpen(null); // Reset explorer when switching targets
+                        }}
+                        data={targets.map(t => ({
+                            label: (
+                                <Center style={{ gap: 8 }}>
+                                    {t.repository.repositoryType !== RepoType.LOCAL ? <IconCloud size={16}/> : <IconDatabase size={16}/>}
+                                    <Text size="sm">{t.repository.name}</Text>
+                                </Center>
+                            ),
+                            value: t.id.toString()
+                        }))}
                     />
-                ))}
-            </Accordion>
+                </Box>
+            )}
+
+            <Stack gap="xs">
+                <TextInput
+                    placeholder="Search snapshots..."
+                    leftSection={<IconSearch size={16} />}
+                    value={search}
+                    onChange={(e) => setSearch(e.currentTarget.value)}
+                />
+
+                {isSnapshotsLoading ? (
+                    <Center h={300}><Loader size="xl" variant="dots" /></Center>
+                ) : (
+                    <Accordion
+                        variant="separated"
+                        onChange={(id) => handleFinishedSnapshotOpen(id)}
+                    >
+                        {/* 1. Running */}
+                        {allSnapshots?.onGoingSnapshot.map(s => (
+                            <SnapshotRow key={s.uuid} data={s} />
+                        ))}
+
+                        {/* 2. Scheduled */}
+                        {allSnapshots?.scheduleSnapshot.map(s => (
+                            <SnapshotRow key={s.uuid} data={s} />
+                        ))}
+
+                        {/* 3. Finished */}
+                        {allSnapshots?.finishedSnapshot
+                            .filter(s => s.snapshotId.includes(search)) // Simple local filter
+                            .map(s => (
+                                <SnapshotRow
+                                    key={s.snapshotId}
+                                    data={s}
+                                    files={openedSnapshot === s ? snapshotFiles : []}
+                                    onDownload={restoreMutate.mutate}
+                                    isLoading={openedSnapshot === s && isSnapshotFilesLoading}
+                                />
+                            ))
+                        }
+                    </Accordion>
+                )}
+            </Stack>
         </Stack>
     );
 }

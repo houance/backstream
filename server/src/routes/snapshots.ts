@@ -7,8 +7,8 @@ import {
     finishedSnapshotsMetaSchema,
     type OnGoingSnapshotsMetaSchema,
     repository, restoreJobKey, type ScheduledSnapshotsMetaSchema, snapshotFile,
-    snapshotsMetadata,
-    updateBackupPolicySchema, updateExecutionSchema,
+    snapshotsMetadata, strategy,
+    updateBackupPolicySchema, updateBackupTargetSchema, updateExecutionSchema,
     updateRepositorySchema,
     updateSnapshotsMetadataSchema
 } from "@backstream/shared";
@@ -21,11 +21,14 @@ import path from "node:path";
 
 
 const snapshotsRoute = new Hono<Env>()
-    .post('/all-snapshots',
-        zValidator('json', updateBackupPolicySchema),
+    .get('/all-snapshots/:targetId',
         async (c) => {
-            const validated = c.req.valid('json');
-            const firstTarget = validated.targets.sort((a, b) => a.index - b.index)[0];
+            const targetId = Number(c.req.param("targetId"));
+            // get policy
+            const policy = await getPolicyByTargetId(c.var.db, targetId);
+            if (policy === undefined || policy.targets.length === 0) return c.json({ message: 'Not found'}, 404);
+            const target = updateBackupTargetSchema.parse(policy.targets[0]);
+            const repo = updateRepositorySchema.parse(policy.targets[0].repository);
             const result: {
                 scheduleSnapshot: ScheduledSnapshotsMetaSchema[],
                 onGoingSnapshot: OnGoingSnapshotsMetaSchema[],
@@ -34,18 +37,18 @@ const snapshotsRoute = new Hono<Env>()
                 scheduleSnapshot: [],
                 onGoingSnapshot: [],
                 finishedSnapshot: []
-            }
+            };
             // 查询 ongoing snapshot
             const [exec] = await c.var.db.select().from(execution)
                 .where(and(
-                    eq(execution.backupTargetId, firstTarget.id),
+                    eq(execution.backupTargetId, target.id),
                     inArray(execution.executeStatus, ['running', 'pending'])
                 ))
                 .orderBy(desc(execution.scheduledAt))
                 .limit(1)
             if (exec) {
                 // 判断 exec 是 pending 还是 running
-                const rs = await c.var.scheduler.getResticService(firstTarget.repository);
+                const rs = await c.var.scheduler.getResticService(repo);
                 const runningJob = rs.getRunningJob(updateExecutionSchema.parse(exec));
                 if (runningJob === null) {
                     result.onGoingSnapshot.push({
@@ -77,8 +80,8 @@ const snapshotsRoute = new Hono<Env>()
             // 查询 finished snapshots
             const allSnapshotsMetadata = await c.var.db.select().from(snapshotsMetadata)
                 .where(and(
-                    eq(snapshotsMetadata.repositoryId, firstTarget.repositoryId),
-                    eq(snapshotsMetadata.path, validated.strategy.dataSource)))
+                    eq(snapshotsMetadata.repositoryId, target.repositoryId),
+                    eq(snapshotsMetadata.path, policy.dataSource)))
             if (!allSnapshotsMetadata) {
                 c.var.logger.warn('query finished snapshots db fail');
             } else {
@@ -92,14 +95,14 @@ const snapshotsRoute = new Hono<Env>()
             }
             // 查询 schedule snapshot
             const [dbResult] = await c.var.db.select().from(backupTarget)
-                .where(eq(backupTarget.id, firstTarget.id));
+                .where(eq(backupTarget.id, target.id));
             result.scheduleSnapshot.push({
                 uuid: '0',
                 status: 'scheduled',
-                createdAtTimestamp: dbResult?.nextBackupAt || firstTarget.nextBackupAt
+                createdAtTimestamp: dbResult?.nextBackupAt || target.nextBackupAt
             })
             return c.json(result);
-        })
+    })
     .post('/files',
         zValidator('json', finishedSnapshotsMetaSchema),
         async (c) => {
@@ -205,6 +208,30 @@ async function getLogs(task: Task<ResticResult<any>>): Promise<string[]> {
     } catch (error) {
         return [`Failed to combine logs: ${(error as Error).message}`];
     }
+}
+
+async function getPolicyByTargetId(db: Env['Variables']['db'], targetId: number) {
+    return await db.query.strategy.findFirst({
+        // 1. Filter the main strategy record based on the targetId
+        where: (strategy, { exists, and, eq }) =>
+            exists(
+                db.select()
+                    .from(backupTarget) // Replace with your actual table variable name
+                    .where(and(
+                        eq(backupTarget.backupStrategyId, strategy.id),
+                        eq(backupTarget.id, targetId)
+                    ))
+            ),
+        // 2. Keep your 'with' to fetch the nested data
+        with: {
+            targets: {
+                where: (backupTarget, { eq }) => eq(backupTarget.id, targetId),
+                with: {
+                    repository: true,
+                },
+            },
+        },
+    });
 }
 
 export default snapshotsRoute;

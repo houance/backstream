@@ -13,6 +13,13 @@ const policyRoute = new Hono<Env>()
         const validated = updateBackupPolicySchema.array().parse(dbResult);
         return c.json(validated);
     })
+    .get('/:id', async (c) => {
+        const id = Number(c.req.param('id'));
+        const dbResult = await getStrategyDataById(c.var.db, id);
+        if (dbResult === null) return c.json({ message: 'Not found'}, 404);
+        const validated = updateBackupPolicySchema.parse(dbResult);
+        return c.json(validated);
+    })
     .post('/',
         zValidator('json', insertBackupPolicySchema),
         async (c) => {
@@ -50,6 +57,40 @@ const policyRoute = new Hono<Env>()
         return c.json({ message: `success delete policy ${id}`}, 200);
     })
 
+
+async function getStrategyDataById(db: Env['Variables']['db'], id: number) {
+    const result = await db.query.strategy.findFirst({
+        where: (strategy, { eq }) => eq(strategy.id, id),
+        with: {
+            targets: {
+                with: {
+                    repository: true,
+                    // Fetch only the single latest backup execution
+                    executions: {
+                        columns: {
+                            startedAt: true,
+                        },
+                        where: (execution, { and, eq }) => and(
+                            eq(execution.commandType, 'backup'),
+                            eq(execution.executeStatus, 'success'),
+                        ),
+                        orderBy: (execution, { desc }) => [desc(execution.startedAt)],
+                        limit: 1,
+                    },
+                },
+            },
+        },
+    });
+    if (!result) return null;
+    const { targets, ...strategyData } = result
+    return {
+        strategy: strategyData,
+        targets: targets.map(({ executions, ...targetData }) => ({
+            ...targetData,
+            lastBackupAt: executions[0]?.startedAt ?? null,
+        }))
+    }
+}
 
 async function getStrategyData(db: Env['Variables']['db']) {
     const result = await db.query.strategy.findMany({
