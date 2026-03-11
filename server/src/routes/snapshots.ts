@@ -2,19 +2,17 @@ import {Hono} from 'hono';
 import {type Env} from '../index'
 import {
     backupTarget,
-    execution, filterQuery, type FilterQuery,
+    filterQuery, type FilterQuery,
     type FinishedSnapshotsMetaSchema,
     finishedSnapshotsMetaSchema,
-    type OnGoingSnapshotsMetaSchema,
     repository, restoreJobKey, snapshotFile,
-    snapshotsMetadata, updateBackupTargetSchema, updateExecutionSchema,
+    snapshotsMetadata, updateBackupTargetSchema,
     updateRepositorySchema,
     updateSnapshotsMetadataSchema
 } from "@backstream/shared";
 import {zValidator} from "@hono/zod-validator";
-import {and, desc, eq, inArray, gte, lte, count} from "drizzle-orm";
-import type {ResticResult, Task} from "../service/restic";
-import { readFile, open } from 'node:fs/promises';
+import {and, eq, gte, lte, count} from "drizzle-orm";
+import { open } from 'node:fs/promises';
 import { stream } from 'hono/streaming'
 import path from "node:path";
 import { z } from "zod";
@@ -36,55 +34,13 @@ const snapshotsRoute = new Hono<Env>()
             const policy = await getPolicyByTargetId(c.var.db, targetId);
             if (policy === undefined || policy.targets.length === 0) return c.json({ message: 'Not found'}, 404);
             const target = updateBackupTargetSchema.parse(policy.targets[0]);
-            const repo = updateRepositorySchema.parse(policy.targets[0].repository);
             const result: {
-                onGoingSnapshot: OnGoingSnapshotsMetaSchema[],
                 finishedSnapshot: FinishedSnapshotsMetaSchema[],
                 totalFinishedCount: number
             } = {
-                onGoingSnapshot: [],
                 finishedSnapshot: [],
                 totalFinishedCount: 0
             };
-            // 查询 ongoing snapshot
-            const [exec] = await c.var.db.select().from(execution)
-                .where(and(
-                    eq(execution.backupTargetId, target.id),
-                    inArray(execution.executeStatus, ['running', 'pending']),
-                ))
-                .orderBy(desc(execution.scheduledAt))
-                .limit(1)
-            if (exec) {
-                // 判断 exec 是 pending 还是 running
-                const rs = await c.var.scheduler.getResticService(repo);
-                const runningJob = rs.getRunningJob(updateExecutionSchema.parse(exec));
-                if (runningJob === null) {
-                    result.onGoingSnapshot.push({
-                        executionId: exec.id,
-                        uuid: exec.uuid,
-                        status: 'pending',
-                        createdAtTimestamp: exec.startedAt || exec.scheduledAt,
-                    })
-                } else {
-                    // 获取 progress
-                    const progress = runningJob.getProgress()
-                    // 获取 logs
-                    const logs = await getLogs(runningJob);
-                    result.onGoingSnapshot.push({
-                        executionId: exec.id,
-                        uuid: exec.uuid,
-                        status: 'running',
-                        createdAtTimestamp: exec.startedAt || exec.scheduledAt,
-                        progress: {
-                            percent: progress.percentDone,
-                            bytesDone: progress.bytesDone,
-                            totalBytes: progress.totalBytes,
-                            logs: logs
-                        },
-                        totalSize: progress.totalBytes || 0,
-                    })
-                }
-            }
             // 查询 finished snapshots
             const [allSnapshotsMetadata, totalCountResult] = await Promise.all([
                 c.var.db.select().from(snapshotsMetadata)
@@ -203,28 +159,6 @@ const snapshotsRoute = new Hono<Env>()
             })
         })
 
-async function getLogs(task: Task<ResticResult<any>>): Promise<string[]> {
-    try {
-        // Read both files concurrently to save time
-        const [stdoutRaw, stderrRaw] = await Promise.all([
-            readFile(task.logFile, 'utf-8'),
-            readFile(task.errorFile, 'utf-8')
-        ]);
-
-        // Split by newline (handles \n and \r\n)
-        const stdoutLines = stdoutRaw.split(/\r?\n/);
-        const stderrLines = stderrRaw.split(/\r?\n/);
-
-        // Remove the trailing empty line often left by loggers at the end of a file
-        const cleanStdout = stdoutLines.filter((line, i) => line !== "" || i !== stdoutLines.length - 1);
-        const cleanStderr = stderrLines.filter((line, i) => line !== "" || i !== stderrLines.length - 1);
-
-        return [...cleanStdout, ...cleanStderr];
-    } catch (error) {
-        return [`Failed to combine logs: ${(error as Error).message}`];
-    }
-}
-
 async function getPolicyByTargetId(db: Env['Variables']['db'], targetId: number) {
     return await db.query.strategy.findFirst({
         // 1. Filter the main strategy record based on the targetId
@@ -241,9 +175,6 @@ async function getPolicyByTargetId(db: Env['Variables']['db'], targetId: number)
         with: {
             targets: {
                 where: (backupTarget, { eq }) => eq(backupTarget.id, targetId),
-                with: {
-                    repository: true,
-                },
             },
         },
     });

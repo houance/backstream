@@ -28,15 +28,37 @@ export function LogTerminal({ logs }: { logs: string[] | undefined }) {
     };
 
     return (
-        <Box p="md" bg="dark.8" pos="relative" style={{ borderRadius: '4px', border: '1px solid var(--mantine-color-dark-4)' }}>
+        <Box
+            p="md"
+            bg="dark.8"
+            pos="relative"
+            w="fit-content"
+            maw="100%" // Prevents the Box from exceeding the screen width
+            style={{ borderRadius: '4px', border: '1px solid var(--mantine-color-dark-4)' }}
+        >
             <Group mb="xs" gap="xs">
                 <IconTerminal2 size={14} color="var(--mantine-color-gray-5)" />
                 <Text size="xs" c="gray.5" ff="monospace" fw={700}>restic stdout</Text>
             </Group>
 
-            <ScrollArea h={300} viewportRef={viewport} onScrollPositionChange={handleScroll}>
+            <ScrollArea
+                h={300}
+                viewportRef={viewport}
+                onScrollPositionChange={handleScroll}
+                scrollbars="xy" // [!code ++] // Enables both vertical and horizontal scroll
+                type="auto"     // [!code ++] // Scrollbars appear only when content overflows
+            >
                 {logs?.map((log, i) => (
-                    <Text key={i} size="xs" ff="monospace" c="gray.3" style={{ lineHeight: 1.5 }}>
+                    <Text
+                        key={i}
+                        size="xs"
+                        ff="monospace"
+                        c="gray.3"
+                        style={{
+                            lineHeight: 1.5,
+                            whiteSpace: 'nowrap' // [!code ++] // Prevents logs from breaking into new lines
+                        }}
+                    >
                         <span style={{ color: 'var(--mantine-color-blue-4)' }}>{'>'}</span> {log}
                     </Text>
                 ))}

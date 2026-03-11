@@ -1,6 +1,6 @@
 import {Badge, Group, Paper, SimpleGrid, Stack, Text} from "@mantine/core";
 import type {UpdateBackupPolicySchema} from "@backstream/shared";
-import {formatRetentionPolicy} from "../../../util/format.ts";
+import {formatRetentionPolicy, formatTimestamp} from "../../../util/format.ts";
 
 export function PolicySummary({ policy } : {policy: UpdateBackupPolicySchema}) {
     return (
@@ -24,7 +24,10 @@ export function PolicySummary({ policy } : {policy: UpdateBackupPolicySchema}) {
                             <DetailRow label="Retention" value={formatRetentionPolicy(target.retentionPolicy)} />
                             <DetailRow label="Schedule" value={target.schedulePolicy} />
                             <DetailRow label="Last Run" value={
-                                target.lastBackupAt ? new Date(target.lastBackupAt).toLocaleString() : 'Never'
+                                target.lastBackupAt ? formatTimestamp(target.lastBackupAt) : 'Never'
+                            } />
+                            <DetailRow label="Next Run" value={
+                                target.nextBackupAt ? formatTimestamp(target.nextBackupAt) : 'Never'
                             } />
                         </Stack>
                     </Paper>

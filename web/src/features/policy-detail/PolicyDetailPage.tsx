@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { Container, Tabs, Button, Group, Title, Loader, Center, Stack, Paper } from '@mantine/core';
+import {Container, Tabs, Button, Group, Title, Loader, Center, Stack, Paper, Box} from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { IconArrowLeft } from '@tabler/icons-react';
 import { client } from "../../api";
@@ -8,6 +8,7 @@ import { client } from "../../api";
 import SnapshotExplorer from './component/SnapshotsExplorer.tsx';
 import PolicySummary from "./component/PolicySummary.tsx";
 import PolicyActionCenter from "./component/PolicyActionCenter.tsx";
+import OnGoingProcessFooter from "./component/OnGoingProcessFooter.tsx";
 
 export default function PolicyDetailPage() {
     const { id } = useParams();
@@ -22,42 +23,75 @@ export default function PolicyDetailPage() {
         },
     });
 
+    const { data: onGoingProcess, isPending: isOnGoingProcessLoading } = useQuery({
+        queryKey: ['process', id],
+        queryFn: async () => {
+            const res = await client.api.policy['process'][':id'].$get({ param: { id: id! } });
+            if (!res.ok) throw new Error('Failed to fetch on going process');
+            return res.json();
+        },
+        refetchInterval: 5000,
+    });
+    const hasProcesses = !isOnGoingProcessLoading && onGoingProcess && onGoingProcess.length > 0;
+
     if (isLoading) return <Center h="100vh"><Loader size="xl" /></Center>;
     if (!policy) return <Center h="100vh">Policy not found</Center>;
 
     return (
-        <Container fluid p={0}>
-            <Stack gap="lg">
-                {/* Header with Back Button */}
-                <Group justify="space-between">
-                    <Group>
-                        <Button variant="subtle" leftSection={<IconArrowLeft size={16} />} onClick={() => navigate(-1)}>
-                            Back
-                        </Button>
-                        <Title order={2}>{policy.strategy.name}</Title>
+        <Box style={{ position: 'relative', minHeight: '100vh'}}>
+            <Container fluid p={0}>
+                <Stack gap="lg">
+                    {/* Header with Back Button */}
+                    <Group justify="space-between">
+                        <Group>
+                            <Button variant="subtle" leftSection={<IconArrowLeft size={16} />} onClick={() => navigate(-1)}>
+                                Back
+                            </Button>
+                            <Title order={2}>{policy.strategy.name}</Title>
+                        </Group>
                     </Group>
-                </Group>
 
-                <Paper withBorder p="md" radius="md">
-                    <Tabs defaultValue="summary" variant="outline">
-                        <Tabs.List>
-                            <Tabs.Tab value="summary">Summary</Tabs.Tab>
-                            <Tabs.Tab value="snapshots">Snapshots</Tabs.Tab>
-                            <Tabs.Tab value="actions">Actions</Tabs.Tab>
-                        </Tabs.List>
+                    <Paper withBorder p="md" radius="md">
+                        <Tabs defaultValue="summary" variant="outline">
+                            <Tabs.List>
+                                <Tabs.Tab value="summary">Summary</Tabs.Tab>
+                                <Tabs.Tab value="snapshots">Snapshots</Tabs.Tab>
+                                <Tabs.Tab value="actions">Actions</Tabs.Tab>
+                            </Tabs.List>
 
-                        <Tabs.Panel value="summary" pt="md">
-                            <PolicySummary policy={policy} />
-                        </Tabs.Panel>
-                        <Tabs.Panel value="snapshots" pt="md">
-                            <SnapshotExplorer policy={policy} />
-                        </Tabs.Panel>
-                        <Tabs.Panel value="actions" pt="md">
-                            <PolicyActionCenter />
-                        </Tabs.Panel>
-                    </Tabs>
-                </Paper>
-            </Stack>
-        </Container>
+                            <Tabs.Panel value="summary" pt="md">
+                                <PolicySummary policy={policy} />
+                            </Tabs.Panel>
+                            <Tabs.Panel value="snapshots" pt="md">
+                                <SnapshotExplorer policy={policy} />
+                            </Tabs.Panel>
+                            <Tabs.Panel value="actions" pt="md">
+                                <PolicyActionCenter />
+                            </Tabs.Panel>
+                        </Tabs>
+                    </Paper>
+                </Stack>
+            </Container>
+
+            {/* --- FIXED PROGRESS FOOTER --- */}
+            {hasProcesses && (
+                <Box
+                    style={{
+                        position: 'fixed',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        zIndex: 1000,
+                        boxShadow: '0 -4px 20px rgba(0,0,0,0.1)',
+                    }}
+                >
+                    <Stack gap={0}>
+                        {onGoingProcess.map((snapshot) => (
+                            <OnGoingProcessFooter key={snapshot.uuid} data={snapshot} />
+                        ))}
+                    </Stack>
+                </Box>
+            )}
+        </Box>
     );
 }

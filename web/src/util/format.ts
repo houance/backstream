@@ -24,6 +24,10 @@ export function getRepositoryStats(usage: number, capacity: number): {usedStr: s
     };
 }
 
+export function formatPercentage(value: number): number {
+    return Number((value * 100).toFixed(2));
+}
+
 export function formatTimestamp(timestamp: number): string {
     return dayjs(timestamp).format('YYYY-MM-DD HH:mm:ss');
 }
