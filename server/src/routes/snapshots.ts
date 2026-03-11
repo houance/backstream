@@ -6,9 +6,8 @@ import {
     type FinishedSnapshotsMetaSchema,
     finishedSnapshotsMetaSchema,
     type OnGoingSnapshotsMetaSchema,
-    repository, restoreJobKey, type ScheduledSnapshotsMetaSchema, snapshotFile,
-    snapshotsMetadata, strategy,
-    updateBackupPolicySchema, updateBackupTargetSchema, updateExecutionSchema,
+    repository, restoreJobKey, snapshotFile,
+    snapshotsMetadata, updateBackupTargetSchema, updateExecutionSchema,
     updateRepositorySchema,
     updateSnapshotsMetadataSchema
 } from "@backstream/shared";
@@ -39,12 +38,10 @@ const snapshotsRoute = new Hono<Env>()
             const target = updateBackupTargetSchema.parse(policy.targets[0]);
             const repo = updateRepositorySchema.parse(policy.targets[0].repository);
             const result: {
-                scheduleSnapshot: ScheduledSnapshotsMetaSchema[],
                 onGoingSnapshot: OnGoingSnapshotsMetaSchema[],
                 finishedSnapshot: FinishedSnapshotsMetaSchema[],
                 totalFinishedCount: number
             } = {
-                scheduleSnapshot: [],
                 onGoingSnapshot: [],
                 finishedSnapshot: [],
                 totalFinishedCount: 0
@@ -119,14 +116,6 @@ const snapshotsRoute = new Hono<Env>()
                 result.finishedSnapshot = finishedSnapshotsMetaSchema.array().parse(manualConvertSnapshot);
                 result.totalFinishedCount = totalCountResult[0].count;
             }
-            // 查询 schedule snapshot
-            const [dbResult] = await c.var.db.select().from(backupTarget)
-                .where(eq(backupTarget.id, target.id));
-            result.scheduleSnapshot.push({
-                uuid: '0',
-                status: 'scheduled',
-                createdAtTimestamp: dbResult?.nextBackupAt || target.nextBackupAt
-            })
             return c.json(result);
     })
     .post('/files',

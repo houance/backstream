@@ -1,143 +1,103 @@
-import { Accordion, Group, Text, Badge, Loader, Paper, Stack, Grid, Center } from '@mantine/core';
-import { IconClock, IconHistory, IconAlertCircle } from '@tabler/icons-react';
+import { Accordion, Group, Text, Badge, Loader, Center, Box } from '@mantine/core';
+import { IconHistory, IconAlertCircle } from '@tabler/icons-react';
 import {
-    type OnGoingSnapshotsMetaSchema,
-    type ScheduledSnapshotsMetaSchema,
     type FinishedSnapshotsMetaSchema,
     type SnapshotFile
 } from '@backstream/shared';
 import {FileBrowser} from "./FileBrowser.tsx";
-import {calculateCountdown, formatTimestamp} from "../../../util/format.ts";
-import {LogTerminal} from "./LogTerminal.tsx";
+import {formatTimestamp} from "../../../util/format.ts";
 
-// Use your Zod types
-type SnapshotUnion =
-    | FinishedSnapshotsMetaSchema
-    | OnGoingSnapshotsMetaSchema
-    | ScheduledSnapshotsMetaSchema;
 
 interface SnapshotRowProps {
-    data: SnapshotUnion;
-    files?: SnapshotFile[];
-    isLoading?: boolean;
-    onDownload?: (file: SnapshotFile) => void;
-    isDownloading?: boolean;
+    data: FinishedSnapshotsMetaSchema;
+    files: SnapshotFile[];
+    isLoading: boolean;
+    onDownload: (file: SnapshotFile) => void;
+    isDownloading: boolean;
 }
 
 export function SnapshotRow({ data, files, isLoading, onDownload, isDownloading }: SnapshotRowProps) {
-    const onDownloadFunc = onDownload ? onDownload : () => {};
-    // 1. Identify the snapshot type based on your Zod status values
-    const isOngoing = data.status === 'running' || data.status === 'pending';
-    const isScheduled = data.status === 'scheduled';
-    const isFinished = !isOngoing && !isScheduled;
+    const isPartial = data.status === 'partial';
 
-    const toClampedPercent = (value: number | undefined): string => {
-        if (!value) return `0%`
-        // 1. Convert decimal to whole percentage
-        const percentage = value * 100;
-
-        // 2. Clamp between 0 and 100
-        const clamped = Math.min(Math.max(percentage, 0), 100);
-
-        return `${clamped.toFixed(2)}%`;
-    };
-
-    // 2. Map visual configuration
-    const config = {
-        // Unique ID varies between schemas: 'snapshotsId' vs 'uuid'
-        id: isFinished ? (data as FinishedSnapshotsMetaSchema).snapshotId :
-            (data as ScheduledSnapshotsMetaSchema | OnGoingSnapshotsMetaSchema).uuid,
-
-        icon: isOngoing ? (
-            <Loader size="xs" color="blue" />
-        ) : isScheduled ? (
-            <IconClock size={16} color="var(--mantine-color-gray-5)" />
-        ) : data.status === 'partial' ? (
-            <IconAlertCircle size={16} color="red" />
-        ) : (
-            <IconHistory size={16} color="var(--mantine-color-green-5)" />
-        ),
-
-        border: isOngoing
-            ? '4px solid var(--mantine-color-blue-6)'
-            : isScheduled
-                ? '4px dashed var(--mantine-color-gray-4)'
-                : '4px solid var(--mantine-color-green-6)',
-
-        badge: isOngoing ? (
-            <Badge variant="dot" size="sm">{`Running (${toClampedPercent((data as OnGoingSnapshotsMetaSchema).progress?.percent)})`}</Badge>
-        ) : isScheduled ? (
-            <Badge variant="outline" color="gray" size="sm">Scheduled</Badge>
-        ) : (
-            <Badge variant="light" color={data.status === 'success' ? 'green' : 'orange'} size="sm">
-                {data.status.toUpperCase()}
-            </Badge>
-        ),
-
-        timeLabel: isScheduled
-            ? `Starts in ${calculateCountdown(data.createdAtTimestamp)}`
-            : isOngoing ? "Started" : "Created"
-    };
+    // Status-based coloring
+    const statusColor = isPartial ? 'orange' : 'green';
 
     return (
-        <Accordion.Item value={config.id} style={{ borderLeft: config.border }}>
-            <Accordion.Control disabled={isScheduled} style={{ cursor: isScheduled ? 'default' : 'pointer' }}>
-                <Grid justify="flex-start" align="center" gutter="xs" pr="md">
-                    {/* 1. Icon Section */}
-                    <Grid.Col span="content">
-                        <Center w={24}> {config.icon} </Center>
-                    </Grid.Col>
-                    {/* 2. ID & Badge Section */}
-                    <Grid.Col span={10}>
-                        <Group gap="xs" wrap="nowrap">
-                            <Text
-                                fw={700}
-                                ff="monospace"
-                                size="sm"
-                                c={isFinished ? 'dark' : 'dimmed'}
-                                w={80} // <--- Fixed width ensures the badge starts at the same spot
+        <Accordion.Item
+            value={data.snapshotId}
+            style={{
+                // 1. Unified border with status-colored accent on the left
+                border: '1px solid var(--mantine-color-default-border)',
+                borderLeft: `4px solid var(--mantine-color-${statusColor}-filled)`,
+                borderRadius: 'var(--mantine-radius-md)',
+                marginBottom: 'var(--mantine-spacing-xs)',
+                backgroundColor: 'var(--mantine-color-body)',
+                overflow: 'hidden'
+            }}
+        >
+            <Accordion.Control
+                px="md"
+                py={6} // 2. Compact height
+                style={{ '&:hover': { backgroundColor: 'var(--mantine-color-gray-0)' } }}
+            >
+                <Group justify="space-between" wrap="nowrap">
+                    <Group gap="sm" wrap="nowrap">
+                        {/* Status Icon */}
+                        <Center w={20}>
+                            {isPartial ? (
+                                <IconAlertCircle size={16} color="var(--mantine-color-orange-6)" />
+                            ) : (
+                                <IconHistory size={16} color="var(--mantine-color-green-6)" />
+                            )}
+                        </Center>
+
+                        {/* ID Section */}
+                        <Text fw={700} ff="monospace" size="sm" c="var(--mantine-color-text)">
+                            {data.snapshotId.slice(0, 8).toUpperCase()}
+                        </Text>
+
+                        {/* 3. Conditional Badge: Only shows if NOT successful */}
+                        {isPartial && (
+                            <Badge
+                                variant="light"
+                                color="orange"
+                                size="xs"
+                                radius="sm"
+                                tt="uppercase"
                             >
-                                {config.id.slice(0, 8)}
-                            </Text>
-                            {config.badge}
-                        </Group>
-                    </Grid.Col>
-                    {/* 3. Time Section */}
-                    <Grid.Col span="auto">
-                        <Stack gap={0} align="flex-start">
-                            <Text size="xs" fw={600} c={isOngoing ? 'blue' : 'dimmed'} lh={1.2}>
-                                {config.timeLabel}
-                            </Text>
-                            <Text size="xs" c="dimmed" lh={1.2}>
-                                {formatTimestamp(data.createdAtTimestamp)}
-                            </Text>
-                        </Stack>
-                    </Grid.Col>
-                </Grid>
+                                Partial
+                            </Badge>
+                        )}
+                    </Group>
+
+                    {/* Time Section: Single line for height efficiency */}
+                    <Group gap={4} wrap="nowrap">
+                        <Text size="xs" c="dimmed" fw={600}>CREATED:</Text>
+                        <Text size="xs" fw={500} c="var(--mantine-color-text)">
+                            {formatTimestamp(data.createdAtTimestamp)}
+                        </Text>
+                    </Group>
+                </Group>
             </Accordion.Control>
 
-
             <Accordion.Panel>
-                {isScheduled && (
-                    <Paper withBorder p="sm" radius="md" bg="var(--mantine-color-gray-0)">
-                        <Text size="xs" c="dimmed" ta="center">Scheduled snapshot. No logs or files available yet.</Text>
-                    </Paper>
-                )}
-
-                {isOngoing && (
-                    <LogTerminal logs={(data as OnGoingSnapshotsMetaSchema).progress?.logs} />
-                )}
-
-                {isFinished && (
-                    <Stack>
-                        {isLoading ? (
-                            <Center p="xl"><Loader size="sm" /></Center>
-                        ) : (
-                            <FileBrowser flatFiles={files || []} onDownload={onDownload || onDownloadFunc} isDownloading={isDownloading || false} />
-                        )}
-                    </Stack>
-                )}
+                <Box
+                    mt="xs"
+                    pt="md"
+                    style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}
+                >
+                    {isLoading ? (
+                        <Center p="xl"><Loader size="sm" variant="dots" /></Center>
+                    ) : (
+                        <FileBrowser
+                            flatFiles={files}
+                            onDownload={onDownload}
+                            isDownloading={isDownloading}
+                        />
+                    )}
+                </Box>
             </Accordion.Panel>
         </Accordion.Item>
     );
 }
+

@@ -1,25 +1,28 @@
 import {
     Stack, Accordion, Center, Loader, Text,
-    Box,
-    Badge,
+    Paper,
     Group,
-    SegmentedControl,
+    SegmentedControl, Pagination, LoadingOverlay, Select
 } from '@mantine/core';
+import { DatePickerInput } from "@mantine/dates";
 import {
-    IconCloud, IconDatabase,
+    IconCloud, IconDatabase
 } from '@tabler/icons-react';
 import {useState} from 'react';
 import {
     type FilterQuery,
-    type FinishedSnapshotsMetaSchema, RepoType, type SnapshotFile,
+    type FinishedSnapshotsMetaSchema, type SnapshotFile,
     type UpdateBackupPolicySchema
 } from "@backstream/shared";
-import {SnapshotRow} from "./SnapshotRow.tsx";
-import {useMutation, useQuery} from "@tanstack/react-query";
+import { SnapshotRow } from "./SnapshotRow.tsx";
+import {keepPreviousData, useMutation, useQuery} from "@tanstack/react-query";
 import {client} from "../../../api";
 import { notice } from 'src/util/notification.tsx';
+import {formatTimeString} from "../../../util/format.ts";
+import dayjs from "dayjs";
 
 export default function SnapshotsExplorer({ policy }: { policy: UpdateBackupPolicySchema}) {
+    const today = dayjs();
     // filter query state
     const [filter, setFilter] = useState<FilterQuery>({
         page: 0,
@@ -33,8 +36,8 @@ export default function SnapshotsExplorer({ policy }: { policy: UpdateBackupPoli
     const [selectedTargetId, setSelectedTargetId] = useState<string>(
         targets.length > 0 ? targets[0].id.toString() : ''
     );
-    // --- 1. FETCH DATA ---
-    const {data: allSnapshots, isLoading: isSnapshotsLoading} = useQuery({
+    // --- 1. FETCH SNAPSHOT DATA ---
+    const {data: allSnapshots, isPending: isSnapshotsLoading, isPlaceholderData} = useQuery({
         queryKey: ['snapshots', policy.strategy.id, selectedTargetId, filter],
         queryFn: async () => {
             const res = await client.api.snapshot['all-snapshots'].$post({
@@ -48,9 +51,10 @@ export default function SnapshotsExplorer({ policy }: { policy: UpdateBackupPoli
         },
         enabled: !!selectedTargetId,
         staleTime: 5000,
+        placeholderData: keepPreviousData
     });
-    // --- 2. FETCH DATA ---
-    const {data: snapshotFiles, isLoading: isSnapshotFilesLoading} = useQuery({
+    // --- 2. FETCH SNAPSHOT FILE DATA ---
+    const {data: snapshotFiles, isPending: isSnapshotFilesLoading} = useQuery({
         queryKey: ['files', openedSnapshot?.snapshotId],
         queryFn: async () => {
             const res = await client.api.snapshot['files'].$post({
@@ -62,7 +66,7 @@ export default function SnapshotsExplorer({ policy }: { policy: UpdateBackupPoli
         enabled: !!openedSnapshot && !!allSnapshots,
         staleTime: Infinity
     });
-    // --- 3. RESTORE FILE ---
+    // --- 3. RESTORE SNAPSHOT FILE ---
     const restoreMutate = useMutation({
         mutationFn: async (file: SnapshotFile) => {
             // 1. Send request and get Key
@@ -116,7 +120,7 @@ export default function SnapshotsExplorer({ policy }: { policy: UpdateBackupPoli
             notice(false, 'Sequence failed:' + error.message);
         }
     })
-
+    // set opened snapshot to trigger file fetch
     const handleFinishedSnapshotOpen = (value: string | null) => {
         if (value === null) return;
         if (!allSnapshots) return;
@@ -130,83 +134,139 @@ export default function SnapshotsExplorer({ policy }: { policy: UpdateBackupPoli
         if (!hit) setOpenedSnapshot(null);
     }
 
-    if (isSnapshotsLoading) {
-        return (
-            <Center h={400}>
-                <Loader size="xl"/>
-            </Center>
-        );
-    }
     if (targets.length === 0) return (
         <Center h={200}>
             <Text c="dimmed">No targets defined for this policy.</Text>
         </Center>
     );
 
+    if (isSnapshotsLoading && !isPlaceholderData) {
+        return (
+            <Center h={400}>
+                <Loader size="xl"/>
+            </Center>
+        );
+    }
+
     return (
         <Stack pt="md" gap="lg">
-            {/* MULTI-TARGET SELECTOR (Only shows if > 1 target) */}
+            {/* 1. CLEAN TARGET SELECTOR AT THE TOP */}
             {targets.length > 1 && (
-                <Box>
-                    <Group justify="space-between" mb="xs">
-                        <Text size="sm" fw={600} c="dimmed">Select Storage Destination</Text>
-                        <Badge variant="outline">{targets.length} Targets</Badge>
-                    </Group>
-                    <SegmentedControl
-                        fullWidth
-                        size="md"
-                        value={selectedTargetId}
-                        onChange={(val) => {
-                            setSelectedTargetId(val);
-                            handleFinishedSnapshotOpen(null); // Reset explorer when switching targets
-                        }}
-                        data={targets.map(t => ({
-                            label: (
-                                <Center style={{ gap: 8 }}>
-                                    {t.repository.repositoryType !== RepoType.LOCAL ? <IconCloud size={16}/> : <IconDatabase size={16}/>}
-                                    <Text size="sm">{t.repository.name}</Text>
-                                </Center>
-                            ),
-                            value: t.id.toString()
-                        }))}
-                    />
-                </Box>
+                <SegmentedControl
+                    fullWidth
+                    size="sm"
+                    value={selectedTargetId}
+                    onChange={(val) => {
+                        setSelectedTargetId(val);
+                        handleFinishedSnapshotOpen(null);
+                    }}
+                    data={targets.map(t => ({
+                        label: (
+                            <Center style={{ gap: 8 }}>
+                                {t.repository.repositoryType !== 'LOCAL' ? <IconCloud size={14}/> : <IconDatabase size={14}/>}
+                                <Text size="xs" fw={500}>{t.repository.name}</Text>
+                            </Center>
+                        ),
+                        value: t.id.toString()
+                    }))}
+                />
             )}
-
-            <Stack gap="xs">
-
-                {isSnapshotsLoading ? (
-                    <Center h={300}><Loader size="xl" variant="dots" /></Center>
-                ) : (
-                    <Accordion
-                        variant="separated"
-                        onChange={(id) => handleFinishedSnapshotOpen(id)}
-                    >
-                        {/* 1. Running */}
-                        {allSnapshots?.onGoingSnapshot.map(s => (
-                            <SnapshotRow key={s.uuid} data={s} />
+            {/* 2. SNAPSHOT AREA WITH FILTERS AT THE TOP RIGHT */}
+            <Paper withBorder radius="md" p="md" bg="var(--mantine-color-body)" pos="relative">
+                <Stack gap="xs" pos="relative">
+                    <LoadingOverlay visible={isPlaceholderData} overlayProps={{ blur: 1 }} />
+                    {/* ACTION BAR: DATE PICKER & RESET PUSHED TO RIGHT */}
+                    <DatePickerInput
+                        type="range"
+                        placeholder="Filter by date range"
+                        size="sm" // Extra small for a compact filter look
+                        w={280}
+                        value={[
+                            filter.startTime ? new Date(filter.startTime) : null,
+                            filter.endTime ? new Date(filter.endTime) : null
+                        ]}
+                        onChange={(dates) => {
+                            const [start, end] = dates;
+                            setFilter((prev) => ({
+                                ...prev,
+                                page: 0,
+                                startTime: formatTimeString(start),
+                                endTime: formatTimeString(end),
+                            }));
+                        }}
+                        clearable
+                        presets={[
+                            {
+                                value: [
+                                    today.subtract(2, 'day').format('YYYY-MM-DD HH:mm:ss.SSS'),
+                                    today.endOf('day').format('YYYY-MM-DD HH:mm:ss.SSS')
+                                ],
+                                label: 'Last two days',
+                            },
+                            {
+                                value: [
+                                    today.subtract(7, 'day').format('YYYY-MM-DD HH:mm:ss.SSS'),
+                                    today.endOf('day').format('YYYY-MM-DD HH:mm:ss.SSS')
+                                ],
+                                label: 'Last 7 days',
+                            },
+                            {
+                                value: [
+                                    today.startOf('month').format('YYYY-MM-DD HH:mm:ss.SSS'),
+                                    today.endOf('month').format('YYYY-MM-DD HH:mm:ss.SSS')
+                                ],
+                                label: 'This month',
+                            },
+                            {
+                                value: [
+                                    today.subtract(1, 'month').startOf('month').format('YYYY-MM-DD HH:mm:ss.SSS'),
+                                    today.subtract(1, 'month').endOf('month').format('YYYY-MM-DD HH:mm:ss.SSS'),
+                                ],
+                                label: 'Last month',
+                            },
+                            {
+                                value: [
+                                    today.subtract(1, 'year').startOf('year').format('YYYY-MM-DD HH:mm:ss.SSS'),
+                                    today.subtract(1, 'year').endOf('year').format('YYYY-MM-DD HH:mm:ss.SSS'),
+                                ],
+                                label: 'Last year',
+                            },
+                        ]}
+                    />
+                    {/* SNAPSHOT ROWS */}
+                    <Accordion variant="unstyled" onChange={(id) => handleFinishedSnapshotOpen(id)}>
+                        {allSnapshots?.finishedSnapshot.map(s => (
+                            <SnapshotRow
+                                key={s.snapshotId}
+                                data={s}
+                                files={snapshotFiles ?? []}
+                                isLoading={openedSnapshot === s && isSnapshotFilesLoading}
+                                onDownload={restoreMutate.mutate}
+                                isDownloading={restoreMutate.isPending}
+                            />
                         ))}
-
-                        {/* 2. Scheduled */}
-                        {allSnapshots?.scheduleSnapshot.map(s => (
-                            <SnapshotRow key={s.uuid} data={s} />
-                        ))}
-
-                        {/* 3. Finished */}
-                        {allSnapshots?.finishedSnapshot
-                            .map(s => (
-                                <SnapshotRow
-                                    key={s.snapshotId}
-                                    data={s}
-                                    files={openedSnapshot === s ? snapshotFiles : []}
-                                    onDownload={restoreMutate.mutate}
-                                    isLoading={openedSnapshot === s && isSnapshotFilesLoading}
-                                />
-                            ))
-                        }
                     </Accordion>
-                )}
-            </Stack>
+                    {/* PAGINATION & PAGE SIZE FOOTER */}
+                    <Group justify="flex-end" gap="sm" mt="md">
+                        <Text size="xs" c="dimmed">Items per page:</Text>
+                        <Select
+                            size="xs"
+                            withCheckIcon={false}
+                            w={70}
+                            data={['10', '15', '20', '30']}
+                            value={filter.pageSize.toString()}
+                            onChange={(val) => setFilter(prev => ({ ...prev, page: 0, pageSize: Number(val) }))}
+                        />
+                        <Pagination
+                            size="sm" // Smaller height
+                            value={filter.page + 1}
+                            onChange={(p) => setFilter((prev) => ({ ...prev, page: p - 1 }))}
+                            total={Math.ceil((allSnapshots?.totalFinishedCount ?? 0) / filter.pageSize)}
+                            withEdges
+                        />
+                    </Group>
+                </Stack>
+            </Paper>
         </Stack>
     );
 }

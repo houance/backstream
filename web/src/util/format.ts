@@ -32,6 +32,10 @@ export function formatTimestampRelative(timestamp: number): string {
     return dayjs(timestamp).fromNow();
 }
 
+export function formatTimeString(timeString: string | null): number {
+    return timeString ? dayjs(timeString).valueOf() : 0;
+}
+
 export function calculateCountdown(scheduledTimestamp: number): string {
     const now = Date.now();
     const diff = scheduledTimestamp - now;

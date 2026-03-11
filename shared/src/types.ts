@@ -303,8 +303,8 @@ export const sameDriveRepoRequest = z.object({
 export type SameDriveRepoRequest = z.infer<typeof sameDriveRepoRequest>;
 // general filter
 export const filterQuery = z.object({
-    page: z.number().int().min(1).default(1),
-    pageSize: z.number().int().max(30).default(15),
+    page: z.number().int().min(0).default(1),
+    pageSize: z.number().int().min(10).max(30).default(15),
     startTime: z.number().min(0).optional(),
     endTime: z.number().min(0).optional(),
 })

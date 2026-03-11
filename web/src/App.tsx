@@ -1,6 +1,7 @@
 import '@mantine/core/styles.css';
+import '@mantine/dates/styles.css';
 import { MantineProvider } from '@mantine/core';
-import { BrowserRouter } from 'react-router-dom'; // Import BrowserRouter
+import { BrowserRouter } from 'react-router-dom';
 import DashboardLayout from './layouts/DashboardLayout';
 import {Notifications} from "@mantine/notifications";
 import '@mantine/notifications/styles.css';
