@@ -1,29 +1,28 @@
-import React, {useState} from 'react';
 import {Button, Center, Container, Group, Loader} from '@mantine/core';
 import {IconPlus} from '@tabler/icons-react';
 import { notice } from "../../util/notification.tsx";
-import StorageLocationModal from './components/StorageLocationsModal.tsx';
-import StorageLocationTable from "./components/StorageLocationTable.tsx";
+import NewStorageLocModal from './components/NewStorageLocModal.tsx';
+import StorageLocTable from "./components/StorageLocTable.tsx";
 import type {InsertRepositorySchema, UpdateRepositorySchema} from "@backstream/shared";
 import {useDisclosure} from "@mantine/hooks";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {client} from "../../api";
 import {ensureSuccess} from "../../util/api.ts";
 
-const StorageLocationsPage: React.FC = () => {
+export default function StorageLocPage() {
     // 1. Manage state for opening/closing and the data to edit
     const [opened, {open, close}] = useDisclosure(false);
-    const [editingItem, setEditingItem] = useState<UpdateRepositorySchema | null>(null);
 
     // --- 2. FETCH DATA ---
     const queryClient = useQueryClient();
-    const {data, isLoading} = useQuery({
+    const {data, isPending: isLoading} = useQuery({
         queryKey: ['storage-locations'],
         queryFn: async () => {
             const res = await client.api.storage['all-storage-location'].$get();
             if (!res.ok) throw new Error('Failed to fetch storage locations');
             return res.json();
         },
+        refetchInterval: 5000,
     });
 
     // --- 3. CREATE/UPDATE MUTATION ---
@@ -75,16 +74,6 @@ const StorageLocationsPage: React.FC = () => {
             notice(false, `connection failed: ${error}`)
         }
     });
-    // 5. OpenModal as empty
-    const openCreateModal = () => {
-        setEditingItem(null);
-        open();
-    }
-    // 6. open modal as edit
-    const openEditModal = (item: UpdateRepositorySchema) => {
-        setEditingItem(item);
-        open()
-    }
 
     if (isLoading) {
         return (
@@ -97,30 +86,28 @@ const StorageLocationsPage: React.FC = () => {
     return (
         <Container fluid p={0}>
             {/* Storage Location 数据展示 */}
-            <StorageLocationTable
+            <StorageLocTable
                 data={data!}
-                onEdit={(item) => openEditModal(item)}
-                onDelete={(item) => deleteMutation.mutate(item)}/>
+                onDelete={(item) => deleteMutation.mutate(item)}
+            />
             {/* Add Storage Location Button */}
             <Group justify="flex-end" mt="xl" pt="md" style={{borderTop: '1px solid var(--mantine-color-gray-3)'}}>
-                <Button leftSection={<IconPlus size="1rem"/>} variant="filled" onClick={openCreateModal}>
+                <Button leftSection={<IconPlus size="1rem"/>} variant="filled" onClick={open}>
                     Add Location
                 </Button>
             </Group>
             {/* The modal component instance */}
-            <StorageLocationModal
-                key={editingItem?.id ?? 'create-storage-location'}
+            <NewStorageLocModal
+                key={'create-storage-location'}
                 onSubmit={(item) => submitMutation.mutate(item)}
                 isSubmitting={submitMutation.isPending}
                 onConnect={(item) => testConnMutation.mutate(item)}
                 isConnecting={testConnMutation.isPending}
-                title={editingItem ? "Edit storage location" : "Create storage location"}
+                title={"Create storage location"}
                 opened={opened}
                 onClose={close}
-                data={editingItem}/>
+            />
         </Container>
     );
-};
-
-export default StorageLocationsPage;
+}
 

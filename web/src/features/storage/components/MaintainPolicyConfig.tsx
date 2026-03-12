@@ -3,7 +3,7 @@ import type {UseFormReturnType} from "@mantine/form";
 import {NumberInput, Paper, Select, Stack, Text, TextInput} from "@mantine/core";
 import {useState} from "react";
 
-export function MaintainPolicyConfig({ form, isEdit = false }: { form: UseFormReturnType<InsertRepositorySchema>, isEdit: boolean }) {
+export function MaintainPolicyConfig({ form }: { form: UseFormReturnType<InsertRepositorySchema> }) {
     const presetCronExpression:{value: string, label: string}[] = [
         { value: 'manual', label: 'Manual' },
         { value: '0 0 0 * * *', label: 'Every Day at Midnight' },
@@ -25,7 +25,6 @@ export function MaintainPolicyConfig({ form, isEdit = false }: { form: UseFormRe
                         form.setFieldValue('checkSchedule', val!)
                     }
                 }}
-                disabled={isEdit}
             />
             {checkScheduleType === 'custom' && (
                 <TextInput
@@ -63,7 +62,6 @@ export function MaintainPolicyConfig({ form, isEdit = false }: { form: UseFormRe
                         form.setFieldValue('pruneSchedule', val!)
                     }
                 }}
-                disabled={isEdit}
             />
             {pruneScheduleType === 'custom' && (
                 <TextInput

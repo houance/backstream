@@ -159,7 +159,7 @@ export default function FailHistory({ policy }: { policy: UpdateBackupPolicySche
                         <Select
                             size="xs"
                             w={70}
-                            data={['10', '20', '50']}
+                            data={['10', '15', '30']}
                             value={filter.pageSize.toString()}
                             onChange={(val) => setFilter(prev => ({ ...prev, page: 1, pageSize: Number(val) }))}
                         />

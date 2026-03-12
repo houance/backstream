@@ -4,7 +4,6 @@ import type {
     CertificateSchema,
     InsertRepositorySchema,
     RepoType,
-    UpdateRepositorySchema
 } from "@backstream/shared";
 import OSSSubform from "./components/OSSSubForm.tsx";
 import SFTPSubform from "./components/SFTPSubform.tsx";
@@ -12,10 +11,7 @@ import B2SubForm from "./components/B2SubForm.tsx";
 import S3SubForm from "./components/S3SubForm.tsx";
 
 interface ProviderMeta {
-    component: React.FC<{
-        form: UseFormReturnType<InsertRepositorySchema | UpdateRepositorySchema>,
-        data: UpdateRepositorySchema | null
-    }> | null // for local repo type
+    component: React.FC<{ form: UseFormReturnType<InsertRepositorySchema> }> | null // for local repo type
     initSubForm: CertificateSchema
 }
 
