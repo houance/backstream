@@ -2,17 +2,18 @@ import { Hono } from 'hono';
 import {type Env} from '../index'
 import {
     backupTarget,
-    execution,
+    execution, failHistory, type FilterQuery, filterQuery,
     insertBackupPolicySchema, type OnGoingBackupProcess,
     strategy,
     updateBackupPolicySchema, updateExecutionSchema, updateRepositorySchema
 } from "@backstream/shared";
 import {zValidator} from "@hono/zod-validator";
-import {and, desc, eq, inArray} from "drizzle-orm";
+import {and, count, desc, eq, gte, inArray, lte} from "drizzle-orm";
 import * as os from 'os';
 import {Cron} from "croner";
-import type {ResticResult, Task} from "../service/restic";
+import {ExitCode, type ResticResult, type Task} from "../service/restic";
 import {readFile} from "node:fs/promises";
+import z from 'zod';
 
 const policyRoute = new Hono<Env>()
     .get('/all-policy', async (c) => {
@@ -48,13 +49,14 @@ const policyRoute = new Hono<Env>()
                         uuid: exec.uuid,
                         status: 'pending',
                         createdAtTimestamp: exec.startedAt || exec.scheduledAt,
-                        repoName: repo.name
+                        repoName: repo.name,
+                        commandType: exec.commandType,
                     })
                 } else {
                     // 获取 progress
                     const progress = runningJob.getProgress()
                     // 获取 logs
-                    const logs = await getLogs(runningJob);
+                    const logs = await getLogs(runningJob.logFile, runningJob.errorFile);
                     result.push({
                         executionId: exec.id,
                         uuid: exec.uuid,
@@ -66,12 +68,73 @@ const policyRoute = new Hono<Env>()
                             totalBytes: progress.totalBytes,
                             logs: logs
                         },
-                        repoName: repo.name
+                        repoName: repo.name,
+                        commandType: exec.commandType,
                     })
                 }
             }
         }
         return c.json(result);
+    })
+    // get fail history by target
+    .post('/fail-history',
+        zValidator('json', z.object({
+            targetId: z.number().positive(),
+            filterQuery: filterQuery
+        })),
+        async (c) => {
+            const validated = c.req.valid('json');
+            const { targetId, filterQuery } = validated;
+            const {start, end} = getTimeRange(filterQuery);
+            // get all execution by filter
+            const [execs, totalCount] = await Promise.all([
+                c.var.db.select().from(execution)
+                    .where(and(
+                        eq(execution.executeStatus, 'fail'),
+                        eq(execution.backupTargetId, targetId),
+                        gte(execution.scheduledAt, start),
+                        lte(execution.scheduledAt, end),
+                    ))
+                    .limit(filterQuery.pageSize)
+                    .offset(filterQuery.page - 1 < 0 ? 0 : filterQuery.page - 1),
+                c.var.db.select({ count: count() }).from(execution)
+                    .where(and(
+                        eq(execution.executeStatus, 'fail'),
+                        eq(execution.backupTargetId, targetId),
+                        gte(execution.scheduledAt, start),
+                        lte(execution.scheduledAt, end),
+                    ))
+            ])
+            if (!execs || !totalCount) {
+                c.var.logger.warn('query fail history db fail');
+                return c.json({ error: 'Query fail history fail' }, 500);
+            } else {
+                const mappedFailHistory = execs.map(exec => ({
+                    executionId: exec.id,
+                    uuid: exec.uuid,
+                    scheduledAt: exec.startedAt,
+                    startAt: exec.startedAt,
+                    finishedAt: exec.scheduledAt,
+                    commandType: exec.commandType,
+                    fullCommand: exec.fullCommand,
+                    failReason: getExitCodeName(exec.exitCode),
+                }))
+                const result = failHistory.array().parse(mappedFailHistory);
+                return c.json({
+                    failHistory: result,
+                    count: totalCount[0].count,
+                });
+            }
+    })
+    // get fail log by execution id
+    .get('/fail-history-log/:id', async (c) => {
+        const executionId = Number(c.req.param('id'));
+        const [exec] = await c.var.db.select().from(execution)
+            .where(eq(execution.id, executionId));
+        if (!exec) return c.json({ message: 'Not found' }, 404);
+        return c.json({
+            logs: await getLogs(exec.logFile!, exec.errorFile!)
+        })
     })
     // create policy
     .post('/',
@@ -111,6 +174,7 @@ const policyRoute = new Hono<Env>()
         await c.var.db.delete(strategy).where(eq(strategy.id, id));
         return c.json({ message: `success delete policy ${id}`}, 200);
     })
+
 
 async function getStrategyOnGoingProcess(db: Env['Variables']['db'], id: number) {
     const result = await db.query.strategy.findFirst({
@@ -201,12 +265,12 @@ async function getStrategyData(db: Env['Variables']['db']) {
     }));
 }
 
-async function getLogs(task: Task<ResticResult<any>>): Promise<string[]> {
+async function getLogs(stdout: string, stderr: string): Promise<string[]> {
     try {
         // Read both files concurrently to save time
         const [stdoutRaw, stderrRaw] = await Promise.all([
-            readFile(task.logFile, 'utf-8'),
-            readFile(task.errorFile, 'utf-8')
+            readFile(stdout, 'utf-8'),
+            readFile(stderr, 'utf-8')
         ]);
 
         // Split by newline (handles \n and \r\n)
@@ -221,6 +285,19 @@ async function getLogs(task: Task<ResticResult<any>>): Promise<string[]> {
     } catch (error) {
         return [`Failed to combine logs: ${(error as Error).message}`];
     }
+}
+
+function getTimeRange(filter: FilterQuery) {
+    const start = Math.max(0, filter.startTime ?? 0);
+    let end = Date.now();
+    if (filter.endTime !== undefined && filter.endTime !== 0) {
+        end = filter.endTime;
+    }
+    return { start, end };
+}
+
+export function getExitCodeName(code: number | null | undefined): string {
+    return Object.entries(ExitCode).find(([_, v]) => v === code)?.[0] ?? "UNKNOWN";
 }
 
 export default policyRoute;

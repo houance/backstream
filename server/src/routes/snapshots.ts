@@ -62,6 +62,7 @@ const snapshotsRoute = new Hono<Env>()
             ])
             if (!allSnapshotsMetadata || !totalCountResult) {
                 c.var.logger.warn('query finished snapshots db fail');
+                return c.json({ error: 'Query db fail' }, 500);
             } else {
                 const manualConvertSnapshot = allSnapshotsMetadata.map(snapshot => ({
                     snapshotId: snapshot.snapshotId,

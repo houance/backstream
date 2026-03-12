@@ -9,7 +9,7 @@ export default function OnGoingProcessFooter({ data }: { data: OnGoingBackupProc
     const [opened, { open, close }] = useDisclosure(false);
 
     // Destructure with schema-based fallbacks
-    const { repoName, status, progress, uuid } = data;
+    const { repoName, commandType, status, progress, uuid } = data;
     const percent = progress?.percent ?? 0;
     const bytesDone = progress?.bytesDone ?? 0;
     const totalBytes = progress?.totalBytes ?? 0;
@@ -37,7 +37,7 @@ export default function OnGoingProcessFooter({ data }: { data: OnGoingBackupProc
                         {/* Human-readable Repo Name */}
                         <Tooltip label={`UUID: ${uuid}`} position="top-start" withArrow>
                             <Badge variant="light" size="sm" color="blue" radius="sm">
-                                {repoName}
+                                {commandType} on {repoName}
                             </Badge>
                         </Tooltip>
 

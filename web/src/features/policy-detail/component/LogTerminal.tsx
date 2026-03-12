@@ -32,8 +32,7 @@ export function LogTerminal({ logs }: { logs: string[] | undefined }) {
             p="md"
             bg="dark.8"
             pos="relative"
-            w="fit-content"
-            maw="100%" // Prevents the Box from exceeding the screen width
+            w="100%"
             style={{ borderRadius: '4px', border: '1px solid var(--mantine-color-dark-4)' }}
         >
             <Group mb="xs" gap="xs">

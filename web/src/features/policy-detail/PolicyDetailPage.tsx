@@ -9,6 +9,7 @@ import SnapshotExplorer from './component/SnapshotsExplorer.tsx';
 import PolicySummary from "./component/PolicySummary.tsx";
 import PolicyActionCenter from "./component/PolicyActionCenter.tsx";
 import OnGoingProcessFooter from "./component/OnGoingProcessFooter.tsx";
+import FailHistory from "./component/FailHistory.tsx";
 
 export default function PolicyDetailPage() {
     const { id } = useParams();
@@ -56,6 +57,7 @@ export default function PolicyDetailPage() {
                             <Tabs.List>
                                 <Tabs.Tab value="summary">Summary</Tabs.Tab>
                                 <Tabs.Tab value="snapshots">Snapshots</Tabs.Tab>
+                                <Tabs.Tab value="fail-history">Fail history</Tabs.Tab>
                                 <Tabs.Tab value="actions">Actions</Tabs.Tab>
                             </Tabs.List>
 
@@ -64,6 +66,9 @@ export default function PolicyDetailPage() {
                             </Tabs.Panel>
                             <Tabs.Panel value="snapshots" pt="md">
                                 <SnapshotExplorer policy={policy} />
+                            </Tabs.Panel>
+                            <Tabs.Panel value="fail-history" pt="md">
+                                <FailHistory policy={policy} />
                             </Tabs.Panel>
                             <Tabs.Panel value="actions" pt="md">
                                 <PolicyActionCenter />

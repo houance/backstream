@@ -227,6 +227,7 @@ export const onGoingBackupProcess = z.object({
         logs: z.array(z.string()).optional(),
     }).optional(),
     repoName: z.string(),
+    commandType: z.string(),
 })
 export type OnGoingBackupProcess = z.infer<typeof onGoingBackupProcess>;
 export const scheduledSnapshotsMetaSchema = z.object({
@@ -309,3 +310,15 @@ export const filterQuery = z.object({
     endTime: z.number().min(0).optional(),
 })
 export type FilterQuery = z.infer<typeof filterQuery>;
+// fail history
+export const failHistory = z.object({
+    executionId: z.number().nonnegative(),
+    uuid: z.string(),
+    scheduledAt: z.number().min(0),
+    startAt: z.number().min(0).optional(),
+    finishedAt: z.number().min(0).optional(),
+    commandType: z.string(),
+    failReason: z.string(),
+    fullCommand: z.string(),
+})
+export type FailHistory = z.infer<typeof failHistory>;
