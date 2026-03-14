@@ -332,10 +332,16 @@ export class ResticService {
         logger.debug(`backup ${this.repo.name} success`)
         // index snapshots
         await this.indexSnapshots(path);
-        // update set execution id
-        await db.update(snapshotsMetadata)
-            .set({ executionId: newExecution.id })
-            .where(eq(snapshotsMetadata.snapshotId, result.result.snapshotId));
+        const [snapshotInDb] = await db.select().from(snapshotsMetadata)
+            .where(eq(snapshotsMetadata.snapshotId, result.result.snapshotId))
+        if (snapshotInDb) {
+            // set execution's snapshot id
+            await db.update(execution)
+                .set({ snapshotsMetadataId: snapshotInDb.id })
+                .where(eq(execution.id, newExecution.id))
+        } else {
+            logger.warn(`not found snapshot:${result.result.snapshotId} after index ${this.repo.name}`)
+        }
         // forget old data
         const retryResult = await this.retryOnLock(
             () => this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy),
@@ -582,7 +588,6 @@ export class ResticService {
         };
         if (target) {
             value.backupTargetId = target.id;
-            value.strategyId = target.backupStrategyId;
         } else {
             value.repositoryId = this.repo.id
         }

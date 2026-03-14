@@ -1,7 +1,7 @@
 import {sqliteTable, text, integer, real} from "drizzle-orm/sqlite-core";
 import {relations} from "drizzle-orm";
 
-// 1. Repository Table
+// Repository Table
 export const repository = sqliteTable("repository_table", {
     id: integer("repository_id").primaryKey({ autoIncrement: true }),
     name: text("name").notNull(),
@@ -19,7 +19,7 @@ export const repository = sqliteTable("repository_table", {
     repositoryStatus: text("repository_status").notNull(),
 });
 
-// 2. Strategy Table
+// Strategy Table
 export const strategy = sqliteTable("strategy_table", {
     id: integer("strategy_id").primaryKey({ autoIncrement: true }),
     name: text("name").notNull(),
@@ -29,7 +29,7 @@ export const strategy = sqliteTable("strategy_table", {
     strategyType: text("strategy_type").notNull(),
 });
 
-// 3. Backup Target Table (Links strategy to Repository)
+// Backup Target Table (Links strategy to Repository)
 export const backupTarget = sqliteTable("backup_target_table", {
     id: integer("backup_target_id").primaryKey({ autoIncrement: true }),
     backupStrategyId: integer("backup_strategy_id").references(() => strategy.id, { onDelete: 'cascade' }).notNull(),
@@ -40,29 +40,10 @@ export const backupTarget = sqliteTable("backup_target_table", {
     index: integer("index").notNull(),
 });
 
-// 4. Execution Table
-export const execution = sqliteTable("execution_table", {
-    id: integer("execution_id").primaryKey({ autoIncrement: true }),
-    uuid: text("uuid").notNull(),
-    logFile: text("log_file"),
-    errorFile: text("error_file"),
-    commandType: text("command_type").notNull(),
-    fullCommand: text("full_command"),
-    exitCode: integer("exit_code"),
-    scheduledAt: integer("scheduled_at").notNull(),
-    startedAt: integer("started_at"),
-    finishedAt: integer("finished_at"),
-    executeStatus: text("execute_status", { enum: ["success", "fail", "running", "pending", "cancel"] }).notNull(),
-    repositoryId: integer("repository_id").references(() => repository.id, { onDelete: 'cascade' }),
-    strategyId: integer("strategy_id").references(() => strategy.id, { onDelete: 'cascade' }),
-    backupTargetId: integer("backup_target_id").references(() => backupTarget.id, { onDelete: 'cascade' }),
-})
-
-// 5. Snapshots Metadata Table
+// Snapshots Metadata Table
 export const snapshotsMetadata = sqliteTable("snapshots_metadata_table", {
     id: integer("snapshot_db_id").primaryKey({ autoIncrement: true }),
     repositoryId: integer("repository_id").references(() => repository.id, { onDelete: 'cascade' }).notNull(),
-    executionId: integer("execution_id").references(() => execution.id, { onDelete: 'cascade' }),
     path: text("path").notNull(),
     snapshotId: text("snapshot_id").notNull().unique(), // The ID from the backup engine
     hostname: text("hostname"),
@@ -78,7 +59,43 @@ export const snapshotsMetadata = sqliteTable("snapshots_metadata_table", {
     size: integer("size").notNull(),
 });
 
-// 6. System Settings Table
+// Restore File Table
+export const restores = sqliteTable("restores_table", {
+    id: integer("restores_id").primaryKey({ autoIncrement: true }),
+    snapshotsMetadataId: integer("snapshot_metadata_id").references(() => snapshotsMetadata.id, { onDelete: 'cascade' }).notNull(),
+    // file meta data
+    files: text("files", { mode: 'json'}).notNull(),
+    // result meta data
+    serverPath: text("server_path"),
+    resultName: text("result_name"),
+    resultSize: integer("result_size"),
+    // timestamp
+    scheduledAt: integer("scheduled_at").notNull(),
+    startedAt: integer("started_at"),
+    zippedAt: integer("zipped_at"), // if file is dir or more than one, zip. other is null
+    finishedAt: integer("finished_at"),
+})
+
+// Execution Table
+export const execution = sqliteTable("execution_table", {
+    id: integer("execution_id").primaryKey({ autoIncrement: true }),
+    uuid: text("uuid").notNull(),
+    logFile: text("log_file"),
+    errorFile: text("error_file"),
+    commandType: text("command_type").notNull(),
+    fullCommand: text("full_command"),
+    exitCode: integer("exit_code"),
+    scheduledAt: integer("scheduled_at").notNull(),
+    startedAt: integer("started_at"),
+    finishedAt: integer("finished_at"),
+    executeStatus: text("execute_status", { enum: ["success", "fail", "running", "pending", "cancel"] }).notNull(),
+    repositoryId: integer("repository_id").references(() => repository.id, { onDelete: 'cascade' }), // repo check, prune
+    backupTargetId: integer("backup_target_id").references(() => backupTarget.id, { onDelete: 'cascade' }), // backup, copyTo
+    snapshotsMetadataId: integer("snapshots_metadata_id").references(() => snapshotsMetadata.id, { onDelete: 'cascade' }), // backup
+    restoresId: integer("restores_id").references(() => restores.id, { onDelete: 'cascade' }), // restore
+})
+
+// System Settings Table
 export const setting = sqliteTable("system_setting", {
     id: integer("setting_id").primaryKey({ autoIncrement: true }),
     ioPriority: text("io_priority").notNull(),
@@ -111,9 +128,14 @@ export const executionRelations = relations(execution, ({ one }) => ({
         references: [backupTarget.id],
     }),
     // Link to Strategy directly (as defined in your table)
-    strategy: one(strategy, {
-        fields: [execution.strategyId],
-        references: [strategy.id],
+    strategy: one(snapshotsMetadata, {
+        fields: [execution.snapshotsMetadataId],
+        references: [snapshotsMetadata.id],
+    }),
+    // Link to Restores
+    restore: one(restores, {
+        fields: [execution.restoresId],
+        references: [restores.id],
     }),
     // Link to Repository directly
     repository: one(repository, {
@@ -121,6 +143,11 @@ export const executionRelations = relations(execution, ({ one }) => ({
         references: [repository.id],
     }),
 }));
+// repository => multiple execution
 export const repositoryRelations = relations(repository, ({ many }) => ({
+    executions: many(execution),
+}))
+// restore => multiple execution
+export const restoresRelations = relations(restores, ({ many }) => ({
     executions: many(execution),
 }))

@@ -166,6 +166,7 @@ export class RepositoryClient {
         }
     }
 
+    // todo: folder using dump + -a zip
     public restore(
         snapshotId: string,
         node: { name: string, path: string },
