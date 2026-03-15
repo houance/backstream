@@ -6,6 +6,7 @@ import storageRoute from "./routes/storage-location";
 import policyRoute from "./routes/policy";
 import settingRoute from "./routes/setting";
 import snapshotRoute from "./routes/snapshots";
+import restoreRoute from "./routes/restore";
 import { db } from './service/db';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -58,6 +59,7 @@ const routes = app.basePath('/api')
     .route('/policy', policyRoute)
     .route('/setting', settingRoute)
     .route('/snapshot', snapshotRoute)
+    .route('/restore', restoreRoute)
 
 // Export the AppType for the frontend
 export type AppType = typeof routes

@@ -1,7 +1,7 @@
 import { Accordion, Group, Stack, Text, Badge, Box, Code, Loader, Center } from '@mantine/core';
 import {IconBug, IconTerminal} from '@tabler/icons-react';
 import type {FailHistory} from "@backstream/shared";
-import {LogTerminal} from "./LogTerminal.tsx";
+import {LogTerminal} from "../../../component/LogTerminal.tsx";
 
 interface FailHistoryRowProps {
     item: FailHistory; // Type according to your Zod schema

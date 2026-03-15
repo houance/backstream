@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {createInsertSchema, createUpdateSchema} from 'drizzle-zod';
-import {backupTarget, execution, repository, setting, snapshotsMetadata, strategy} from './schema';
+import {backupTarget, execution, repository, restores, setting, snapshotsMetadata, strategy} from './schema';
 
 
 // cron format: sec min hour day month day-of-week
@@ -198,11 +198,22 @@ export const updateBackupPolicySchema = z.object({
     }))
 })
 export type UpdateBackupPolicySchema = z.infer<typeof updateBackupPolicySchema>;
+// snapshot file type
+export const SnapshotFileType = {
+    FILE: 'file',
+    DIR: 'dir',
+    SYMLINK: 'symlink',
+    DEV: 'dev',
+    CHARDEV: 'chardev',
+    FIFO: 'fifo',
+    SOCKET: 'socket',
+}
+export type SnapshotFileType = typeof SnapshotFileType[keyof typeof SnapshotFileType];
 export const snapshotFile = z.object({
     snapshotId: z.string(),
     repoId: z.number().positive(),
     name: z.string(),
-    type: z.enum(['file', 'dir', 'symlink', 'dev', 'chardev', 'fifo', 'socket']),
+    type: z.enum(Object.values(SnapshotFileType)),
     size: z.number().min(0),
     path: z.string(),
     mtime: z.coerce.date().transform((date) => date.getTime()),
@@ -322,3 +333,16 @@ export const failHistory = z.object({
     fullCommand: z.string(),
 })
 export type FailHistory = z.infer<typeof failHistory>;
+// restores schema
+export const insertRestoreSchema = createInsertSchema(restores, {
+    files: z.array(z.object({
+        path: z.string(),
+        name: z.string(),
+        type: z.enum(Object.values(SnapshotFileType))
+    }))
+}).omit({ id: true })
+export type InsertRestoreSchema = z.infer<typeof insertRestoreSchema>;
+export const updateRestoreSchema = insertRestoreSchema.safeExtend({
+    id: z.number().positive(),
+})
+export type UpdateRestoreSchema = z.infer<typeof updateRestoreSchema>;
