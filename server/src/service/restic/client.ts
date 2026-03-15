@@ -166,8 +166,68 @@ export class RepositoryClient {
         }
     }
 
-    // todo: folder using dump + -a zip
-    public restore(
+    // dump with target, restore folder into zip file
+    public restoreFolder(
+        snapshotId: string,
+        node: { name: string, path: string },
+        resultPath: string,
+        logFile: string,
+        errorFile: string,
+        uuid: string
+    ): Task<ResticResult<string>> {
+        const command = `restic dump ${snapshotId}:${node.path} / --target ${resultPath} -a zip --json`
+        const process = executeStream(
+            command,
+            logFile,
+            errorFile,
+            { env: this._env }
+        );
+        // 更新 progress
+        const progress: Progress = { totalBytes: 0, bytesDone: 0, percentDone: 0 };
+        // 2. Process the stream in the background (Immediate Execution)
+        (async () => {
+            try {
+                // Execa v9+ yields lines automatically from the subprocess
+                for await (const line of process) {
+                    try {
+                        const data: {
+                            message_type: string,
+                            percent_done: number,
+                            total_bytes: number,
+                            bytes_restored: number
+                        } = JSON.parse(line.toString());
+                        // Restic specific JSON logic (adjust based on actual restic output)
+                        if (data.message_type === 'status') {
+                            progress.totalBytes = data.total_bytes;
+                            progress.bytesDone = data.bytes_restored;
+                            progress.percentDone = data.percent_done;
+                        }
+                    } catch {
+                        /* Ignore non-JSON lines or partial chunks */
+                    }
+                }
+            } catch (err) {
+                logger.warn(err, "Stream processing error:");
+            }
+        })();
+        // 处理结果
+        const result = (async (): Promise<ResticResult<string>> => {
+            const result:Result = await process;
+            if (result.failed) return fail(result);
+            return success(resultPath, result);
+        })();
+        return {
+            uuid:  uuid,
+            command: command,
+            logFile: logFile,
+            errorFile: errorFile,
+            result: result,
+            cancel: () => process.kill(),
+            getProgress: () => progress,
+        }
+    }
+
+    public restoreFile(
         snapshotId: string,
         node: { name: string, path: string },
         dir: string,

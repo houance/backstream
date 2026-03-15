@@ -229,7 +229,7 @@ export class ResticService {
             const dir = await FileManager.createTmpFolder();
             const task = await this.startJob(
                 newExecution,
-                (log, err) => this.repoClient.restore(
+                (log, err) => this.repoClient.restoreFile(
                     file.snapshotId,
                     {name: file.name, path: file.path},
                     dir,
