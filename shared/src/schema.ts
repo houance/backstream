@@ -1,4 +1,4 @@
-import {sqliteTable, text, integer, real} from "drizzle-orm/sqlite-core";
+import {sqliteTable, text, integer, real, uniqueIndex} from "drizzle-orm/sqlite-core";
 import {relations} from "drizzle-orm";
 
 // Repository Table
@@ -38,7 +38,10 @@ export const backupTarget = sqliteTable("backup_target_table", {
     schedulePolicy: text("schedule_policy").notNull(),
     nextBackupAt: integer("next_backup_at").notNull(),
     index: integer("index").notNull(),
-});
+}, (table) => [
+    uniqueIndex("target_strategy_id_unique").on(table.backupStrategyId),
+    uniqueIndex("target_repository_id_unique").on(table.repositoryId),
+]);
 
 // Snapshots Metadata Table
 export const snapshotsMetadata = sqliteTable("snapshots_metadata_table", {
@@ -57,7 +60,10 @@ export const snapshotsMetadata = sqliteTable("snapshots_metadata_table", {
     snapshotStatus: text("snapshotStatus", { enum: ['success', 'partial'] }).notNull(),
     snapshotSummary: text("snapshotSummary", { mode: "json" }).notNull(),
     size: integer("size").notNull(),
-});
+}, (table) => [
+    uniqueIndex("snapshots_metadata_repository_id_unique").on(table.repositoryId),
+    uniqueIndex("snapshots_metadata_snapshot_id_unique").on(table.snapshotId),
+]);
 
 // Restore File Table
 export const restores = sqliteTable("restores_table", {
@@ -68,13 +74,18 @@ export const restores = sqliteTable("restores_table", {
     // result meta data
     serverPath: text("server_path"),
     resultName: text("result_name"),
+    resultType: text("result_type", { enum: ['file', 'zip']}),
     resultSize: integer("result_size"),
     // timestamp
     scheduledAt: integer("scheduled_at").notNull(),
     startedAt: integer("started_at"),
     zippedAt: integer("zipped_at"), // if file is dir or more than one, zip. other is null
     finishedAt: integer("finished_at"),
-})
+    // status
+    restoreStatus: text("restore_status", { enum: ["success", "fail", "running", "pending", "cancel"]}).notNull(),
+}, (table) => [
+    uniqueIndex("restores_snapshots_metadata_id_unique").on(table.snapshotsMetadataId),
+])
 
 // Execution Table
 export const execution = sqliteTable("execution_table", {
@@ -93,7 +104,12 @@ export const execution = sqliteTable("execution_table", {
     backupTargetId: integer("backup_target_id").references(() => backupTarget.id, { onDelete: 'cascade' }), // backup, copyTo
     snapshotsMetadataId: integer("snapshots_metadata_id").references(() => snapshotsMetadata.id, { onDelete: 'cascade' }), // backup
     restoresId: integer("restores_id").references(() => restores.id, { onDelete: 'cascade' }), // restore
-})
+}, (table) => [
+    uniqueIndex("executions_repository_id_unique").on(table.restoresId),
+    uniqueIndex("executions_backup_target_id_unique").on(table.backupTargetId),
+    uniqueIndex("executions_snapshots_metadata_id_unique").on(table.snapshotsMetadataId),
+    uniqueIndex("executions_restores_id_unique").on(table.restoresId),
+])
 
 // System Settings Table
 export const setting = sqliteTable("system_setting", {
