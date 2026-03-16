@@ -297,7 +297,6 @@ async function main() {
             startedAt: daysAgo(1),
             finishedAt: daysAgo(1) + 3600,
             executeStatus: "success",
-            strategyId: strategy1.id,
             backupTargetId: target1.id,
         },
         {
@@ -312,7 +311,6 @@ async function main() {
             finishedAt: daysAgo(2) + 1200,
             executeStatus: "success",
             repositoryId: repo1.id,
-            strategyId: null,
             backupTargetId: null,
         },
         {
@@ -326,7 +324,6 @@ async function main() {
             startedAt: daysAgo(7),
             finishedAt: daysAgo(7) + 7200,
             executeStatus: "success",
-            strategyId: strategy3.id,
             backupTargetId: target3.id,
         },
         {
@@ -340,7 +337,6 @@ async function main() {
             startedAt: daysAgo(0.25),
             finishedAt: daysAgo(0.25) + 600,
             executeStatus: "fail",
-            strategyId: strategy1.id,
             backupTargetId: target1.id,
         },
         {
@@ -354,7 +350,6 @@ async function main() {
             startedAt: null,
             finishedAt: null,
             executeStatus: "pending",
-            strategyId: strategy1.id,
             backupTargetId: target1.id,
         },
     ]);

@@ -1,4 +1,4 @@
-import {sqliteTable, text, integer, real, uniqueIndex} from "drizzle-orm/sqlite-core";
+import {sqliteTable, text, integer, real, uniqueIndex, index} from "drizzle-orm/sqlite-core";
 import {relations} from "drizzle-orm";
 
 // Repository Table
@@ -39,8 +39,8 @@ export const backupTarget = sqliteTable("backup_target_table", {
     nextBackupAt: integer("next_backup_at").notNull(),
     index: integer("index").notNull(),
 }, (table) => [
-    uniqueIndex("target_strategy_id_unique").on(table.backupStrategyId),
-    uniqueIndex("target_repository_id_unique").on(table.repositoryId),
+    index("target_strategy_id_idx").on(table.backupStrategyId),
+    index("target_repository_id_idx").on(table.repositoryId),
 ]);
 
 // Snapshots Metadata Table
@@ -61,7 +61,7 @@ export const snapshotsMetadata = sqliteTable("snapshots_metadata_table", {
     snapshotSummary: text("snapshotSummary", { mode: "json" }).notNull(),
     size: integer("size").notNull(),
 }, (table) => [
-    uniqueIndex("snapshots_metadata_repository_id_unique").on(table.repositoryId),
+    index("snapshots_metadata_repository_id_idx").on(table.repositoryId),
     uniqueIndex("snapshots_metadata_snapshot_id_unique").on(table.snapshotId),
 ]);
 
@@ -84,7 +84,7 @@ export const restores = sqliteTable("restores_table", {
     // status
     restoreStatus: text("restore_status", { enum: ["success", "fail", "running", "pending", "cancel"]}).notNull(),
 }, (table) => [
-    uniqueIndex("restores_snapshots_metadata_id_unique").on(table.snapshotsMetadataId),
+    index("restores_snapshots_metadata_id_idx").on(table.snapshotsMetadataId),
 ])
 
 // Execution Table
@@ -105,10 +105,10 @@ export const execution = sqliteTable("execution_table", {
     snapshotsMetadataId: integer("snapshots_metadata_id").references(() => snapshotsMetadata.id, { onDelete: 'cascade' }), // backup
     restoresId: integer("restores_id").references(() => restores.id, { onDelete: 'cascade' }), // restore
 }, (table) => [
-    uniqueIndex("executions_repository_id_unique").on(table.restoresId),
-    uniqueIndex("executions_backup_target_id_unique").on(table.backupTargetId),
-    uniqueIndex("executions_snapshots_metadata_id_unique").on(table.snapshotsMetadataId),
-    uniqueIndex("executions_restores_id_unique").on(table.restoresId),
+    index("executions_repository_id_idx").on(table.restoresId),
+    index("executions_backup_target_id_idx").on(table.backupTargetId),
+    index("executions_snapshots_metadata_id_idx").on(table.snapshotsMetadataId),
+    index("executions_restores_id_idx").on(table.restoresId),
 ])
 
 // System Settings Table
@@ -164,6 +164,15 @@ export const repositoryRelations = relations(repository, ({ many }) => ({
     executions: many(execution),
 }))
 // restore => multiple execution
-export const restoresRelations = relations(restores, ({ many }) => ({
+export const restoresRelations = relations(restores, ({ one, many }) => ({
     executions: many(execution),
+    // Link to Snapshots metadata
+    snapshot: one(snapshotsMetadata, {
+        fields: [restores.snapshotsMetadataId],
+        references: [snapshotsMetadata.id],
+    })
+}))
+// snapshots metadata => multiple restores
+export const snapshotsMetadataRelations = relations(snapshotsMetadata, ({ many }) => ({
+    restores: many(restores),
 }))
