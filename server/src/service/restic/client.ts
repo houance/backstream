@@ -56,7 +56,9 @@ export class RepositoryClient {
         snapshotIds: string[],
         logFie:string,
         errorFile: string,
-        uuid: string): Task<ResticResult<boolean>> {
+        uuid: string,
+        signal: AbortSignal,
+    ): Task<ResticResult<boolean>> {
         if (this.repoType !== RepoType.LOCAL && this.repoType === targetClient.repoType) {
             throw new Error('copy between same type of repositories is not supported');
         }
@@ -65,6 +67,7 @@ export class RepositoryClient {
             command,
             logFie,
             errorFile,
+            signal,
             {
                 env: {
                     ...this._env,
@@ -101,16 +104,22 @@ export class RepositoryClient {
             logFile: logFie,
             errorFile: errorFile,
             result: result,
-            cancel: () => process.kill(),
             getProgress: () => progress,
         }
     }
 
-    public backup(path: string, logFile: string, errorFile: string, uuid: string): Task<ResticResult<SnapshotSummary>> {
+    public backup(
+        path: string,
+        logFile: string,
+        errorFile: string,
+        uuid: string,
+        signal: AbortSignal
+    ): Task<ResticResult<SnapshotSummary>> {
         const process = executeStream(
             `restic backup . --skip-if-unchanged --json`,
             logFile,
             errorFile,
+            signal,
             { cwd: path, env: this._env }
         );
         const progress: Progress = { totalBytes: 0, bytesDone: 0, percentDone: 0 };
@@ -161,7 +170,6 @@ export class RepositoryClient {
             logFile: logFile,
             errorFile: errorFile,
             result: result,
-            cancel: () => process.kill(),
             getProgress: () => progress,
         }
     }
@@ -173,13 +181,15 @@ export class RepositoryClient {
         resultPath: string,
         logFile: string,
         errorFile: string,
-        uuid: string
+        uuid: string,
+        signal: AbortSignal
     ): Task<ResticResult<string>> {
         const command = `restic dump ${snapshotId}:${node.path} / --target ${resultPath} -a zip --json`
         const process = executeStream(
             command,
             logFile,
             errorFile,
+            signal,
             { env: this._env }
         );
         // 更新 progress
@@ -222,7 +232,6 @@ export class RepositoryClient {
             logFile: logFile,
             errorFile: errorFile,
             result: result,
-            cancel: () => process.kill(),
             getProgress: () => progress,
         }
     }
@@ -233,13 +242,16 @@ export class RepositoryClient {
         dir: string,
         logFile: string,
         errorFile: string,
-        uuid: string): Task<ResticResult<string>> {
+        uuid: string,
+        signal: AbortSignal
+    ): Task<ResticResult<string>> {
         const command = `restic restore ${snapshotId}:${getParentPathFromNode(node.path)} ` +
             `--target ${dir} --include /${node.name} --json`
         const process = executeStream(
             command,
             logFile,
             errorFile,
+            signal,
             { env: this._env }
         );
         // 更新 progress
@@ -282,12 +294,16 @@ export class RepositoryClient {
             logFile: logFile,
             errorFile: errorFile,
             result: result,
-            cancel: () => process.kill(),
             getProgress: () => progress,
         }
     }
 
-    public prune(logFile: string, errorFile: string, uuid: string): Task<ResticResult<boolean>> {
+    public prune(
+        logFile: string,
+        errorFile: string,
+        uuid: string,
+        signal: AbortSignal
+    ): Task<ResticResult<boolean>> {
         const command = this.repoType === "LOCAL" ?
             `restic prune --max-unused 0 --repack-cacheable-only --verbose` :
             `restic prune --max-unused unlimited --verbose`;
@@ -295,6 +311,7 @@ export class RepositoryClient {
             command,
             logFile,
             errorFile,
+            signal,
             { env: this._env }
         );
         // 更新 progress
@@ -322,7 +339,6 @@ export class RepositoryClient {
             logFile: logFile,
             errorFile: errorFile,
             result: result,
-            cancel: () => process.kill(),
             getProgress: () => progress,
         }
     }
@@ -331,7 +347,9 @@ export class RepositoryClient {
         logFile: string,
         errorFile: string,
         percentage:number = 0,
-        uuid: string): Task<ResticResult<CheckSummary>> {
+        uuid: string,
+        signal: AbortSignal
+    ): Task<ResticResult<CheckSummary>> {
         const command = percentage > 0 ?
             `restic check --read-data-subset=${percentage}% --json` :
             `restic check --json`
@@ -339,6 +357,7 @@ export class RepositoryClient {
             command,
             logFile,
             errorFile,
+            signal,
             { env: this._env }
         );
         // 不支持 progress
@@ -367,7 +386,6 @@ export class RepositoryClient {
             logFile: logFile,
             errorFile: errorFile,
             result: result,
-            cancel: () => process.kill(),
             getProgress: () => progress,
         }
     }

@@ -29,6 +29,7 @@ export function executeStream(
     command: string,
     logFile: string,
     errorFile: string,
+    signal: AbortSignal,
     options: Options,
     commandPath?: string,
 ):ResultPromise {
@@ -42,6 +43,7 @@ export function executeStream(
         ...options,
         stdout: [{ file: logFile, append: true}, 'pipe'],
         stderr: [{ file: errorFile, append: true }, 'pipe'],
+        cancelSignal: signal,
         reject: false,
         buffer: false,
         cleanup: true,
@@ -51,7 +53,7 @@ export function executeStream(
             ...options.env,
             RESTIC_PROGRESS_FPS: '0.2', // 5 second report rate
             GOMAXPROCS: '2',
-        }
+        },
     });
 }
 

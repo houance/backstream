@@ -1,7 +1,6 @@
-import {createWriteStream, existsSync, constants} from "node:fs";
-import {mkdtemp, writeFile, readdir, stat, rm, mkdir, realpath, access} from "node:fs/promises";
+import {existsSync, constants} from "node:fs";
+import {mkdtemp, writeFile, readdir, stat, rm, mkdir, realpath, access, unlink} from "node:fs/promises";
 import path from "node:path";
-import archiver from "archiver";
 import { env } from '../../config/env'
 import {logger} from "../log/logger";
 
@@ -45,38 +44,35 @@ export class FileManager {
         return path.join(zipFolder, fileFullName);
     }
 
-    public static async getFileSize(path: string): Promise<number | null> {
-        try {
-            const { size } = await stat(path);
-            return size;
-        } catch (error) {
-            logger.warn(error, "Could not read file size");
-            return null;
-        }
+    public static async getFileInfo(fullPath: string) {
+        const stats = await stat(fullPath);
+        const fileName = path.basename(fullPath);
+
+        // path.extname returns '.ext', slice(1) removes the leading dot
+        const fileType = path.extname(fullPath).slice(1).toLowerCase();
+
+        return {
+            size: stats.size,
+            name: fileName,
+            type: fileType
+        };
     }
 
-    public static async zip(file: string, zipName: string):
-        Promise<{ success: true, result: string } | { success: false, error: any }> {
-        // todo: linux 平台引入 zip cli, fallback to archiver. window 平台允许用户选择路径直接 restore
-        const zipPath = path.join(path.dirname(file), `${zipName}.zip`);
-        const output = createWriteStream(zipPath);
-        const archive = archiver('zip', { zlib: { level: 5 } });
-
-        return new Promise((resolve) => {
-            // 1. Listen for the 'close' event on the output stream (True completion)
-            output.on('close', () => {
-                resolve({ success: true, result: zipPath });
-            });
-
-            // 2. Handle errors from both the archiver and the write stream
-            output.on('error', (err) => resolve({ success: false, error: err }));
-            archive.on('error', (err) => resolve({ success: false, error: err }));
-
-            // 3. Pipe and finalize
-            archive.pipe(output);
-            archive.directory(file, false);
-            archive.finalize(); // No need to await this inside the Promise
-        });
+    public static async deleteFileAndFolder(fullPath: string) {
+        try {
+            // 1. Delete the file (it must be a file)
+            await unlink(fullPath);
+            // 2. Identify the parent folder
+            const parentFolder = path.dirname(fullPath);
+            const folderName = path.basename(parentFolder);
+            // 3. Delete the parent folder only if it starts with tmp folder prefix
+            if (folderName.startsWith(FileManager.tmpFolderPrefix)) {
+                // Use recursive: true if the folder might contain other files/folders
+                await rm(parentFolder, { recursive: true, force: true });
+            }
+        } catch (error: any) {
+            logger.error(`Failed to delete: ${error.message}`);
+        }
     }
 
     /**

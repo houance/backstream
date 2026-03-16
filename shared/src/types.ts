@@ -346,3 +346,7 @@ export const updateRestoreSchema = insertRestoreSchema.safeExtend({
     id: z.number().positive(),
 })
 export type UpdateRestoreSchema = z.infer<typeof updateRestoreSchema>;
+export const restoreDataSchema = updateRestoreSchema.safeExtend({
+    executions: updateExecutionSchema.array()
+})
+export type RestoreDataSchema = z.infer<typeof restoreDataSchema>;

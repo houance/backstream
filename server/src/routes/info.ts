@@ -10,24 +10,15 @@ import {inArray} from "drizzle-orm";
 const infoRoute = new Hono<Env>()
     .get('/health', (c) => c.json({ message:'OK'}))
     .get('/activity', async (c) => {
-        const dbResult = await c.var.db.query.execution.findMany({
-            orderBy: (execution, { desc }) => [desc(execution.finishedAt)],
-            limit: 20,
-            with: {
-                target: true,
-                strategy: true,
-                repository: true,
-            },
-        });
+        const dbResult = await getExecutionsData(c.var.db);
         if (!dbResult) return c.json({ error: 'db error'}, 500);
         const result: Activity[] = dbResult.map(item => ({
             id: item.id,
             title: item.commandType,
-            description: `Performed ${item.commandType} on ${item.repository ? item.repository.name : item.strategy?.name}(${item.executeStatus})`,
+            description: `Performed ${item.commandType} on ${item.repository ? item.repository.name : item.target?.strategy.name}(${item.executeStatus})`,
             completeAt: item.finishedAt ? item.finishedAt : 0,
             level: item.executeStatus === "fail" ? "ALERT" : "INFO",
         }))
-
         return c.json(result);
     })
     .get('/stats', async (c) => {
@@ -115,6 +106,21 @@ const infoRoute = new Hono<Env>()
             }
             return c.json(result);
     })
+
+async function getExecutionsData(db: Env['Variables']['db']) {
+    return await db.query.execution.findMany({
+        orderBy: (execution, { desc }) => [desc(execution.finishedAt)],
+        limit: 20,
+        with: {
+            target: {
+                with: {
+                    strategy: true
+                }
+            },
+            repository: true,
+        },
+    });
+}
 
 function getLevenshteinDistance(a: string, b: string): number {
     const tmp = Array(b.length + 1).fill(null).map(() => Array(a.length + 1).fill(null));

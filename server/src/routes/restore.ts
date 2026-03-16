@@ -4,73 +4,84 @@ import {zValidator} from "@hono/zod-validator";
 import {
     filterQuery,
     type FilterQuery,
-    repository,
-    restoreJobKey,
+    repository, restoreDataSchema,
     restores, type SnapshotFile,
-    snapshotFile, snapshotsMetadata, updateRepositorySchema, type UpdateRestoreSchema,
-    updateRestoreSchema
+    snapshotFile, snapshotsMetadata, updateExecutionSchema, updateRepositorySchema,
+    updateRestoreSchema, updateSnapshotsMetadataSchema
 } from "@backstream/shared";
-import {and, eq, gte, lte} from "drizzle-orm";
+import {and, eq, gte, lte, inArray, count} from "drizzle-orm";
 import path from "node:path";
 import { stream } from 'hono/streaming'
 import {open, readFile} from "node:fs/promises";
+import {FileManager} from "../service/backup-manager/file-manager";
 
 const restoreRoute = new Hono<Env>()
     .post('/all-restores',
         zValidator('json', filterQuery),
         async (c) => {
             const filter = c.req.valid('json');
-            const { start, end } = getTimeRange(filter);
-            const dbResult = await c.var.db.select().from(restores)
-                .where(and(
-                    gte(restores.scheduledAt, start),
-                    lte(restores.scheduledAt, end)
-                ))
-                .limit(filter.pageSize)
-                .offset(filter.page - 1 > 0 ? filter.page - 1 : 0)
+            const [ dbResult, countResult ] = await getAllRestoreData(c.var.db, filter);
             if (!dbResult) return c.json({ error: 'query restores db error'}, 500);
-            if (dbResult.length === 0) return c.json([]);
-            const validated = updateRestoreSchema.array().parse(dbResult);
-            return c.json(validated);
+            if (countResult[0].count === 0) return c.json({
+                restores: [],
+                totalCount: 0
+            });
+            // todo: enhance file's path to include policy name and repo name
+            const validated = restoreDataSchema.array().parse(dbResult);
+            return c.json({
+                restores: validated,
+                totalCount: countResult[0].count
+            });
     })
     .post('/submit-restore',
         zValidator('json', snapshotFile),
         async (c) => {
             const validated = c.req.valid('json');
+            // check if snapshot exist
+            const snapshot = await c.var.db.query.snapshotsMetadata.findFirst({
+                where: (snapshotsMetadata, { and, eq }) => and(
+                    eq(snapshotsMetadata.repositoryId, validated.repoId),
+                    eq(snapshotsMetadata.snapshotId, validated.snapshotId),
+                ),
+                with: {
+                    restores: {
+                        with: {
+                            executions: {
+                                where: (executions, { inArray }) => inArray(
+                                    executions.executeStatus, ['success', 'running', 'pending']
+                                )
+                            }
+                        }
+                    }
+                }
+            });
+            if (!snapshot) return c.json({ message: 'Not found'}, 404);
             // check if already restore
-            const restore = await getRestoreBySnapshotFiles(c.var.db, validated);
-            if (restore !== null) return c.json({ key: restore.id });
+            for (let restore of updateRestoreSchema.array().parse(snapshot.restores)) {
+                if (restore.files[0].path === validated.path) return c.json({ key: restore.id }, 200) // 200 for Existing restore
+            }
             const [repo] = await c.var.db.select().from(repository).where(eq(repository.id, validated.repoId));
             const rs = await c.var.scheduler.getResticService(updateRepositorySchema.parse(repo));
             // start restore
-            const key = await rs.restoreSnapshotFile(validated);
-            return c.json({ key: key });
+            const key = await rs.restoreSnapshotFile(validated, updateSnapshotsMetadataSchema.parse(snapshot));
+            return c.json({ key: key }, 201); // 201 for newly created restore
         })
-    .post('/check-restore-status/:id', async (c) => {
-        const restoreId = Number(c.req.param('id'));
-        const [dbResult] = await c.var.db.select().from(restores)
-            .where(eq(restores.id, restoreId));
-        if (!dbResult) return c.json({ message: 'Not found'}, 404);
-        return c.json({
-            status: dbResult.restoreStatus
-        })
-    })
     .get('/restore-log/:id', async (c) => {
         const restoreId = Number(c.req.param('id'))
         const restoreData = await getRestoreData(c.var.db, restoreId);
         if (!restoreData || !restoreData.executions || restoreData.executions.length === 0) return c.json({ message: 'Not found'}, 404);
-        if (restoreData.restoreStatus === 'pending') return c.json([]);
+        if (restoreData.executions[0].executeStatus === 'pending') return c.json([]);
         const exec = restoreData.executions[0];
         const logs = await getLogs(exec.logFile!, exec.errorFile!);
         return c.json(logs);
     })
     .on(['GET', 'HEAD'], '/download-restore-file', async (c) => {
         const key = Number(c.req.query('key'));
-        const [restore] = await c.var.db.select().from(restores)
-            .where(eq(restores.id, key));
-        if (!restore) return c.json({ message: 'Not found'}, 404);
+        const restoreData = await getRestoreData(c.var.db, key);
+        if (!restoreData) return c.json({ message: 'Not found'}, 404);
+        if (restoreData.executions[0].executeStatus !== 'success') return c.json({ message: 'Not a success restore' }, 400);
         // get restore file
-        const filePath = restore.serverPath!;
+        const filePath = restoreData.serverPath!;
         const CHUNK_SIZE = 512 * 1024;
         // Set necessary binary stream headers
         c.header('Content-Type', 'application/octet-stream')
@@ -104,13 +115,54 @@ const restoreRoute = new Hono<Env>()
     })
     .delete('/:id', async (c) => {
         const restoreId = Number(c.req.param('id'));
-        const [restore] = await c.var.db.select().from(restores)
-            .where(eq(restores.id, restoreId));
+        const restore = await c.var.db.query.restores.findFirst({
+            where: (restores, { eq }) => eq(restores.id, restoreId),
+            with: {
+                executions: true,
+                snapshot: {
+                    with: {
+                        repository: true
+                    }
+                }
+            }
+        })
         if (!restore) return c.json({ message: 'Not found' }, 404);
-        // todo: 停止正在 restore 的 job
+        // 停止正在 restore 的 job
+        const validatedRepo = updateRepositorySchema.parse(restore.snapshot.repository);
+        const rs = await c.var.scheduler.getResticService(validatedRepo);
+        updateExecutionSchema.array().parse(restore.executions).forEach(exec => rs.stopJobByExec(exec));
+        // delete restore record
         await c.var.db.delete(restores).where(eq(restores.id, restoreId));
+        // delete file
+        if (restore.serverPath) void FileManager.deleteFileAndFolder(restore.serverPath)
         return c.json({ success: true, restoreId });
     })
+
+async function getAllRestoreData(db: Env['Variables']['db'], filterQuery: FilterQuery) {
+    const { start, end } = getTimeRange(filterQuery)
+    return await Promise.all([
+        db.query.restores.findMany({
+            where: (restores, { gte, lte, and }) => and(
+                gte(restores.createdAt, start),
+                lte(restores.createdAt, end)
+            ),
+            limit: filterQuery.pageSize,
+            offset: filterQuery.page - 1 > 0 ? filterQuery.page - 1 : 0,
+            with: {
+                executions: {
+                    orderBy: (execution, { desc }) =>
+                        [desc(execution.id)],
+                    limit: 1
+                }
+            }
+        }),
+        db.select({ count: count() }).from(restores)
+            .where(and(
+                gte(restores.createdAt, start),
+                lte(restores.createdAt, end)
+            ))
+    ]);
+}
 
 async function getRestoreData(db: Env['Variables']['db'], id: number) {
     const result = await db.query.restores.findFirst({
@@ -146,27 +198,6 @@ async function getLogs(stdout: string, stderr: string): Promise<string[]> {
     } catch (error) {
         return [`Failed to combine logs: ${(error as Error).message}`];
     }
-}
-
-async function getRestoreBySnapshotFiles(db: Env['Variables']['db'], file: SnapshotFile) {
-    const snapshot = await db.query.snapshotsMetadata.findFirst({
-        where: (snapshotsMetadata, { and, eq }) => and(
-            eq(snapshotsMetadata.repositoryId, file.repoId),
-            eq(snapshotsMetadata.snapshotId, file.snapshotId),
-        ),
-        with: {
-            restores: {
-                where: (restores, { inArray }) =>
-                    inArray(restores.restoreStatus, ['success', 'running', 'pending'])
-            }
-        }
-    });
-    if (!snapshot || !snapshot.restores || snapshot.restores.length === 0) return null;
-    // check if restore file match
-    for (const restore of updateRestoreSchema.array().parse(snapshot.restores)) {
-        if (restore.files[0].path === file.path) return restore;
-    }
-    return null;
 }
 
 function getTimeRange(filter: FilterQuery) {

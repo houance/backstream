@@ -1,7 +1,7 @@
 import type {SnapshotFile} from "@backstream/shared";
 import {useMemo, useState} from "react";
-import {ActionIcon, Anchor, Breadcrumbs, Group, Stack, Table, Text} from "@mantine/core";
-import {IconDownload, IconFile, IconFolder} from "@tabler/icons-react";
+import {ActionIcon, Anchor, Breadcrumbs, Group, Stack, Table, Text, Tooltip} from "@mantine/core";
+import {IconRestore, IconFile, IconFolder} from "@tabler/icons-react";
 import {formatBytes} from "../../../util/format.ts";
 
 interface FileBrowserProps {
@@ -58,7 +58,7 @@ export function FileBrowser({ flatFiles, onDownload, isDownloading }: FileBrowse
                         <Table.Th>Name</Table.Th>
                         <Table.Th>Size</Table.Th>
                         <Table.Th>Modified</Table.Th>
-                        <Table.Th />
+                        <Table.Th>Action</Table.Th>
                     </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
@@ -96,18 +96,20 @@ export function FileBrowser({ flatFiles, onDownload, isDownloading }: FileBrowse
                                 </Text>
                             </Table.Td>
                             <Table.Td>
-                                <Group gap={4} justify="flex-end">
-                                    <ActionIcon
-                                        size="sm"
-                                        variant="subtle"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            onDownload(file);
-                                        }}
-                                        loading={isDownloading}
-                                    >
-                                        <IconDownload size={14} />
-                                    </ActionIcon>
+                                <Group gap={4} justify="flex-start">
+                                    <Tooltip label="Restore" withArrow openDelay={300}>
+                                        <ActionIcon
+                                            size="sm"
+                                            variant="subtle"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onDownload(file);
+                                            }}
+                                            loading={isDownloading}
+                                        >
+                                            <IconRestore size={14} />
+                                        </ActionIcon>
+                                    </Tooltip>
                                 </Group>
                             </Table.Td>
                         </Table.Tr>

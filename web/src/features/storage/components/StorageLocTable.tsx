@@ -43,9 +43,11 @@ export default function StorageLocTable({data, onDelete} : { data: UpdateReposit
                     </Badge>
                 </Table.Td>
                 <Table.Td>
-                    <ActionIcon variant="light" color="red" aria-label="Delete" onClick={() => onDelete(item)}>
-                        <IconTrash size="1rem" />
-                    </ActionIcon>
+                    <Tooltip label="Delete Storage Location" color='red' withArrow openDelay={300}>
+                        <ActionIcon variant="light" color="red" aria-label="Delete" onClick={() => onDelete(item)}>
+                            <IconTrash size="1rem" />
+                        </ActionIcon>
+                    </Tooltip>
                 </Table.Td>
             </Table.Tr>
         )});

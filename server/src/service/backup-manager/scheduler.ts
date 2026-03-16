@@ -143,7 +143,7 @@ export class Scheduler {
             // 停止 target 正在运行的任务
             const rs = this.clientMap.get(target.repositoryId);
             if (!rs) continue;
-            await rs.stopPolicyRunningJob(target.id);
+            await rs.stopPolicyJob(target.id);
         }
         return { status: 'success' };
     }

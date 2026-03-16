@@ -5,16 +5,13 @@ import {
     filterQuery, type FilterQuery,
     type FinishedSnapshotsMetaSchema,
     finishedSnapshotsMetaSchema,
-    repository, restoreJobKey, snapshotFile,
+    repository, snapshotFile,
     snapshotsMetadata, updateBackupTargetSchema,
     updateRepositorySchema,
     updateSnapshotsMetadataSchema
 } from "@backstream/shared";
 import {zValidator} from "@hono/zod-validator";
 import {and, eq, gte, lte, count} from "drizzle-orm";
-import { open } from 'node:fs/promises';
-import { stream } from 'hono/streaming'
-import path from "node:path";
 import { z } from "zod";
 
 
@@ -98,66 +95,6 @@ const snapshotsRoute = new Hono<Env>()
                 mtime: node.mtime,
                 path: node.path,
             })))
-        })
-    .post('/submit-restore',
-        zValidator('json', snapshotFile),
-        async (c) => {
-            const validated = c.req.valid('json');
-            const [repo] = await c.var.db.select().from(repository).where(eq(repository.id, validated.repoId));
-            const rs = await c.var.scheduler.getResticService(updateRepositorySchema.parse(repo));
-            // start restore
-            const key = await rs.restoreSnapshotFile(validated);
-            return c.json(key);
-        })
-    .post('/check-restore-status',
-        zValidator('json', restoreJobKey),
-        async (c) => {
-            const validated = c.req.valid('json');
-            const [repo] = await c.var.db.select().from(repository).where(eq(repository.id, validated.repoId));
-            const rs = await c.var.scheduler.getResticService(updateRepositorySchema.parse(repo));
-            // check restore status
-            const result = rs.checkRestoreStatus(validated);
-            return c.json(result);
-        })
-    .on(['GET', 'HEAD'], '/restore-file',
-        async (c) => {
-            const key = c.req.query('key');
-            if (!key) return c.json({error: 'Query Key is empty'}, 404);
-            const validated = restoreJobKey.parse(JSON.parse(key));
-            const [repo] = await c.var.db.select().from(repository).where(eq(repository.id, validated.repoId));
-            const rs = await c.var.scheduler.getResticService(updateRepositorySchema.parse(repo));
-            // get restore file
-            const filePath = rs.getRestoreFile(validated);
-            const CHUNK_SIZE = 512 * 1024;
-            // Set necessary binary stream headers
-            c.header('Content-Type', 'application/octet-stream')
-            c.header('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`)
-            c.header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
-            // Handle HEAD request (Pre-flight check from React)
-            if (c.req.method === 'HEAD') {
-                return c.body(null, 200); // Return headers only, no file body
-            }
-            // return stream
-            return stream(c, async (stream) => {
-                const file = await open(filePath)
-                const buffer = Buffer.alloc(CHUNK_SIZE)
-                // handle user abort
-                let isAborted = false;
-                stream.onAbort(() => {
-                    isAborted = true;
-                })
-                try {
-                    let bytesRead
-                    while (!isAborted && (bytesRead = (await file.read(buffer, 0, CHUNK_SIZE)).bytesRead) > 0) {
-                        // Write the specific MB block to the stream
-                        await stream.write(buffer.subarray(0, bytesRead))
-                    }
-                } catch (e) {
-                    c.var.logger.warn(e, `Streaming ${path.basename(filePath)} error (likely disconnect):`)
-                }finally {
-                    await file.close()
-                }
-            })
         })
 
 async function getPolicyByTargetId(db: Env['Variables']['db'], targetId: number) {

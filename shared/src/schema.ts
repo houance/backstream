@@ -73,15 +73,11 @@ export const restores = sqliteTable("restores_table", {
     // result meta data
     serverPath: text("server_path"),
     resultName: text("result_name"),
-    resultType: text("result_type", { enum: ['file', 'zip']}),
+    resultType: text("result_type"), // file extension
     resultSize: integer("result_size"),
     // timestamp
-    scheduledAt: integer("scheduled_at").notNull(),
-    startedAt: integer("started_at"),
-    zippedAt: integer("zipped_at"), // if file is dir or more than one, zip. other is null
-    finishedAt: integer("finished_at"),
-    // status
-    restoreStatus: text("restore_status", { enum: ["success", "fail", "running", "pending", "cancel"]}).notNull(),
+    createdAt: integer("createdAt").notNull(),
+    finishedAt: integer("finishedAt"),
 }, (table) => [
     index("restores_snapshots_metadata_id_idx").on(table.snapshotsMetadataId),
 ])
@@ -143,7 +139,7 @@ export const executionRelations = relations(execution, ({ one }) => ({
         references: [backupTarget.id],
     }),
     // Link to Strategy directly (as defined in your table)
-    strategy: one(snapshotsMetadata, {
+    snapshot: one(snapshotsMetadata, {
         fields: [execution.snapshotsMetadataId],
         references: [snapshotsMetadata.id],
     }),
@@ -172,6 +168,10 @@ export const restoresRelations = relations(restores, ({ one, many }) => ({
     })
 }))
 // snapshots metadata => multiple restores
-export const snapshotsMetadataRelations = relations(snapshotsMetadata, ({ many }) => ({
+export const snapshotsMetadataRelations = relations(snapshotsMetadata, ({ one, many }) => ({
     restores: many(restores),
+    repository: one(repository, {
+        fields: [snapshotsMetadata.repositoryId],
+        references: [repository.id],
+    })
 }))

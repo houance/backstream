@@ -5,7 +5,7 @@ import {ensureSuccess} from "../../util/api.ts";
 import { client } from 'src/api/index.ts';
 import type {FilterQuery} from "@backstream/shared";
 import {notice} from "../../util/notification.tsx";
-import {Center, Loader} from "@mantine/core";
+import { Center, Container, Group, Loader, Pagination, Select, Text} from "@mantine/core";
 
 export default function RestorePage() {
     // filter query state
@@ -19,7 +19,7 @@ export default function RestorePage() {
     const queryClient = useQueryClient();
 
     // 1. Fetch Table Data
-    const { data: restores, isPending: isRestoresLoading, isPlaceholderData } = useQuery({
+    const { data: allRestores, isPending: isRestoresLoading, isPlaceholderData } = useQuery({
         queryKey: ['restores'],
         queryFn: async () => {
             const res = await client.api.restore['all-restores'].$post({
@@ -41,59 +41,32 @@ export default function RestorePage() {
             if (!res.ok) throw new Error('Failed to fetch restore logs');
             return res.json();
         },
-        enabled: !!restores && !!activeLogId,
+        enabled: !!allRestores && !!activeLogId,
         staleTime: 5000,
         placeholderData: keepPreviousData
     });
     // --- 3. DOWNLOAD RESTORE FILE ---
     const restoreDownloadMutate = useMutation({
         mutationFn: async (id: number) => {
-            // 1. Send request and get Key
-            const submitRes = await client.api.snapshot['submit-restore'].$post({ json: file });
-            if (!submitRes.ok) throw new Error('Initial restore request failed');
-            const jobKey = await submitRes.json();
-            // 2. Polling status by key
-            let isFinished = false;
-            let attempts = 0;
-            const DELAY = 2000;
-            const MAX_ATTEMPTS = 30; // ~1 minute if polling every 2s
-
-            while (!isFinished && attempts < MAX_ATTEMPTS) {
-                await new Promise((resolve) => setTimeout(resolve, DELAY)); // Wait 2 seconds between polls
-                attempts++;
-                const statusRes = await client.api.snapshot['check-restore-status'].$post({ json: jobKey });
-                if (!statusRes.ok) throw new Error('Failed to check restore status');
-                // check restore status
-                const { status } = await statusRes.json();
-                if (status === 'success') {
-                    isFinished = true;
-                    // HEAD CHECK if file exist
-                    const headRes = await client.api.snapshot['restore-file'].$get({
-                        query: { key: JSON.stringify(jobKey) },
-                        init: { method: 'HEAD' } // Trigger HEAD instead of GET
-                    });
-                    if (!headRes.ok) {
-                        console.warn('Restore reported success, but file is missing on server.');
-                        return { success: false, error: 'file_not_found' };
-                    }
-                    // Trigger actual browser download
-                    const downloadUrl = client.api.snapshot['restore-file'].$url({
-                        query: { key: JSON.stringify(jobKey) }
-                    });
-                    const a = document.createElement('a');
-                    a.download = ''; // set to empty use server header
-                    a.href = downloadUrl.toString();
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                }
-                if (status === 'fail' || status === 'delete') {
-                    throw new Error(`Restore job ${status} on server.`);
-                }
+            // HEAD CHECK if file exist
+            const headRes = await client.api.restore['download-restore-file'].$get({
+                query: { key: id.toString() },
+                init: { method: 'HEAD' } // Trigger HEAD instead of GET
+            });
+            if (!headRes.ok) {
+                console.warn('Restore reported success, but file is missing on server.');
+                return { success: false, error: 'file_not_found' };
             }
-            if (!isFinished) {
-                throw new Error(`Restore timed out after ${DELAY}ms * ${MAX_ATTEMPTS}`);
-            }
+            // Trigger actual browser download
+            const downloadUrl = client.api.restore['download-restore-file'].$url({
+                query: { key: id.toString() }
+            });
+            const a = document.createElement('a');
+            a.download = ''; // set to empty use server header
+            a.href = downloadUrl.toString();
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
         },
         onError: (error) => {
             notice(false, 'Sequence failed:' + error.message);
@@ -128,13 +101,33 @@ export default function RestorePage() {
     }
 
     return (
-        <RestoreTable
-            data={restores || []}
-            activeLogId={activeLogId}
-            logs={logs}
-            onToggleLog={handleToggleLog}
-            onDownload={restoreDownloadMutate.mutate}
-            onDelete={deleteRestore.mutate}
-        />
+        <Container fluid p={0}>
+            <RestoreTable
+                data={allRestores?.restores ?? []}
+                activeLogId={activeLogId}
+                logs={logs}
+                onToggleLog={handleToggleLog}
+                onDownload={restoreDownloadMutate.mutate}
+                onDelete={deleteRestore.mutate}
+            />
+            <Group justify="flex-end" mt="xl" pt="md" style={{borderTop: '1px solid var(--mantine-color-gray-3)'}}>
+                <Text size="md" c="dimmed">Items per page:</Text>
+                <Select
+                    size="sm"
+                    withCheckIcon={false}
+                    w={70}
+                    data={['10', '15', '20', '30']}
+                    value={filter.pageSize.toString()}
+                    onChange={(val) => setFilter(prev => ({ ...prev, page: 0, pageSize: Number(val) }))}
+                />
+                <Pagination
+                    size="md" // Smaller height
+                    value={filter.page + 1}
+                    onChange={(p) => setFilter((prev) => ({ ...prev, page: p - 1 }))}
+                    total={Math.ceil((allRestores?.totalCount ?? 0) / filter.pageSize)}
+                    withEdges
+                />
+            </Group>
+        </Container>
     );
 }

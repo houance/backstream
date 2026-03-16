@@ -1,23 +1,29 @@
 import {
-    Stack, Accordion, Center, Loader, Text,
-    Paper,
+    Accordion,
+    Center,
     Group,
-    SegmentedControl, Pagination, LoadingOverlay, Select
+    Loader,
+    LoadingOverlay,
+    Pagination,
+    Paper,
+    SegmentedControl,
+    Select,
+    Stack,
+    Text
 } from '@mantine/core';
-import { DatePickerInput } from "@mantine/dates";
-import {
-    IconCloud, IconDatabase
-} from '@tabler/icons-react';
+import {DatePickerInput} from "@mantine/dates";
+import {IconCloud, IconDatabase} from '@tabler/icons-react';
 import {useState} from 'react';
 import {
     type FilterQuery,
-    type FinishedSnapshotsMetaSchema, type SnapshotFile,
+    type FinishedSnapshotsMetaSchema,
+    type SnapshotFile,
     type UpdateBackupPolicySchema
 } from "@backstream/shared";
-import { SnapshotRow } from "./SnapshotRow.tsx";
-import {keepPreviousData, useMutation, useQuery} from "@tanstack/react-query";
+import {SnapshotRow} from "./SnapshotRow.tsx";
+import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {client} from "../../../api";
-import { notice } from 'src/util/notification.tsx';
+import {notice} from 'src/util/notification.tsx';
 import {formatTimeString} from "../../../util/format.ts";
 import dayjs from "dayjs";
 
@@ -66,58 +72,30 @@ export default function SnapshotsExplorer({ policy }: { policy: UpdateBackupPoli
         enabled: !!openedSnapshot && !!allSnapshots,
         staleTime: Infinity
     });
-    // --- 3. RESTORE SNAPSHOT FILE ---
+    // --- 3. SUBMIT RESTORE ---
+    const queryClient = useQueryClient();
     const restoreMutate = useMutation({
         mutationFn: async (file: SnapshotFile) => {
-            // 1. Send request and get Key
-            const submitRes = await client.api.snapshot['submit-restore'].$post({ json: file });
-            if (!submitRes.ok) throw new Error('Initial restore request failed');
-            const jobKey = await submitRes.json();
-            // 2. Polling status by key
-            let isFinished = false;
-            let attempts = 0;
-            const DELAY = 2000;
-            const MAX_ATTEMPTS = 30; // ~1 minute if polling every 2s
-
-            while (!isFinished && attempts < MAX_ATTEMPTS) {
-                await new Promise((resolve) => setTimeout(resolve, DELAY)); // Wait 2 seconds between polls
-                attempts++;
-                const statusRes = await client.api.snapshot['check-restore-status'].$post({ json: jobKey });
-                if (!statusRes.ok) throw new Error('Failed to check restore status');
-                // check restore status
-                const { status } = await statusRes.json();
-                if (status === 'success') {
-                    isFinished = true;
-                    // HEAD CHECK if file exist
-                    const headRes = await client.api.snapshot['restore-file'].$get({
-                        query: { key: JSON.stringify(jobKey) },
-                        init: { method: 'HEAD' } // Trigger HEAD instead of GET
-                    });
-                    if (!headRes.ok) {
-                        console.warn('Restore reported success, but file is missing on server.');
-                        return { success: false, error: 'file_not_found' };
-                    }
-                    // Trigger actual browser download
-                    const downloadUrl = client.api.snapshot['restore-file'].$url({
-                        query: { key: JSON.stringify(jobKey) }
-                    });
-                    const a = document.createElement('a');
-                    a.download = ''; // set to empty use server header
-                    a.href = downloadUrl.toString();
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                }
-                if (status === 'fail' || status === 'delete') {
-                    throw new Error(`Restore job ${status} on server.`);
-                }
+            const res = await client.api.restore['submit-restore'].$post({ json: file });
+            if (!res.ok) {
+                // This throw is what actually triggers onError
+                throw new Error(`Server failed with status ${res.status}`);
             }
-            if (!isFinished) {
-                throw new Error(`Restore timed out after ${DELAY}ms * ${MAX_ATTEMPTS}`);
+            return {
+                status: res.status,
+                ok: res.ok,
+                data: await res.json()
+            };
+        },
+        onSuccess: async (res) => {
+            // 201 for newly created restore, since invalidate restores
+            if (res.status === 201) {
+                await queryClient.invalidateQueries({queryKey: ['restores']});
             }
+            notice(true, `please download it at restore page. ID: ${res.data.key}`)
         },
         onError: (error) => {
-            notice(false, 'Sequence failed:' + error.message);
+            notice(false, 'restore failed:' + error.message);
         }
     })
     // set opened snapshot to trigger file fetch

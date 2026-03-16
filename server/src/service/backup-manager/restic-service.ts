@@ -2,19 +2,19 @@ import {
     commandType,
     type CommandType,
     execution,
-    type InsertExecutionSchema,
+    type InsertExecutionSchema, type InsertRestoreSchema,
     type InsertSnapshotsMetadataSchema,
     insertSnapshotsMetadataSchema,
     repository,
     RepoType,
-    type RestoreJobKey,
+    type RestoreJobKey, restores,
     type SnapshotFile,
     snapshotsMetadata,
     type UpdateBackupTargetSchema,
     updateExecutionSchema,
     type UpdateExecutionSchema,
     updateRepositorySchema,
-    type UpdateRepositorySchema,
+    type UpdateRepositorySchema, type UpdateRestoreSchema, updateRestoreSchema,
     type UpdateSnapshotsMetadataSchema,
     updateSnapshotsMetadataSchema
 } from "@backstream/shared";
@@ -39,18 +39,12 @@ export class ResticService {
     private repoClient: RepositoryClient;
     private globalQueue: PQueue; // global concurrency limit
     private reader = 0; // simple rw lock
-    private readonly waitingJob: Map<number, AbortController>; // <executionId, AbortController>
-    private readonly runningJob: Map<number, Task<ResticResult<any>>> // <executionId, Task>
+    private readonly jobMap: Map<number, ResticJob> // <executionId, Task>
     private readonly rcloneClient: RcloneClient | null;
-    private readonly restoreFiles: Map<string, string>; // <snapshotId:path, restore file path>
-    private readonly zippingExecution: Set<number>; // <executionId>
 
     public constructor(repo: UpdateRepositorySchema, queue: PQueue) {
         // init map
-        this.waitingJob = new Map();
-        this.runningJob = new Map();
-        this.restoreFiles = new Map();
-        this.zippingExecution = new Set<number>();
+        this.jobMap = new Map();
         this.repo = repo;
         // convert to validate zod schema
         const validated = updateRepositorySchema.parse(repo);
@@ -128,18 +122,17 @@ export class ResticService {
     }
 
     public getRunningJob(execution: UpdateExecutionSchema): Task<ResticResult<any>> | null {
-        if (!this.runningJob.has(execution.id)) return null;
-        return this.runningJob.get(execution.id)!;
+        const job = this.jobMap.get(execution.id);
+        if (!job || job.status === 'waiting') return null;
+        return job.task;
     }
 
     public stopAllRunningJob() {
-        this.runningJob.forEach((value) => value.cancel());
-        this.runningJob.clear();
-        this.waitingJob.forEach((value) => value.abort());
-        this.waitingJob.clear();
+        this.jobMap.forEach((value) => value.controller.abort('manual cancel'));
+        this.jobMap.clear();
     }
 
-    public async stopPolicyRunningJob(targetId: number) {
+    public async stopPolicyJob(targetId: number) {
         const dbResult = await db.select().from(execution)
             .where(and(
                 eq(execution.backupTargetId, targetId),
@@ -147,17 +140,20 @@ export class ResticService {
             ));
         if (!dbResult || dbResult.length === 0) return;
         dbResult.forEach(exec => {
-            this.waitingJob.get(exec.id)?.abort();
-            this.waitingJob.delete(exec.id);
-            this.runningJob.get(exec.id)?.cancel();
-            this.runningJob.delete(exec.id);
+            this.jobMap.get(exec.id)?.controller.abort('manual cancel');
+            this.jobMap.delete(exec.id);
         })
+    }
+
+    public stopJobByExec(exec: UpdateExecutionSchema) {
+        this.jobMap.get(exec.id)?.controller.abort('manual cancel');
+        this.jobMap.delete(exec.id);
     }
 
     public async updateStat() {
         if (this.repo.repositoryStatus === "Corrupt") return;
         let status: 'Active' | 'Disconnected';
-        if (this.runningJob.size !== 0) {
+        if (this.jobMap.size !== 0) {
             status = 'Active';
         } else {
             const result = await this.repoClient.isRepoExist();
@@ -195,31 +191,16 @@ export class ResticService {
         )
     }
 
-    public getRestoreFile(key: RestoreJobKey): string {
-        const restoreKey = `${key.snapshotId}:${key.path}`;
-        return this.restoreFiles.get(restoreKey)!;
-    }
-
-    public checkRestoreStatus(key: RestoreJobKey): { status: 'running' | 'fail' | 'delete' | 'success' } {
-        const restoreKey = `${key.snapshotId}:${key.path}`;
-        const file = this.restoreFiles.get(restoreKey);
-        if (file) return { status: 'success' };
-        if (!key.executionId) return { status: 'delete' };
-        // check if restoring
-        const task = this.runningJob.get(key.executionId);
-        if (task) return { status: 'running' };
-        // check if zipping
-        if (this.zippingExecution.has(key.executionId)) return { status: 'running' };
-        // neither then return fail
-        return { status: 'fail' }
-    }
-
     // only support single file or dir
-    public async restoreSnapshotFile(file: SnapshotFile): Promise<number> {
-        // todo: 创建, 更新 restore
-        const newExecution = await this.createExecution(commandType.restore);
+    public async restoreSnapshotFile(file: SnapshotFile, snapshot: UpdateSnapshotsMetadataSchema): Promise<number> {
+        const newRestore = await this.createRestore(file, snapshot);
+        const newExecution = await this.createExecution(
+            commandType.restore,
+            undefined,
+            newRestore
+        );
         // start restore, return immediately
-        (async () => {
+        void (async () => {
             let serverPath;
             let task: Task<ResticResult<string>> | undefined;
             if (file.type === 'dir') {
@@ -227,14 +208,16 @@ export class ResticService {
                 serverPath = fileFullPath;
                 task = await this.startJob(
                     newExecution,
-                    (log, err) => this.repoClient.restoreFolder(
-                        file.snapshotId,
-                        {name: file.name, path: file.path},
-                        fileFullPath,
-                        log,
-                        err,
-                        newExecution.uuid
-                    ),
+                    (log, err, signal) =>
+                        this.repoClient.restoreFolder(
+                            file.snapshotId,
+                            {name: file.name, path: file.path},
+                            fileFullPath,
+                            log,
+                            err,
+                            newExecution.uuid,
+                            signal
+                        ),
                     false
                 )
             } else {
@@ -242,19 +225,26 @@ export class ResticService {
                 serverPath = path.join(dir, file.name);
                 task = await this.startJob(
                     newExecution,
-                    (log, err) => this.repoClient.restoreFile(
-                        file.snapshotId,
-                        {name: file.name, path: file.path},
-                        dir,
-                        log,
-                        err,
-                        newExecution.uuid,
-                    ),
+                    (log, err, signal) =>
+                        this.repoClient.restoreFile(
+                            file.snapshotId,
+                            {name: file.name, path: file.path},
+                            dir,
+                            log,
+                            err,
+                            newExecution.uuid,
+                            signal
+                        ),
                     false
                 );
             }
+            if (!task) return;
+            const result = await task.result;
+            if (!result.success) return;
+            logger.debug(`restore ${file.snapshotId}:${file.name} at ${this.repo.name} success`);
+            await this.finalizeRestore(serverPath, newRestore);
         })();
-        return newExecution.id;
+        return newRestore.id;
     }
 
     public async copyTo(
@@ -280,12 +270,14 @@ export class ResticService {
         const newExecution = await this.createExecution(commandType.copy, target);
         const task = await this.startJob(
             newExecution,
-            (log, err) => this.repoClient.copyTo(
+            (log, err, signal) =>
+                this.repoClient.copyTo(
                     targetService.repoClient,
                     keepSnapshotIds,
                     log,
                     err,
-                    newExecution.uuid
+                    newExecution.uuid,
+                    signal
                 )
             ,
             false,
@@ -312,8 +304,8 @@ export class ResticService {
         // add to queue
         const task = await this.startJob(
             newExecution,
-            (log, err) =>
-                this.repoClient.backup(path, log, err, newExecution.uuid),
+            (log, err, signal) =>
+                this.repoClient.backup(path, log, err, newExecution.uuid, signal),
             false
         )
         if (!task) return;
@@ -424,8 +416,8 @@ export class ResticService {
         // add to queue
         const task = await this.startJob(
             newExecution,
-            (log, err) =>
-                this.repoClient.check(log, err, this.repo.checkPercentage, newExecution.uuid),
+            (log, err, signal) =>
+                this.repoClient.check(log, err, this.repo.checkPercentage, newExecution.uuid, signal),
         )
         if (!task) return;
         // update repo as corrupt if check failed
@@ -450,7 +442,8 @@ export class ResticService {
         // add to queue
         const task = await this.startJob(
             newExecution,
-            (log, err) => this.repoClient.prune(log, err, newExecution.uuid)
+            (log, err, signal) =>
+                this.repoClient.prune(log, err, newExecution.uuid, signal)
         )
         if (!task) return;
         const result = await task.result;
@@ -460,53 +453,65 @@ export class ResticService {
 
     private async startJob<T> (
         newExecution: UpdateExecutionSchema,
-        job: (log: string, err: string) => Task<ResticResult<T>>,
+        job: (log: string, err: string, signal: AbortSignal) => Task<ResticResult<T>>,
         isExclusive: boolean = true,
         lockRemote?: () => Promise<void>,
         unLockRemote?: () => Promise<void>,
     ): Promise<Task<ResticResult<T>> | undefined> {
         const controller = new AbortController();
-        this.waitingJob.set(newExecution.id, controller);
+        const { signal } = controller;
+        this.jobMap.set(newExecution.id, { status: 'waiting', controller: controller });
+        const onAbort = async () => {
+            logger.warn(`Execution ${newExecution.id} was aborted.`);
+            await this.cancelExecution(newExecution.id);
+        };
+        signal.addEventListener('abort', onAbort, { once: true });
         try {
             return this.globalQueue.add(async () => {
-                if (isExclusive) {
-                    await this.writeLock();
-                } else {
-                    await this.readLock();
-                }
-                if (lockRemote) {
-                    await lockRemote();
-                }
+                // locking
+                if (isExclusive) await this.writeLock();
+                else await this.readLock();
+                if (lockRemote) await lockRemote();
                 try {
                     // create log file and start
                     const { logFile, errorFile } = await FileManager.createLogFile();
-                    const task = job(logFile, errorFile)
-                    this.runningJob.set(newExecution.id, task)
+                    const task = job(logFile, errorFile, signal)
+                    this.jobMap.set(newExecution.id, {
+                       status: 'running',
+                       controller: controller,
+                       task: task
+                    });
                     // update execution as running
-                    await this.updateToRunning(newExecution, task)
+                    await this.updateToRunning(newExecution, task);
                     // await the task finish then update final result
-                    await this.finalizeExecution(newExecution, await task.result);
+                    const result = await task.result;
+                    // Only finalize if we weren't aborted
+                    if (!signal.aborted) {
+                        await this.finalizeExecution(newExecution, result);
+                    }
                     return task;
                 } catch (e) {
-                    throw new Error(`execution ${newExecution.id} failed: ${String(e)}`);
+                    // Only throw if this wasn't a planned abort
+                    if (!signal.aborted) {
+                        throw new Error(`execution ${newExecution.id} failed: ${String(e)}`);
+                    }
                 } finally {
-                    if (isExclusive) {
-                        await this.writeUnlock();
-                    } else {
-                        await this.readUnlock();
-                    }
-                    if (unLockRemote) {
-                        await unLockRemote();
-                    }
-                    this.runningJob.delete(newExecution.id);
+                    // unlocking
+                    if (isExclusive) await this.writeUnlock();
+                    else await this.readUnlock();
+                    if (unLockRemote) await unLockRemote();
                 }
-            }, { signal: controller.signal });
+            }, { signal: signal });
         } catch (error) {
-            if (!(error instanceof DOMException)) logger.warn(error, `error before execution ${newExecution.id} added`);
-            await this.cancelExecution(newExecution.id);
+            // This catch only handles unexpected queue/setup errors
+            if (!(error instanceof DOMException) && !signal.aborted) {
+                logger.error(error, `error during execution ${newExecution.id} setup`);
+                await this.cancelExecution(newExecution.id);
+            }
             return undefined;
         } finally {
-            this.waitingJob.delete(newExecution.id);
+            signal.removeEventListener('abort', onAbort);
+            this.jobMap.delete(newExecution.id);
         }
     }
 
@@ -569,7 +574,9 @@ export class ResticService {
 
     private async createExecution(
         commandType: CommandType,
-        target?:UpdateBackupTargetSchema): Promise<UpdateExecutionSchema> {
+        target?: UpdateBackupTargetSchema,
+        restore?: UpdateRestoreSchema,
+    ): Promise<UpdateExecutionSchema> {
         let value: InsertExecutionSchema = {
             commandType: commandType,
             executeStatus: "pending",
@@ -578,6 +585,8 @@ export class ResticService {
         };
         if (target) {
             value.backupTargetId = target.id;
+        } else if (restore) {
+            value.restoresId = restore.id;
         } else {
             value.repositoryId = this.repo.id
         }
@@ -605,6 +614,31 @@ export class ResticService {
             finishedAt: Date.now(),
             executeStatus: result.success ? 'success' : 'fail'
         }).where(eq(execution.id, exec.id));
+    }
+
+    private async createRestore(file: SnapshotFile, snapshot: UpdateSnapshotsMetadataSchema) {
+        const value: InsertRestoreSchema = {
+            snapshotsMetadataId: snapshot.id,
+            files: [{
+                path: file.path,
+                name: file.name,
+                type: file.type
+            }],
+            createdAt: Date.now()
+        }
+        const [row] = await db.insert(restores).values(value).returning();
+        return updateRestoreSchema.parse(row);
+    }
+
+    private async finalizeRestore(serverPath: string, restore: UpdateRestoreSchema) {
+        const { size, name, type } = await FileManager.getFileInfo(serverPath);
+        await db.update(restores).set({
+            serverPath: serverPath,
+            resultName: name,
+            resultType: type,
+            resultSize: size,
+            finishedAt: Date.now()
+        }).where(eq(restores.id, restore.id));
     }
 
     public async readLock(
@@ -647,3 +681,7 @@ export class ResticService {
 type RetryResult<T> =
     | { success: true; result: T; attempts: number }
     | { success: false; error: ResticError; attempts: number };
+
+type ResticJob =
+    | { status: 'waiting'; controller: AbortController }
+    | { status: 'running'; controller: AbortController; task: Task<ResticResult<any>> };

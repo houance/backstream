@@ -135,7 +135,6 @@ export interface Task<T> {
     logFile: string;
     errorFile: string;
     result: Promise<T>;
-    cancel: () => void;
     getProgress: () => Progress;
 }
 
