@@ -6,8 +6,8 @@ import {
     type FilterQuery,
     repository,
     restoreJobKey,
-    restores,
-    snapshotFile, updateRepositorySchema,
+    restores, type SnapshotFile,
+    snapshotFile, snapshotsMetadata, updateRepositorySchema, type UpdateRestoreSchema,
     updateRestoreSchema
 } from "@backstream/shared";
 import {and, eq, gte, lte} from "drizzle-orm";
@@ -37,11 +37,14 @@ const restoreRoute = new Hono<Env>()
         zValidator('json', snapshotFile),
         async (c) => {
             const validated = c.req.valid('json');
+            // check if already restore
+            const restore = await getRestoreBySnapshotFiles(c.var.db, validated);
+            if (restore !== null) return c.json({ key: restore.id });
             const [repo] = await c.var.db.select().from(repository).where(eq(repository.id, validated.repoId));
             const rs = await c.var.scheduler.getResticService(updateRepositorySchema.parse(repo));
             // start restore
             const key = await rs.restoreSnapshotFile(validated);
-            return c.json(key);
+            return c.json({ key: key });
         })
     .post('/check-restore-status/:id', async (c) => {
         const restoreId = Number(c.req.param('id'));
@@ -61,14 +64,13 @@ const restoreRoute = new Hono<Env>()
         const logs = await getLogs(exec.logFile!, exec.errorFile!);
         return c.json(logs);
     })
-    .on(['GET', 'HEAD'], '/restore-file', async (c) => {
-        const key = c.req.query('key');
-        if (!key) return c.json({error: 'Query Key is empty'}, 404);
-        const validated = restoreJobKey.parse(JSON.parse(key));
-        const [repo] = await c.var.db.select().from(repository).where(eq(repository.id, validated.repoId));
-        const rs = await c.var.scheduler.getResticService(updateRepositorySchema.parse(repo));
+    .on(['GET', 'HEAD'], '/download-restore-file', async (c) => {
+        const key = Number(c.req.query('key'));
+        const [restore] = await c.var.db.select().from(restores)
+            .where(eq(restores.id, key));
+        if (!restore) return c.json({ message: 'Not found'}, 404);
         // get restore file
-        const filePath = rs.getRestoreFile(validated);
+        const filePath = restore.serverPath!;
         const CHUNK_SIZE = 512 * 1024;
         // Set necessary binary stream headers
         c.header('Content-Type', 'application/octet-stream')
@@ -144,6 +146,27 @@ async function getLogs(stdout: string, stderr: string): Promise<string[]> {
     } catch (error) {
         return [`Failed to combine logs: ${(error as Error).message}`];
     }
+}
+
+async function getRestoreBySnapshotFiles(db: Env['Variables']['db'], file: SnapshotFile) {
+    const snapshot = await db.query.snapshotsMetadata.findFirst({
+        where: (snapshotsMetadata, { and, eq }) => and(
+            eq(snapshotsMetadata.repositoryId, file.repoId),
+            eq(snapshotsMetadata.snapshotId, file.snapshotId),
+        ),
+        with: {
+            restores: {
+                where: (restores, { inArray }) =>
+                    inArray(restores.restoreStatus, ['success', 'running', 'pending'])
+            }
+        }
+    });
+    if (!snapshot || !snapshot.restores || snapshot.restores.length === 0) return null;
+    // check if restore file match
+    for (const restore of updateRestoreSchema.array().parse(snapshot.restores)) {
+        if (restore.files[0].path === file.path) return restore;
+    }
+    return null;
 }
 
 function getTimeRange(filter: FilterQuery) {

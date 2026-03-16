@@ -32,6 +32,7 @@ import pWaitFor from "p-wait-for";
 import {RcloneClient} from "../rclone";
 import {FileManager} from "./file-manager";
 import { logger } from '../log/logger'
+import path from "node:path";
 
 export class ResticService {
     public repo: UpdateRepositorySchema;
@@ -213,58 +214,47 @@ export class ResticService {
         return { status: 'fail' }
     }
 
-    // return
-    public async restoreSnapshotFile(file: SnapshotFile): Promise<RestoreJobKey> {
-        const restoreKey = `${file.snapshotId}:${file.path}`;
-        // check if restore before
-        const filePath = this.restoreFiles.get(restoreKey);
-        if (filePath) return {
-            snapshotId: file.snapshotId,
-            path: file.path,
-            repoId: this.repo.id,
-        };
+    // only support single file or dir
+    public async restoreSnapshotFile(file: SnapshotFile): Promise<number> {
+        // todo: 创建, 更新 restore
         const newExecution = await this.createExecution(commandType.restore);
-        // start restore
-        void (async () => {
-            const dir = await FileManager.createTmpFolder();
-            const task = await this.startJob(
-                newExecution,
-                (log, err) => this.repoClient.restoreFile(
-                    file.snapshotId,
-                    {name: file.name, path: file.path},
-                    dir,
-                    log,
-                    err,
-                    newExecution.uuid,
-                ),
-                false
-            );
-            if (!task) return;
-            const result = await task.result;
-            if (!result.success) return;
-            const restoreFilePath = result.result;
-            if (file.type !== 'dir') {
-                this.restoreFiles.set(restoreKey, restoreFilePath);
+        // start restore, return immediately
+        (async () => {
+            let serverPath;
+            let task: Task<ResticResult<string>> | undefined;
+            if (file.type === 'dir') {
+                const fileFullPath = await FileManager.getZipFilePath(file.name);
+                serverPath = fileFullPath;
+                task = await this.startJob(
+                    newExecution,
+                    (log, err) => this.repoClient.restoreFolder(
+                        file.snapshotId,
+                        {name: file.name, path: file.path},
+                        fileFullPath,
+                        log,
+                        err,
+                        newExecution.uuid
+                    ),
+                    false
+                )
             } else {
-                // set zippingExecution
-                this.zippingExecution.add(newExecution.id);
-                // start zipping
-                const result = await FileManager.zip(restoreFilePath, `backstream-${Date.now().toString()}`);
-                if (result.success) {
-                    this.restoreFiles.set(restoreKey, result.result);
-                } else {
-                    logger.warn(result.error, `restore ${file.name} fail`);
-                }
-                // remove zipping
-                this.zippingExecution.delete(newExecution.id);
+                const dir = await FileManager.createTmpFolder();
+                serverPath = path.join(dir, file.name);
+                task = await this.startJob(
+                    newExecution,
+                    (log, err) => this.repoClient.restoreFile(
+                        file.snapshotId,
+                        {name: file.name, path: file.path},
+                        dir,
+                        log,
+                        err,
+                        newExecution.uuid,
+                    ),
+                    false
+                );
             }
         })();
-        return {
-            executionId: newExecution.id,
-            snapshotId: file.snapshotId,
-            path: file.path,
-            repoId: this.repo.id,
-        };
+        return newExecution.id;
     }
 
     public async copyTo(

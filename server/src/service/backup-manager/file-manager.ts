@@ -37,6 +37,24 @@ export class FileManager {
         };
     }
 
+    // join zip path from tmp folder, no create
+    public static async getZipFilePath(name: string) {
+        let fileFullName = name;
+        if (!name.endsWith(".zip")) fileFullName = name + ".zip";
+        const zipFolder = await FileManager.createTmpFolder();
+        return path.join(zipFolder, fileFullName);
+    }
+
+    public static async getFileSize(path: string): Promise<number | null> {
+        try {
+            const { size } = await stat(path);
+            return size;
+        } catch (error) {
+            logger.warn(error, "Could not read file size");
+            return null;
+        }
+    }
+
     public static async zip(file: string, zipName: string):
         Promise<{ success: true, result: string } | { success: false, error: any }> {
         // todo: linux 平台引入 zip cli, fallback to archiver. window 平台允许用户选择路径直接 restore

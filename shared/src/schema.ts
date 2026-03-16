@@ -61,8 +61,7 @@ export const snapshotsMetadata = sqliteTable("snapshots_metadata_table", {
     snapshotSummary: text("snapshotSummary", { mode: "json" }).notNull(),
     size: integer("size").notNull(),
 }, (table) => [
-    index("snapshots_metadata_repository_id_idx").on(table.repositoryId),
-    uniqueIndex("snapshots_metadata_snapshot_id_unique").on(table.snapshotId),
+    uniqueIndex("snapshots_metadata_snapshot_id_unique").on(table.repositoryId, table.snapshotId),
 ]);
 
 // Restore File Table
