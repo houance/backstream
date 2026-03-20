@@ -1,5 +1,5 @@
-import React from 'react';
-import { Grid, Container, Stack, Center, Loader } from '@mantine/core';
+import {useMemo, useState} from 'react';
+import {Grid, Container, Stack, Center, Loader, Group, TextInput, Title} from '@mantine/core';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -11,10 +11,13 @@ import type { UpdateBackupPolicySchema } from '@backstream/shared';
 import { client } from "../../api";
 import { ensureSuccess } from "../../util/api.ts";
 import { notice } from "../../util/notification.tsx";
+import {IconSearch} from "@tabler/icons-react";
 
-const OverviewPage: React.FC = () => {
+export function OverviewPage()  {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
+    // 3. Policy Name Search State
+    const [searchQuery, setSearchQuery] = useState('');
 
     // --- FETCH POLICY DATA ---
     const { data: policy, isLoading: isPolicyLoading } = useQuery({
@@ -25,6 +28,13 @@ const OverviewPage: React.FC = () => {
             return res.json();
         },
     });
+    // 4. Memoized Filtered Data
+    const filteredPolicies = useMemo(() => {
+        if (!policy) return [];
+        return policy.filter((p: UpdateBackupPolicySchema) =>
+            p.strategy.name.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+    }, [policy, searchQuery]);
 
     // --- DELETE POLICY ---
     const mutate = useMutation(({
@@ -62,6 +72,12 @@ const OverviewPage: React.FC = () => {
         },
     });
 
+    if (isPolicyLoading || isActivityLoading || isStatsLoading) {
+        return (
+            <Center h={400}><Loader size="xl" /></Center>
+        )
+    }
+
     return (
         <Container fluid p={0}>
             <Stack gap="xl">
@@ -77,11 +93,22 @@ const OverviewPage: React.FC = () => {
 
                 <Grid gutter="xl">
                     <Grid.Col span={{ md: 8 }}>
-                        {isPolicyLoading ? (
-                            <Center h={400}><Loader size="xl" /></Center>
-                        ) : (
+                        <Stack gap="md">
+                            {/* 5. Search Panel */}
+                            <Group justify="space-between" align="flex-end">
+                                <Title order={4}>Backup Policies</Title>
+                                <TextInput
+                                    placeholder="Search by name..."
+                                    leftSection={<IconSearch size={16} />}
+                                    value={searchQuery}
+                                    onChange={(event) => setSearchQuery(event.currentTarget.value)}
+                                    style={{ flex: 1, maxWidth: 300 }}
+                                />
+                            </Group>
+
                             <Grid gutter="md">
-                                {policy!.map((policy: UpdateBackupPolicySchema) => (
+                                {/* 6. Map through filteredPolicies instead of policy */}
+                                {filteredPolicies.map((policy: UpdateBackupPolicySchema) => (
                                     <Grid.Col key={policy.strategy.id} span={{ sm: 4 }}>
                                         <BackupPolicyCard
                                             policy={policy}
@@ -91,8 +118,13 @@ const OverviewPage: React.FC = () => {
                                         />
                                     </Grid.Col>
                                 ))}
+                                {filteredPolicies.length === 0 && (
+                                    <Grid.Col span={12}>
+                                        <Center h={100}>No policies match your search.</Center>
+                                    </Grid.Col>
+                                )}
                             </Grid>
-                        )}
+                        </Stack>
                     </Grid.Col>
 
                     <Grid.Col span={{ md: 4 }}>
@@ -106,6 +138,6 @@ const OverviewPage: React.FC = () => {
             </Stack>
         </Container>
     );
-};
+}
 
 export default OverviewPage;

@@ -1,7 +1,7 @@
-import {Card, Text, Badge, Group, Stack, Progress, Tooltip, Box, ActionIcon} from '@mantine/core';
-import {IconAlertTriangle, IconCloud, IconDeviceSdCard, IconTrash} from '@tabler/icons-react';
-import {formatTimestamp, getRepositoryStats} from "../../../util/format.ts";
-import {type UpdateBackupPolicySchema} from '@backstream/shared'
+import { Card, Text, Badge, Group, Stack, Progress, Tooltip, Box, ActionIcon } from '@mantine/core';
+import { IconAlertTriangle, IconCloud, IconDeviceSdCard, IconTrash } from '@tabler/icons-react';
+import { formatTimestamp, getRepositoryStats } from "../../../util/format.ts";
+import { type UpdateBackupPolicySchema } from '@backstream/shared'
 
 export function BackupPolicyCard({ policy, onDetail, onDelete, isDeleting }: {
     policy: UpdateBackupPolicySchema,
@@ -9,22 +9,30 @@ export function BackupPolicyCard({ policy, onDetail, onDelete, isDeleting }: {
     onDelete: (policy: UpdateBackupPolicySchema) => void,
     isDeleting: boolean
 }) {
-    // Determine if ANY repository is near capacity
+    const MAX_VISIBLE_TARGETS = 3;
     const isCritical = policy.targets.some(t => (t.repository.usage / (t.repository.capacity || Infinity)) > 0.8);
+
+    // Slice targets for display
+    const visibleTargets = policy.targets.slice(0, MAX_VISIBLE_TARGETS);
+    const remainingCount = policy.targets.length - MAX_VISIBLE_TARGETS;
 
     return (
         <Card shadow="sm"
               padding="lg"
               radius="md"
               withBorder
-              component="button" // Use button for accessibility
+              component="button"
               onClick={onDetail}
               style={{
                   width: '100%',
+                  height: '100%', // Ensure card fills Grid.Col height
                   textAlign: 'left',
                   cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column'
               }}>
-            {/* 备份计划名称和类型  */}
+
+            {/* Header section remains the same */}
             <Group justify="space-between" mb="md" wrap="nowrap">
                 <Box style={{ flex: 1 }}>
                     <Tooltip label={policy.strategy.dataSource}>
@@ -37,13 +45,12 @@ export function BackupPolicyCard({ policy, onDetail, onDelete, isDeleting }: {
                         {policy.strategy.strategyType}
                     </Badge>
 
-                    {/* Delete Action Icon */}
                     <ActionIcon
                         variant="subtle"
                         color="red"
                         loading={isDeleting}
                         onClick={(e) => {
-                            e.stopPropagation(); // Prevents onDetail from firing
+                            e.stopPropagation();
                             onDelete(policy);
                         }}
                     >
@@ -52,53 +59,53 @@ export function BackupPolicyCard({ policy, onDetail, onDelete, isDeleting }: {
                 </Group>
             </Group>
 
-            {/* 备份目标健康度 */}
             <Text size="sm" fw={500} mb="xs" c="dimmed">Backup Target Health</Text>
-            {/* by 备份目标展示 progress 和 backup time */}
-            <Stack gap="sm">
-                {policy.targets.map((target) => {
+
+            <Stack gap="sm" style={{ flex: 1 }}>
+                {visibleTargets.map((target) => {
                     const { percentage } = getRepositoryStats(target.repository.usage, target.repository.capacity || Infinity);
 
                     return (
                         <Box key={target.repositoryId}>
                             <Group justify="space-between" mb={4}>
-                                {/* 空间条上方文字和 icon: target name + target type */}
                                 <Group gap="xs">
                                     {target.repository.repositoryType === 'LOCAL' ?
                                         <IconDeviceSdCard size={16} /> :
                                         <IconCloud size={16} />}
-                                    <Text size="xs" fw={600}>{target.repository.name}</Text>
+                                    <Text size="xs" fw={600} truncate maw={120}>{target.repository.name}</Text>
                                 </Group>
-                                {/* 空间条上方, 当空间不足的时候展示三角形警告 icon */}
                                 <Group gap={4}>
                                     {percentage > 90 && (
-                                        <Tooltip label="Low space on this target">
-                                            <IconAlertTriangle size={14} color="red" />
-                                        </Tooltip>
+                                        <IconAlertTriangle size={14} color="var(--mantine-color-red-filled)" />
                                     )}
                                 </Group>
                             </Group>
-                            {/* 空间条 */}
+
                             <Progress.Root size="lg" radius="xl">
                                 <Progress.Section
                                     value={percentage}
                                     color={percentage > 90 ? 'red' : percentage > 80 ? 'orange' : 'blue'}
                                     striped={percentage > 80}
                                 >
-                                    <Progress.Label>
-                                        {percentage.toFixed(1)}%
-                                    </Progress.Label>
+                                    <Progress.Label>{percentage.toFixed(0)}%</Progress.Label>
                                 </Progress.Section>
                             </Progress.Root>
-                            {/* 空间条下方的 lastBackupTime */}
-                            <Text size="xs" c="dimmed" mb={4}>
-                                Last backup: {target.lastBackupAt ?
-                                formatTimestamp(target.lastBackupAt) :
-                                'Never'}
+
+                            <Text size="xs" c="dimmed" mt={2}>
+                                {target.lastBackupAt ? formatTimestamp(target.lastBackupAt) : 'Never'}
                             </Text>
                         </Box>
                     );
                 })}
+
+                {/* The "+X More" Indicator */}
+                {remainingCount > 0 && (
+                    <Group justify="center" gap={4} mt="auto" pt="xs">
+                        <Badge variant="dot" color="gray" size="sm">
+                            +{remainingCount} more targets
+                        </Badge>
+                    </Group>
+                )}
             </Stack>
         </Card>
     );

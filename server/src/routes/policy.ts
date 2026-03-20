@@ -243,8 +243,8 @@ async function getStrategyData(db: Env['Variables']['db']) {
                         columns: {
                             startedAt: true,
                         },
-                        where: (execution, { and, eq }) => and(
-                            eq(execution.commandType, 'backup'),
+                        where: (execution, { and, eq, or }) => and(
+                            or(eq(execution.commandType, 'backup'), eq(execution.commandType, 'copy')),
                             eq(execution.executeStatus, 'success'),
                         ),
                         orderBy: (execution, { desc }) => [desc(execution.startedAt)],

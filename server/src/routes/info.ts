@@ -110,7 +110,7 @@ const infoRoute = new Hono<Env>()
 async function getExecutionsData(db: Env['Variables']['db']) {
     return await db.query.execution.findMany({
         orderBy: (execution, { desc }) => [desc(execution.finishedAt)],
-        limit: 20,
+        limit: 5,
         with: {
             target: {
                 with: {
