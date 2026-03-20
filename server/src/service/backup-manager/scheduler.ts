@@ -22,6 +22,51 @@ import {FileManager} from "./file-manager";
 import { logger } from '../log/logger'
 import {ResticError} from "../restic";
 
+async function getPolicyById(strategyId: number): Promise<Policy | null> {
+    const result = await db.query.strategy.findFirst({
+        where: (strategy, { eq }) => eq(strategy.id, strategyId),
+        with: {
+            targets: {
+                with: {
+                    repository: true,
+                }
+            }
+        }
+    });
+    if (!result) return null;
+    return result;
+}
+
+async function getAllPolicy() {
+    return await db.query.strategy.findMany({
+        with: {
+            targets: {
+                with: {
+                    repository: true,
+                }
+            }
+        }
+    });
+}
+
+type AllPolicy = Awaited<ReturnType<typeof getAllPolicy>>;
+type Policy = AllPolicy[number]
+
+// 1. Keep your Discriminated Union for strictness
+type JobMetadata =
+    | { category: 'repo'; type: 'check' | 'prune' | 'stat' | 'snapshots'; repoId: number; client: ResticService }
+    | { category: 'policy-target'; type: 'backup' | 'copy'; strategyId: number; targetId: number; repoId: number; client: ResticService }
+    | { category: 'policy'; type: 'dataSize'; strategyId: number }
+
+    | { category: 'system'; type: 'clean' };
+
+// 2. Use a Type Alias (not an interface) to combine metadata with the Cron instance
+type JobRecord = JobMetadata & {
+    cron: Cron;
+    key: string; // The "Primary Key"
+};
+
+
 export class Scheduler {
     private readonly clientMap: Map<number, ResticService>; // <repoId, ResticService>
     private readonly setting: UpdateSystemSettingSchema
@@ -290,33 +335,3 @@ export class Scheduler {
         }))
     }
 }
-
-async function getPolicyById(strategyId: number): Promise<Policy | null> {
-    const result = await db.query.strategy.findFirst({
-        where: (strategy, { eq }) => eq(strategy.id, strategyId),
-        with: {
-            targets: {
-                with: {
-                    repository: true,
-                }
-            }
-        }
-    });
-    if (!result) return null;
-    return result;
-}
-
-async function getAllPolicy() {
-    return await db.query.strategy.findMany({
-        with: {
-            targets: {
-                with: {
-                    repository: true,
-                }
-            }
-        }
-    });
-}
-
-type AllPolicy = Awaited<ReturnType<typeof getAllPolicy>>;
-type Policy = AllPolicy[number]
