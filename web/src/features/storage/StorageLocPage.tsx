@@ -8,10 +8,12 @@ import {useDisclosure} from "@mantine/hooks";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {client} from "../../api";
 import {ensureSuccess} from "../../util/api.ts";
+import {useNavigate} from "react-router-dom";
 
 export default function StorageLocPage() {
     // 1. Manage state for opening/closing and the data to edit
     const [opened, {open, close}] = useDisclosure(false);
+    const navigate = useNavigate();
 
     // --- 2. FETCH DATA ---
     const queryClient = useQueryClient();
@@ -88,6 +90,7 @@ export default function StorageLocPage() {
             {/* Storage Location 数据展示 */}
             <StorageLocTable
                 data={data!}
+                onDetail={(repoId: number) => navigate(`/storage/detail/${repoId}`)}
                 onDelete={(item) => deleteMutation.mutate(item)}
             />
             {/* Add Storage Location Button */}

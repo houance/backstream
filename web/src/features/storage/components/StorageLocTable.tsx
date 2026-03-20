@@ -3,12 +3,24 @@ import {IconAlertTriangle, IconTrash} from '@tabler/icons-react';
 import {getRepositoryStats} from "../../../util/format.ts";
 import { type UpdateRepositorySchema } from '@backstream/shared'
 
-export default function StorageLocTable({data, onDelete} : { data: UpdateRepositorySchema[], onDelete: (item: UpdateRepositorySchema) => void }) {
-    // Map through data to create rows
+export default function StorageLocTable(
+    {data, onDetail, onDelete} :
+    {
+        data: UpdateRepositorySchema[],
+        onDetail: (repoId: number) => void,
+        onDelete: (item: UpdateRepositorySchema) => void,
+    }) {
+
     const rows = data.map((item) => {
         const { usedStr, totalStr, percentage } = getRepositoryStats(item.usage, item.capacity);
+
         return (
-            <Table.Tr key={item.id}>
+            <Table.Tr
+                key={item.id}
+                // Add pointer cursor and click handler
+                style={{ cursor: 'pointer' }}
+                onClick={() => onDetail(item.id)}
+            >
                 <Table.Td><b>{item.name}</b></Table.Td>
                 <Table.Td>{item.path}</Table.Td>
                 <Table.Td>{item.repositoryType}</Table.Td>
@@ -44,7 +56,16 @@ export default function StorageLocTable({data, onDelete} : { data: UpdateReposit
                 </Table.Td>
                 <Table.Td>
                     <Tooltip label="Delete Storage Location" color='red' withArrow openDelay={300}>
-                        <ActionIcon variant="light" color="red" aria-label="Delete" onClick={() => onDelete(item)}>
+                        <ActionIcon
+                            variant="light"
+                            color="red"
+                            aria-label="Delete"
+                            onClick={(e) => {
+                                // Prevent row navigation when clicking delete
+                                e.stopPropagation();
+                                onDelete(item);
+                            }}
+                        >
                             <IconTrash size="1rem" />
                         </ActionIcon>
                     </Tooltip>

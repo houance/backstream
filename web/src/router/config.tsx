@@ -5,6 +5,7 @@ import SettingsPage from "../features/settings/SettingsPage";
 import CreatePolicyPage from "../features/create-policy/CreatePolicyPage";
 import PolicyDetailPage from "../features/policy-detail/PolicyDetailPage.tsx";
 import RestorePage from "../features/restore/RestorePage.tsx";
+import StorageDetailPage from "../features/storage-detail/StorageDetailPage.tsx";
 
 export const NAV_ROUTES = [
     { label: 'Overview', path: '/', icon: IconLayoutDashboard, element: <OverviewPage /> },
@@ -16,6 +17,7 @@ export const NAV_ROUTES = [
 
 export const DETAIL_ROUTES = [
     { path: '/policy/:id', element: <PolicyDetailPage /> },
+    { path: 'storage/detail/:id', element: <StorageDetailPage /> },
 ] as const;
 
 export const ALL_ROUTES = [...NAV_ROUTES, ...DETAIL_ROUTES] as const;
