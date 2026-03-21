@@ -65,8 +65,9 @@ const storageRoute = new Hono<Env>()
             const [repo] = await c.var.db.select().from(repository).where(eq(repository.id, id));
             if (repo === undefined) return c.json({ error: 'Not found'}, 404);
             // scheduler 对应的 restic service 更新 repo name
-            const resticService = await c.var.scheduler.getResticService(updateRepositorySchema.parse(repo))
-            const updatedRepo = await resticService.renameRepo(values.name);
+            const clientRecord = await c.var.scheduler.getResticService(updateRepositorySchema.parse(repo));
+            if (clientRecord.status !== 'active') return c.json({ error: `repo ${repo.name} is not active`});
+            const updatedRepo = await clientRecord.client.renameRepo(values.name);
             return c.json(updatedRepo);
         })
     // delete repo

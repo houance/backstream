@@ -61,9 +61,10 @@ const restoreRoute = new Hono<Env>()
                 if (restore.files[0].path === validated.path) return c.json({ key: restore.id }, 200) // 200 for Existing restore
             }
             const [repo] = await c.var.db.select().from(repository).where(eq(repository.id, validated.repoId));
-            const rs = await c.var.scheduler.getResticService(updateRepositorySchema.parse(repo));
+            const clientRecord = await c.var.scheduler.getResticService(updateRepositorySchema.parse(repo));
+            if (clientRecord.status !== 'active') return c.json({ error: `repo ${repo.name} not active` }, 500);
             // start restore
-            const key = await rs.restoreSnapshotFile(validated, updateSnapshotsMetadataSchema.parse(snapshot));
+            const key = await clientRecord.client.restoreSnapshotFile(validated, updateSnapshotsMetadataSchema.parse(snapshot));
             return c.json({ key: key }, 201); // 201 for newly created restore
         })
     .get('/restore-log/:id', async (c) => {
@@ -129,8 +130,12 @@ const restoreRoute = new Hono<Env>()
         if (!restore) return c.json({ message: 'Not found' }, 404);
         // 停止正在 restore 的 job
         const validatedRepo = updateRepositorySchema.parse(restore.snapshot.repository);
-        const rs = await c.var.scheduler.getResticService(validatedRepo);
-        updateExecutionSchema.array().parse(restore.executions).forEach(exec => rs.stopJobByExec(exec));
+        const clientRecord = await c.var.scheduler.getResticService(validatedRepo);
+        if (clientRecord.status === 'active') {
+            updateExecutionSchema.array().parse(restore.executions).forEach(
+                exec => clientRecord.client.stopJobByExec(exec)
+            );
+        }
         // delete restore record
         await c.var.db.delete(restores).where(eq(restores.id, restoreId));
         // delete file

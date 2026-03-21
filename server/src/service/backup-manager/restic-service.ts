@@ -39,12 +39,12 @@ export class ResticService {
     private repoClient: RepositoryClient;
     private globalQueue: PQueue; // global concurrency limit
     private reader = 0; // simple rw lock
-    private readonly jobMap: Map<number, ResticJob> // <executionId, Task>
+    private readonly taskMap: Map<number, ResticTask> // <executionId, Task>
     private readonly rcloneClient: RcloneClient | null;
 
     public constructor(repo: UpdateRepositorySchema, queue: PQueue) {
         // init map
-        this.jobMap = new Map();
+        this.taskMap = new Map();
         this.repo = repo;
         // convert to validate zod schema
         const validated = updateRepositorySchema.parse(repo);
@@ -122,14 +122,14 @@ export class ResticService {
     }
 
     public getRunningJob(execution: UpdateExecutionSchema): Task<ResticResult<any>> | null {
-        const job = this.jobMap.get(execution.id);
+        const job = this.taskMap.get(execution.id);
         if (!job || job.status === 'waiting') return null;
         return job.task;
     }
 
     public stopAllRunningJob() {
-        this.jobMap.forEach((value) => value.controller.abort('manual cancel'));
-        this.jobMap.clear();
+        this.taskMap.forEach((value) => value.controller.abort('manual cancel'));
+        this.taskMap.clear();
     }
 
     public async stopPolicyJob(targetId: number) {
@@ -140,20 +140,20 @@ export class ResticService {
             ));
         if (!dbResult || dbResult.length === 0) return;
         dbResult.forEach(exec => {
-            this.jobMap.get(exec.id)?.controller.abort('manual cancel');
-            this.jobMap.delete(exec.id);
+            this.taskMap.get(exec.id)?.controller.abort('manual cancel');
+            this.taskMap.delete(exec.id);
         })
     }
 
     public stopJobByExec(exec: UpdateExecutionSchema) {
-        this.jobMap.get(exec.id)?.controller.abort('manual cancel');
-        this.jobMap.delete(exec.id);
+        this.taskMap.get(exec.id)?.controller.abort('manual cancel');
+        this.taskMap.delete(exec.id);
     }
 
     public async updateStat() {
         if (this.repo.repositoryStatus === "Corrupt") return;
         let status: 'Active' | 'Disconnected';
-        if (this.jobMap.size !== 0) {
+        if (this.taskMap.size !== 0) {
             status = 'Active';
         } else {
             const result = await this.repoClient.isRepoExist();
@@ -349,7 +349,10 @@ export class ResticService {
         let validatedDbResult: UpdateSnapshotsMetadataSchema[];
         if (path) {
             const dbResult = await db.select().from(snapshotsMetadata)
-                .where(and(eq(snapshotsMetadata.path, path), eq(snapshotsMetadata.repositoryId, this.repo.id)))
+                .where(and(
+                    eq(snapshotsMetadata.path, path),
+                    eq(snapshotsMetadata.repositoryId, this.repo.id))
+                )
             validatedDbResult = updateSnapshotsMetadataSchema.array().parse(dbResult);
         } else {
             const dbResult = await db.select().from(snapshotsMetadata)
@@ -460,7 +463,7 @@ export class ResticService {
     ): Promise<Task<ResticResult<T>> | undefined> {
         const controller = new AbortController();
         const { signal } = controller;
-        this.jobMap.set(newExecution.id, { status: 'waiting', controller: controller });
+        this.taskMap.set(newExecution.id, { status: 'waiting', controller: controller });
         const onAbort = async () => {
             logger.warn(`Execution ${newExecution.id} was aborted.`);
             await this.cancelExecution(newExecution.id);
@@ -476,7 +479,7 @@ export class ResticService {
                     // create log file and start
                     const { logFile, errorFile } = await FileManager.createLogFile();
                     const task = job(logFile, errorFile, signal)
-                    this.jobMap.set(newExecution.id, {
+                    this.taskMap.set(newExecution.id, {
                        status: 'running',
                        controller: controller,
                        task: task
@@ -511,7 +514,7 @@ export class ResticService {
             return undefined;
         } finally {
             signal.removeEventListener('abort', onAbort);
-            this.jobMap.delete(newExecution.id);
+            this.taskMap.delete(newExecution.id);
         }
     }
 
@@ -682,6 +685,6 @@ type RetryResult<T> =
     | { success: true; result: T; attempts: number }
     | { success: false; error: ResticError; attempts: number };
 
-type ResticJob =
+type ResticTask =
     | { status: 'waiting'; controller: AbortController }
     | { status: 'running'; controller: AbortController; task: Task<ResticResult<any>> };

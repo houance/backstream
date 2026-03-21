@@ -41,8 +41,9 @@ const policyRoute = new Hono<Env>()
             const repo = updateRepositorySchema.parse(target.repository)
             if (exec) {
                 // 判断 exec 是 pending 还是 running
-                const rs = await c.var.scheduler.getResticService(repo);
-                const runningJob = rs.getRunningJob(updateExecutionSchema.parse(exec));
+                const clientRecord = await c.var.scheduler.getResticService(repo);
+                if (clientRecord.status !== 'active') return c.json(result);
+                const runningJob = clientRecord.client.getRunningJob(updateExecutionSchema.parse(exec));
                 if (runningJob === null) {
                     result.push({
                         executionId: exec.id,
@@ -210,8 +211,11 @@ async function getStrategyDataById(db: Env['Variables']['db'], id: number) {
                         columns: {
                             startedAt: true,
                         },
-                        where: (execution, { and, eq }) => and(
-                            eq(execution.commandType, 'backup'),
+                        where: (execution, { and, eq, or }) => and(
+                            or(
+                                eq(execution.commandType, 'backup'),
+                                eq(execution.commandType, 'copy')
+                            ),
                             eq(execution.executeStatus, 'success'),
                         ),
                         orderBy: (execution, { desc }) => [desc(execution.startedAt)],
