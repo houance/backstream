@@ -94,7 +94,7 @@ export const execution = sqliteTable("execution_table", {
     scheduledAt: integer("scheduled_at").notNull(),
     startedAt: integer("started_at"),
     finishedAt: integer("finished_at"),
-    executeStatus: text("execute_status", { enum: ["success", "fail", "running", "pending", "cancel"] }).notNull(),
+    executeStatus: text("execute_status", { enum: ["success", "fail", "running", "pending", "cancel", "kill"] }).notNull(),
     repositoryId: integer("repository_id").references(() => repository.id, { onDelete: 'cascade' }), // repo check, prune
     backupTargetId: integer("backup_target_id").references(() => backupTarget.id, { onDelete: 'cascade' }), // backup, copyTo
     snapshotsMetadataId: integer("snapshots_metadata_id").references(() => snapshotsMetadata.id, { onDelete: 'cascade' }), // backup

@@ -7,7 +7,7 @@ import {
     insertSnapshotsMetadataSchema,
     repository,
     RepoType,
-    type RestoreJobKey, restores,
+    restores,
     type SnapshotFile,
     snapshotsMetadata,
     type UpdateBackupTargetSchema,
@@ -28,21 +28,27 @@ import {
 import PQueue from "p-queue";
 import {db} from "../db";
 import {eq, and, inArray} from "drizzle-orm";
-import pWaitFor from "p-wait-for";
 import {RcloneClient} from "../rclone";
 import {FileManager} from "./file-manager";
 import { logger } from '../log/logger'
 import path from "node:path";
+import {Semaphore, withTimeout, E_TIMEOUT, Mutex} from 'async-mutex'
+
 
 export class ResticService {
     public repo: UpdateRepositorySchema;
     private repoClient: RepositoryClient;
     private globalQueue: PQueue; // global concurrency limit
-    private reader = 0; // simple rw lock
+    private MAX_SEM_WEIGHT: number = 1000;
+    private resticSem: Semaphore;
+    private dbLock: Mutex;
     private readonly taskMap: Map<number, ResticTask> // <executionId, Task>
     private readonly rcloneClient: RcloneClient | null;
 
     public constructor(repo: UpdateRepositorySchema, queue: PQueue) {
+        // init sem and mutex
+        this.resticSem = new Semaphore(this.MAX_SEM_WEIGHT);
+        this.dbLock = new Mutex();
         // init map
         this.taskMap = new Map();
         this.repo = repo;
@@ -282,7 +288,6 @@ export class ResticService {
             ,
             false,
             async () => await targetService.readLock(),
-            async () => await targetService.readUnlock()
         )
         if (!task) return;
         const result = await task.result
@@ -347,69 +352,77 @@ export class ResticService {
         const snapshots = retryResult.result;
         if (snapshots.length === 0) return;
         let validatedDbResult: UpdateSnapshotsMetadataSchema[];
-        if (path) {
-            const dbResult = await db.select().from(snapshotsMetadata)
-                .where(and(
-                    eq(snapshotsMetadata.path, path),
-                    eq(snapshotsMetadata.repositoryId, this.repo.id))
-                )
-            validatedDbResult = updateSnapshotsMetadataSchema.array().parse(dbResult);
-        } else {
-            const dbResult = await db.select().from(snapshotsMetadata)
-                .where(eq(snapshotsMetadata.repositoryId, this.repo.id))
-            validatedDbResult = updateSnapshotsMetadataSchema.array().parse(dbResult);
-        }
-        const newSnapshots: InsertSnapshotsMetadataSchema[] = [];
-        for (const snapshot of snapshots) {
-            let hit = false;
-            validatedDbResult.forEach((dbResult) => {
-                if (snapshot.id === dbResult.snapshotId) {
-                    hit = true;
-                    return ;
-                }
-            })
-            if (!hit) {
-                // get snapshot size
-                const snapshotStat = await this.repoClient.getSnapshotSize(snapshot.id);
-                const tmp = {
-                    repositoryId: this.repo.id,
-                    path: snapshot.paths[0],
-                    snapshotId: snapshot.id,
-                    hostname: snapshot.hostname,
-                    username: snapshot.username,
-                    uid: snapshot.uid,
-                    gid: snapshot.gid,
-                    excludes: snapshot.excludes,
-                    tags: snapshot.tags,
-                    programVersion: snapshot.programVersion,
-                    time: snapshot.time,
-                    snapshotStatus: 'success',
-                    snapshotSummary: snapshot.summary,
-                    size: snapshotStat.success ? snapshotStat.result.totalSize : 0
-                }
-                newSnapshots.push(insertSnapshotsMetadataSchema.parse(tmp))
+        let r1: (() => void) | undefined;
+        try {
+            // lock db from other indexSnapshots, 5 sec timeout
+            r1 = await withTimeout(this.dbLock, 5000).acquire();
+            // index snapshots
+            if (path) {
+                const dbResult = await db.select().from(snapshotsMetadata)
+                    .where(and(
+                        eq(snapshotsMetadata.path, path),
+                        eq(snapshotsMetadata.repositoryId, this.repo.id))
+                    )
+                validatedDbResult = updateSnapshotsMetadataSchema.array().parse(dbResult);
+            } else {
+                const dbResult = await db.select().from(snapshotsMetadata)
+                    .where(eq(snapshotsMetadata.repositoryId, this.repo.id))
+                validatedDbResult = updateSnapshotsMetadataSchema.array().parse(dbResult);
             }
-        }
-        const deleteSnapshots: UpdateSnapshotsMetadataSchema[] = [];
-        validatedDbResult.forEach((dbResult) => {
-            let hit = false;
-            snapshots.forEach((snapshot) => {
-                if (dbResult.snapshotId === snapshot.id) {
-                    hit = true;
-                    return;
+            const newSnapshots: InsertSnapshotsMetadataSchema[] = [];
+            for (const snapshot of snapshots) {
+                let hit = false;
+                validatedDbResult.forEach((dbResult) => {
+                    if (snapshot.id === dbResult.snapshotId) {
+                        hit = true;
+                        return ;
+                    }
+                })
+                if (!hit) {
+                    const tmp = {
+                        repositoryId: this.repo.id,
+                        path: snapshot.paths[0],
+                        snapshotId: snapshot.id,
+                        hostname: snapshot.hostname,
+                        username: snapshot.username,
+                        uid: snapshot.uid,
+                        gid: snapshot.gid,
+                        excludes: snapshot.excludes,
+                        tags: snapshot.tags,
+                        programVersion: snapshot.programVersion,
+                        time: snapshot.time,
+                        snapshotStatus: 'success',
+                        snapshotSummary: snapshot.summary,
+                        size: snapshot.summary ? snapshot.summary.totalBytesProcessed : 0
+                    }
+                    newSnapshots.push(insertSnapshotsMetadataSchema.parse(tmp))
                 }
+            }
+            const deleteSnapshots: UpdateSnapshotsMetadataSchema[] = [];
+            validatedDbResult.forEach((dbResult) => {
+                let hit = false;
+                snapshots.forEach((snapshot) => {
+                    if (dbResult.snapshotId === snapshot.id) {
+                        hit = true;
+                        return;
+                    }
+                })
+                if (!hit) deleteSnapshots.push(dbResult);
             })
-            if (!hit) deleteSnapshots.push(dbResult);
-        })
-        // create
-        if (newSnapshots.length > 0) await db.insert(snapshotsMetadata).values(newSnapshots);
-        // delete
-        if (deleteSnapshots.length > 0) await db.delete(snapshotsMetadata)
-            .where(inArray(
-                snapshotsMetadata.id,
-                deleteSnapshots.map(dbResult => dbResult.id)
-            ));
-        logger.debug(`index repo ${this.repo.name} success`);
+            // create
+            if (newSnapshots.length > 0) await db.insert(snapshotsMetadata).values(newSnapshots);
+            // delete
+            if (deleteSnapshots.length > 0) await db.delete(snapshotsMetadata)
+                .where(inArray(
+                    snapshotsMetadata.id,
+                    deleteSnapshots.map(dbResult => dbResult.id)
+                ));
+            logger.debug(`index repo ${this.repo.name} success`);
+        } catch (e) {
+            if (e === E_TIMEOUT) logger.warn(`index repo ${this.repo.name} timeout`);
+        } finally {
+            if (r1) r1();
+        }
     }
 
     public async check() {
@@ -458,40 +471,32 @@ export class ResticService {
         newExecution: UpdateExecutionSchema,
         job: (log: string, err: string, signal: AbortSignal) => Task<ResticResult<T>>,
         isExclusive: boolean = true,
-        lockRemote?: () => Promise<void>,
-        unLockRemote?: () => Promise<void>,
+        lockRemote?: () => Promise<() => void>,
     ): Promise<Task<ResticResult<T>> | undefined> {
         const controller = new AbortController();
         const { signal } = controller;
         this.taskMap.set(newExecution.id, { status: 'waiting', controller: controller });
-        const onAbort = async () => {
-            logger.warn(`Execution ${newExecution.id} was aborted.`);
-            await this.cancelExecution(newExecution.id);
-        };
-        signal.addEventListener('abort', onAbort, { once: true });
         try {
-            return this.globalQueue.add(async () => {
-                // locking
-                if (isExclusive) await this.writeLock();
-                else await this.readLock();
-                if (lockRemote) await lockRemote();
+            return await this.globalQueue.add(async () => {
+                // lock local
+                const [, r1] = await this.resticSem.acquire(isExclusive ? this.MAX_SEM_WEIGHT : 1);
+                // lock remote if provide
+                const r2 = lockRemote ? await lockRemote() : undefined;
                 try {
                     // create log file and start
                     const { logFile, errorFile } = await FileManager.createLogFile();
                     const task = job(logFile, errorFile, signal)
                     this.taskMap.set(newExecution.id, {
-                       status: 'running',
-                       controller: controller,
-                       task: task
+                        status: 'running',
+                        controller: controller,
+                        task: task
                     });
                     // update execution as running
                     await this.updateToRunning(newExecution, task);
                     // await the task finish then update final result
                     const result = await task.result;
-                    // Only finalize if we weren't aborted
-                    if (!signal.aborted) {
-                        await this.finalizeExecution(newExecution, result);
-                    }
+                    // update execution
+                    await this.finalizeExecution(newExecution, result);
                     return task;
                 } catch (e) {
                     // Only throw if this wasn't a planned abort
@@ -500,20 +505,19 @@ export class ResticService {
                     }
                 } finally {
                     // unlocking
-                    if (isExclusive) await this.writeUnlock();
-                    else await this.readUnlock();
-                    if (unLockRemote) await unLockRemote();
+                    if (r2) r2();
+                    if (r1) r1();
                 }
             }, { signal: signal });
         } catch (error) {
-            // This catch only handles unexpected queue/setup errors
-            if (!(error instanceof DOMException) && !signal.aborted) {
-                logger.error(error, `error during execution ${newExecution.id} setup`);
+            // If we are here, the task was likely aborted while WAITING in the queue
+            if (signal.aborted) {
                 await this.cancelExecution(newExecution.id);
+            } else {
+                logger.error(error, `Setup error for ${newExecution.id}`);
             }
             return undefined;
         } finally {
-            signal.removeEventListener('abort', onAbort);
             this.taskMap.delete(newExecution.id);
         }
     }
@@ -528,13 +532,9 @@ export class ResticService {
         let lastError: ResticError | any;
         for (let attempt = 0; attempt <= retryCount; attempt++) {
             try {
-                if (isExclusive) {
-                    await this.writeLock(initialIntervalMs, 1);
-                } else {
-                    await this.readLock(initialIntervalMs, 1);
-                }
-                // 1. Execute the function
-                const result = await func();
+                const delay = initialIntervalMs * (attempt + 1);
+                const result = await withTimeout(this.resticSem, delay)
+                    .runExclusive(async () => await func(), isExclusive ? this.MAX_SEM_WEIGHT : 1);
                 // 3. Check for success
                 if (result.success) {
                     return {
@@ -543,6 +543,7 @@ export class ResticService {
                         attempts: attempt + 1
                     };
                 }
+                // fail for non locking issue, return
                 if (result.error.exitCode !== ExitCode.FailedToLockRepository) {
                     return {
                         success: false,
@@ -550,22 +551,11 @@ export class ResticService {
                         attempts: attempt + 1
                     }
                 } else {
-                    // 4. Handle Failure
+                    // Handle Failure, enter next attempt
                     lastError = result.error;
-                    // If we have retries left, wait before next attempt
-                    if (attempt < retryCount) {
-                        const delay = initialIntervalMs * (attempt + 1);
-                        await new Promise(resolve => setTimeout(resolve, delay));
-                    }
                 }
             } catch (error) {
                 lastError = error;
-            } finally {
-                if (isExclusive) {
-                    await this.writeUnlock();
-                } else {
-                    await this.readUnlock();
-                }
             }
         }
         return {
@@ -612,10 +602,14 @@ export class ResticService {
     }
 
     private async finalizeExecution(exec: UpdateExecutionSchema, result: ResticResult<any>) {
+        const status = result.success ? 'success'
+            : result.error.rawResult.isCanceled ? 'cancel'
+                : result.error.rawResult.isTerminated ? 'kill'
+                    : 'fail'
         await db.update(execution).set({
             exitCode: result.success ? result.rawResult.exitCode : result.error.exitCode,
             finishedAt: Date.now(),
-            executeStatus: result.success ? 'success' : 'fail'
+            executeStatus: status
         }).where(eq(execution.id, exec.id));
     }
 
@@ -644,40 +638,9 @@ export class ResticService {
         }).where(eq(restores.id, restore.id));
     }
 
-    public async readLock(
-        intervalMs?: number,
-        maxRetry?: number,
-    ) {
-        await pWaitFor(() => {
-            if (this.reader >= 0) {
-                this.reader++;
-                return true;
-            } else {
-                return false;
-            }
-        }, { interval: intervalMs || 10 * 1000, timeout: maxRetry ? maxRetry * (intervalMs || 10 * 1000) : 60 * 60 * 1000 }); // default wait 1 hours
-    }
-
-    public async readUnlock() {
-        this.reader--;
-    }
-
-    private async writeLock(
-        intervalMs?: number,
-        maxRetry?: number,
-    ) {
-        await pWaitFor(() => {
-            if (this.reader === 0) {
-                this.reader = -1;
-                return true;
-            } else {
-                return false;
-            }
-        }, { interval: intervalMs || 10 * 1000, timeout: maxRetry ? maxRetry * (intervalMs || 10 * 1000) : 60 * 60 * 1000 });
-    }
-
-    private async writeUnlock() {
-        this.reader = 0;
+    public async readLock() {
+        const [, releaseFunc] = await this.resticSem.acquire(1);
+        return releaseFunc;
     }
 }
 
