@@ -1,10 +1,10 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import { Box, Container, Stack, Group, Button, Title, Paper, Tabs } from '@mantine/core';
-import { IconArrowLeft, IconInfoCircle, IconDatabase, IconActivity } from '@tabler/icons-react';
+import { IconArrowLeft, IconInfoCircle, IconActivity, IconPlayerPlay } from '@tabler/icons-react';
 // Import your sub-components
 import { OverviewTab } from './component/OverviewTab';
-import { StatsTab } from './component/StatsTab';
 import { HealthLogTab } from './component/HealthLogTab';
+import ActionCenter from "./component/ActionCenter.tsx";
 
 export default function StorageDetailPage() {
     const navigate = useNavigate();
@@ -37,11 +37,11 @@ export default function StorageDetailPage() {
                                 <Tabs.Tab value="overview" leftSection={<IconInfoCircle size={14} />}>
                                     Overview
                                 </Tabs.Tab>
-                                <Tabs.Tab value="stats" leftSection={<IconDatabase size={14} />}>
-                                    Usage & Stats
-                                </Tabs.Tab>
                                 <Tabs.Tab value="health" leftSection={<IconActivity size={14} />}>
                                     Health Log
+                                </Tabs.Tab>
+                                <Tabs.Tab value="action" leftSection={<IconPlayerPlay size={14} />}>
+                                    Action Center
                                 </Tabs.Tab>
                             </Tabs.List>
 
@@ -49,12 +49,12 @@ export default function StorageDetailPage() {
                                 <OverviewTab />
                             </Tabs.Panel>
 
-                            <Tabs.Panel value="stats" pt="md">
-                                <StatsTab />
-                            </Tabs.Panel>
-
                             <Tabs.Panel value="health" pt="md">
                                 <HealthLogTab />
+                            </Tabs.Panel>
+
+                            <Tabs.Panel value="action" pt="md">
+                                <ActionCenter />
                             </Tabs.Panel>
                         </Tabs>
                     </Paper>
