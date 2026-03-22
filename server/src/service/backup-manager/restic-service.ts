@@ -293,14 +293,13 @@ export class ResticService {
         const result = await task.result
         if (!result.success) return;
         logger.debug(`copyTo ${path} snapshots from ${this.repo.name} to ${targetService.repo.name} success`)
-        // run remote retention policy against remote for cleaning up old data
-        const retryResult2 = await targetService.retryOnLock(
-            () => targetService.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy),
-            true
-        );
-        if (!retryResult2.success) logger.warn(retryResult2.error, `forget ${path} at ${this.repo.name} fail:`)
-        // remote repo index snapshot
-        void targetService.indexSnapshots(path);
+        // post backup
+        void targetService.postBackupOperation(
+            path,
+            target,
+            newExecution.id,
+            null
+        )
     }
 
     public async backup(path: string, target: UpdateBackupTargetSchema) {
@@ -315,26 +314,37 @@ export class ResticService {
         )
         if (!task) return;
         const result = await task.result
-        if (!result.success || result.result.snapshotId === undefined || result.result.snapshotId === null) return;
+        if (!result.success) return;
         logger.debug(`backup ${this.repo.name} success`)
-        // index snapshots
-        await this.indexSnapshots(path);
-        const [snapshotInDb] = await db.select().from(snapshotsMetadata)
-            .where(eq(snapshotsMetadata.snapshotId, result.result.snapshotId))
-        if (snapshotInDb) {
-            // set execution's snapshot id
-            await db.update(execution)
-                .set({ snapshotsMetadataId: snapshotInDb.id })
-                .where(eq(execution.id, newExecution.id))
-        } else {
-            logger.warn(`not found snapshot:${result.result.snapshotId} after index ${this.repo.name}`)
-        }
+        // run post backup
+        void this.postBackupOperation(path, target, newExecution.id, result.result.snapshotId);
+    }
+
+    public async postBackupOperation(
+        path: string,
+        target: UpdateBackupTargetSchema,
+        executionId: number,
+        snapshotId: string | undefined | null, // handle backup skipped
+    ) {
         // forget old data
         const retryResult = await this.retryOnLock(
             () => this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy),
             true,
         );
         if (!retryResult.success) logger.warn(`forget ${path} at ${this.repo.name} fail: ${retryResult.error.toString()}`);
+        // only index just backup + forget snapshot
+        await this.indexSnapshots(path);
+        if (snapshotId === undefined || snapshotId === null) return;
+        const [snapshotInDb] = await db.select().from(snapshotsMetadata)
+            .where(eq(snapshotsMetadata.snapshotId, snapshotId))
+        if (snapshotInDb) {
+            // set execution's snapshot id
+            await db.update(execution)
+                .set({snapshotsMetadataId: snapshotInDb.id})
+                .where(eq(execution.id, executionId))
+        } else {
+            logger.warn(`not found snapshot:${snapshotId} after index ${this.repo.name}`)
+        }
     }
 
     public async indexSnapshots(path?: string) {

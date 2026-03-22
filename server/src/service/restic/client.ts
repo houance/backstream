@@ -6,7 +6,7 @@ import {
     type Node,
     type Progress,
     type RepoConfig, type ResticResult,
-    type Snapshot, type SnapshotStat, type SnapshotSummary, success,
+    type Snapshot, type SnapshotSummary, success,
     type RepoStat,
     type Task,
 } from "./types";
@@ -158,6 +158,7 @@ export class RepositoryClient {
             const exitCode = mapResticCode(result.exitCode);
             switch (exitCode) {
                 case ExitCode.Success:
+                    // todo: return partial backup result
                 case ExitCode.BackupReadError: {
                     return success(this.parse(summary, "{}"), result);
                 }

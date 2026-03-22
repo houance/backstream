@@ -152,12 +152,6 @@ export interface KeepReason {
     matches: string[];
 }
 
-export interface SnapshotStat {
-    totalSize: number;
-    totalFileCount: number;
-    snapshotsCount: number;
-}
-
 export interface RepoStat {
     totalSize: number;
     totalUncompressedSize: number;
