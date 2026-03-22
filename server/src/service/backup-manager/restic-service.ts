@@ -176,7 +176,7 @@ export class ResticService {
         }
         // update repo stat
         const repoSize = await this.repoClient.getRepoSize();
-        const usage = repoSize.success ? repoSize.result.totalSize : this.repo.usage;
+        const size = repoSize.success ? repoSize.result.totalSize : null;
         // get repo capacity, only support local repo currently
         let capacity = this.repo.capacity;
         if (this.rcloneClient !== null && this.rcloneClient !== undefined) {
@@ -184,7 +184,7 @@ export class ResticService {
             if (repoStat.success && repoStat.result.total) capacity = repoStat.result.total;
         }
         const [updatedResult] = await db.update(repository)
-            .set({ repositoryStatus: status, usage: usage, capacity: capacity })
+            .set({ repositoryStatus: status, size: size, capacity: capacity })
             .where(eq(repository.id, this.repo.id))
             .returning();
         this.repo = updateRepositorySchema.parse(updatedResult);
@@ -351,87 +351,60 @@ export class ResticService {
         if (this.repo.repositoryStatus !== 'Active') return;
         const retryResult = await this.retryOnLock(
             () => this.repoClient.getSnapshots(path),
-            false,
-            2500,
-            4,
-        )
+            false, 2500, 4
+        );
         if (!retryResult.success) {
             logger.warn(retryResult.error, `indexSnapshots ${path} in ${this.repo.name} fail.`);
             return;
         }
         const snapshots = retryResult.result;
         if (snapshots.length === 0) return;
-        let validatedDbResult: UpdateSnapshotsMetadataSchema[];
-        let r1: (() => void) | undefined;
+        let release: (() => void) | undefined;
         try {
-            // lock db from other indexSnapshots, 5 sec timeout
-            r1 = await withTimeout(this.dbLock, 5000).acquire();
-            // index snapshots
-            if (path) {
-                const dbResult = await db.select().from(snapshotsMetadata)
-                    .where(and(
-                        eq(snapshotsMetadata.path, path),
-                        eq(snapshotsMetadata.repositoryId, this.repo.id))
-                    )
-                validatedDbResult = updateSnapshotsMetadataSchema.array().parse(dbResult);
-            } else {
-                const dbResult = await db.select().from(snapshotsMetadata)
-                    .where(eq(snapshotsMetadata.repositoryId, this.repo.id))
-                validatedDbResult = updateSnapshotsMetadataSchema.array().parse(dbResult);
-            }
-            const newSnapshots: InsertSnapshotsMetadataSchema[] = [];
-            for (const snapshot of snapshots) {
-                let hit = false;
-                validatedDbResult.forEach((dbResult) => {
-                    if (snapshot.id === dbResult.snapshotId) {
-                        hit = true;
-                        return ;
-                    }
-                })
-                if (!hit) {
-                    const tmp = {
-                        repositoryId: this.repo.id,
-                        path: snapshot.paths[0],
-                        snapshotId: snapshot.id,
-                        hostname: snapshot.hostname,
-                        username: snapshot.username,
-                        uid: snapshot.uid,
-                        gid: snapshot.gid,
-                        excludes: snapshot.excludes,
-                        tags: snapshot.tags,
-                        programVersion: snapshot.programVersion,
-                        time: snapshot.time,
-                        snapshotStatus: 'success',
-                        snapshotSummary: snapshot.summary,
-                        size: snapshot.summary ? snapshot.summary.totalBytesProcessed : 0
-                    }
-                    newSnapshots.push(insertSnapshotsMetadataSchema.parse(tmp))
-                }
-            }
-            const deleteSnapshots: UpdateSnapshotsMetadataSchema[] = [];
-            validatedDbResult.forEach((dbResult) => {
-                let hit = false;
-                snapshots.forEach((snapshot) => {
-                    if (dbResult.snapshotId === snapshot.id) {
-                        hit = true;
-                        return;
-                    }
-                })
-                if (!hit) deleteSnapshots.push(dbResult);
-            })
-            // create
-            if (newSnapshots.length > 0) await db.insert(snapshotsMetadata).values(newSnapshots);
-            // delete
-            if (deleteSnapshots.length > 0) await db.delete(snapshotsMetadata)
-                .where(inArray(
-                    snapshotsMetadata.id,
-                    deleteSnapshots.map(dbResult => dbResult.id)
+            release = await withTimeout(this.dbLock, 5000).acquire();
+            // 1. Fetch existing records
+            const query = db.select().from(snapshotsMetadata)
+                .where(and(
+                    eq(snapshotsMetadata.repositoryId, this.repo.id),
+                    path ? eq(snapshotsMetadata.path, path) : undefined
                 ));
+            const dbRecords = updateSnapshotsMetadataSchema.array().parse(await query);
+            const dbIds = new Set(dbRecords.map(d => d.snapshotId));
+            const localIds = new Set(snapshots.map(s => s.id));
+            // 2. Identify New Snapshots (in Remote, not in DB)
+            const newSnapshots = snapshots
+                .filter(s => !dbIds.has(s.id))
+                .map(s => insertSnapshotsMetadataSchema.parse({
+                    repositoryId: this.repo.id,
+                    path: s.paths[0],
+                    snapshotId: s.id,
+                    hostname: s.hostname,
+                    username: s.username,
+                    uid: s.uid,
+                    gid: s.gid,
+                    excludes: s.excludes,
+                    tags: s.tags,
+                    programVersion: s.programVersion,
+                    time: s.time,
+                    snapshotStatus: 'success',
+                    snapshotSummary: s.summary,
+                    size: s.summary?.totalBytesProcessed ?? 0
+                }));
+            // 3. Identify Deleted Snapshots (in DB, not in Remote)
+            const deleteIds = dbRecords
+                .filter(d => !localIds.has(d.snapshotId))
+                .map(d => d.id);
+            // 4. Batch Operations
+            if (newSnapshots.length > 0) await db.insert(snapshotsMetadata).values(newSnapshots);
+            if (deleteIds.length > 0) {
+                await db.delete(snapshotsMetadata).where(inArray(snapshotsMetadata.id, deleteIds));
+            }
             logger.debug(`index repo ${this.repo.name} success`);
         } catch (e) {
-            if (e === E_TIMEOUT) logger.warn(`index repo ${this.repo.name} timeout`);
+            if (e === E_TIMEOUT) logger.warn(e, `index repo ${this.repo.name} timeout`);
+            else logger.error(e, `index repo ${this.repo.name} error`);
         } finally {
-            if (r1) r1();
+            release?.();
         }
     }
 

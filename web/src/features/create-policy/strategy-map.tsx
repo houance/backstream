@@ -38,7 +38,6 @@ export const STRATEGY_MAP: Record<StrategyType, StrategyMeta> = {
             },
             schedulePolicy: "* * * * * *",
             index: 1,
-            nextBackupAt: 0
         }]
     },
     STRATEGY_321: {
@@ -57,7 +56,6 @@ export const STRATEGY_MAP: Record<StrategyType, StrategyMeta> = {
                 },
                 schedulePolicy: "* * * * * *",
                 index: 1,
-                nextBackupAt: 0
             },
             {
                 backupStrategyId: 0,
@@ -69,7 +67,6 @@ export const STRATEGY_MAP: Record<StrategyType, StrategyMeta> = {
                 },
                 schedulePolicy: "* * * * * *",
                 index: 2,
-                nextBackupAt: 0
             }
         ]
     }

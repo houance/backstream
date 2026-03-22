@@ -8,14 +8,17 @@ export const repository = sqliteTable("repository_table", {
     path: text("path").notNull(),
     password: text("password").notNull(),
     repositoryType: text("repository_type").notNull(),
-    usage: integer("usage").notNull(),
+    size: integer("size"),
+    uncompressedSize: integer("uncompressed_size"),
+    blobCount: integer("blob_count"),
+    snapshotsCount: integer("snapshots_count"),
     capacity: integer("capacity"), // null for infinity or not retrievable
     certification: text("certification", { mode: "json" }),
     checkSchedule: text("check_schedule").notNull(),
     checkPercentage: real("check_percentage").notNull(),
-    nextCheckAt: integer("next_check_at").notNull(),
+    nextCheckAt: integer("next_check_at"),
     pruneSchedule: text("prune_schedule").notNull(),
-    nextPruneAt: integer("next_prune_at").notNull(),
+    nextPruneAt: integer("next_prune_at"),
     repositoryStatus: text("repository_status").notNull(),
 });
 
@@ -36,7 +39,7 @@ export const backupTarget = sqliteTable("backup_target_table", {
     repositoryId: integer("repository_id").references(() => repository.id, { onDelete: 'cascade' }).notNull(),
     retentionPolicy: text("retention_policy", { mode: "json"}).notNull(),
     schedulePolicy: text("schedule_policy").notNull(),
-    nextBackupAt: integer("next_backup_at").notNull(),
+    nextBackupAt: integer("next_backup_at"), // null for frontend to bind, set when insert
     index: integer("index").notNull(),
 }, (table) => [
     index("target_strategy_id_idx").on(table.backupStrategyId),

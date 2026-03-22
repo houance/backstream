@@ -15,11 +15,14 @@ export function formatBytes(bytes: number | null | undefined, decimals: number =
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 }
 
-export function getRepositoryStats(usage: number, capacity: number | null | undefined) {
+export function getRepositoryStats(
+    usage: number | null | undefined,
+    capacity: number | null | undefined
+) {
     return {
         usedStr: formatBytes(usage),
         totalStr: formatBytes(capacity),
-        percentage: Math.min(100, (capacity && capacity > 0) ? (usage / capacity) * 100 : 0) // Caps at 100% for visual safety
+        percentage: Math.min(100, (usage && capacity && capacity > 0) ? (usage / capacity) * 100 : 0) // Caps at 100% for visual safety
     };
 }
 
