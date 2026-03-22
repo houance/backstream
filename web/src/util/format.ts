@@ -15,12 +15,21 @@ export function formatBytes(bytes: number | null | undefined, decimals: number =
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 }
 
-export function getRepositoryStats(usage: number, capacity: number | null | undefined): {usedStr: string, totalStr: string, percentage: number } {
+export function getRepositoryStats(usage: number, capacity: number | null | undefined) {
     return {
         usedStr: formatBytes(usage),
         totalStr: formatBytes(capacity),
         percentage: Math.min(100, (capacity && capacity > 0) ? (usage / capacity) * 100 : 0) // Caps at 100% for visual safety
     };
+}
+
+export function formatPath(path: string, maxLength = 60) {
+    if (path.length <= maxLength) return path;
+
+    // Keep ~12 chars from start and ~15 from end
+    const start = path.slice(0, 15);
+    const end = path.slice(-25);
+    return `${start}...${end}`;
 }
 
 export function formatPercentage(value: number): number {

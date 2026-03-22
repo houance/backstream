@@ -1,6 +1,6 @@
 import {Table, Badge, ActionIcon, Group, Card, Box, Text, Progress, Tooltip} from '@mantine/core';
-import {IconAlertTriangle, IconTrash} from '@tabler/icons-react';
-import {getRepositoryStats} from "../../../util/format.ts";
+import {IconAlertTriangle, IconEye, IconTrash} from '@tabler/icons-react';
+import {formatPath, getRepositoryStats} from "../../../util/format.ts";
 import { type UpdateRepositorySchema } from '@backstream/shared'
 
 export default function StorageLocTable(
@@ -13,17 +13,36 @@ export default function StorageLocTable(
 
     const rows = data.map((item) => {
         const { usedStr, totalStr, percentage } = getRepositoryStats(item.usage, item.capacity);
+        // Map status to specific Mantine colors
+        const statusColor =
+            item.repositoryStatus === 'Active' ? 'green' :
+                item.repositoryStatus === 'Disconnected' ? 'yellow' :
+                    item.repositoryStatus === 'Corrupt' ? 'red' : 'gray';
 
         return (
             <Table.Tr
                 key={item.id}
-                // Add pointer cursor and click handler
-                style={{ cursor: 'pointer' }}
-                onClick={() => onDetail(item.id)}
             >
                 <Table.Td><b>{item.name}</b></Table.Td>
-                <Table.Td>{item.path}</Table.Td>
-                <Table.Td>{item.repositoryType}</Table.Td>
+                <Table.Td>
+                    <Tooltip label={item.repositoryStatus} position='top-start' withArrow openDelay={300}>
+                        <Badge variant="dot" color={statusColor} size="sm">{item.repositoryType}</Badge>
+                    </Tooltip>
+                </Table.Td>
+                <Table.Td>
+                    <Tooltip label={item.path} position='top-start' withArrow openDelay={300}>
+                        <Text
+                            size='sm'
+                            style={{
+                                cursor: 'help',
+                                wordBreak: 'break-all', // Allows breaking at any character if needed
+                                maxWidth: '600px',      // Caps the growth
+                            }}
+                        >
+                            {formatPath(item.path, 60)}
+                        </Text>
+                    </Tooltip>
+                </Table.Td>
                 <Table.Td>
                     <Box maw={180}>
                         <Group justify="space-between" mb={4}>
@@ -50,40 +69,45 @@ export default function StorageLocTable(
                     </Box>
                 </Table.Td>
                 <Table.Td>
-                    <Badge color={item.repositoryStatus === 'Active' ? 'green' : 'yellow'} variant="light">
-                        {item.repositoryStatus}
-                    </Badge>
-                </Table.Td>
-                <Table.Td>
-                    <Tooltip label="Delete Storage Location" color='red' withArrow openDelay={300}>
-                        <ActionIcon
-                            variant="light"
-                            color="red"
-                            aria-label="Delete"
-                            onClick={(e) => {
-                                // Prevent row navigation when clicking delete
-                                e.stopPropagation();
-                                onDelete(item);
-                            }}
-                        >
-                            <IconTrash size="1rem" />
-                        </ActionIcon>
-                    </Tooltip>
+                    <Group gap={4} justify='left'>
+                        <Tooltip label="Detail" withArrow openDelay={300}>
+                            <ActionIcon
+                                variant="light"
+                                aria-label="Detail"
+                                onClick={() => onDetail(item.id)}
+                            >
+                                <IconEye size="1rem" />
+                            </ActionIcon>
+                        </Tooltip>
+                        <Tooltip label="Delete" color='red' withArrow openDelay={300}>
+                            <ActionIcon
+                                variant="light"
+                                color="red"
+                                aria-label="Delete"
+                                onClick={(e) => {
+                                    // Prevent row navigation when clicking delete
+                                    e.stopPropagation();
+                                    onDelete(item);
+                                }}
+                            >
+                                <IconTrash size="1rem" />
+                            </ActionIcon>
+                        </Tooltip>
+                    </Group>
                 </Table.Td>
             </Table.Tr>
         )});
 
     return (
         <Card shadow="sm" p="lg" radius="md" withBorder mb="xl">
-            <Table striped highlightOnHover verticalSpacing="md" layout="fixed">
-                <Table.Thead>
-                    <Table.Tr fz="lg">
-                        <Table.Th>Location Name</Table.Th>
-                        <Table.Th>Path</Table.Th>
-                        <Table.Th>Type</Table.Th>
-                        <Table.Th>Capacity</Table.Th>
-                        <Table.Th>Status</Table.Th>
-                        <Table.Th style={{ width: '120px' }}>Actions</Table.Th>
+            <Table highlightOnHover verticalSpacing="md" horizontalSpacing='lg'>
+                <Table.Thead >
+                    <Table.Tr fz="sm" tt='uppercase'>
+                        <Table.Th style={{ width: '15%'}} >Location</Table.Th>
+                        <Table.Th style={{ width: '15%'}} >Status & Type</Table.Th>
+                        <Table.Th style={{ width: '25%'}} >Path</Table.Th>
+                        <Table.Th style={{ width: '20%'}} >Capacity</Table.Th>
+                        <Table.Th style={{ width: '100px' }}>Actions</Table.Th>
                     </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>{rows}</Table.Tbody>
