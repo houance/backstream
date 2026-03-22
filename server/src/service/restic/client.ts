@@ -59,10 +59,11 @@ export class RepositoryClient {
         uuid: string,
         signal: AbortSignal,
     ): Task<ResticResult<boolean>> {
+        // todo: move to upper class
         if (this.repoType !== RepoType.LOCAL && this.repoType === targetClient.repoType) {
             throw new Error('copy between same type of repositories is not supported');
         }
-        const command = `restic copy ${snapshotIds.join(' ')}`;
+        const command = `restic copy ${snapshotIds.join(' ')} -v`;
         const process = executeStream(
             command,
             logFie,
@@ -87,6 +88,23 @@ export class RepositoryClient {
                 // Execa v9+ yields lines automatically from the subprocess
                 for await (const line of process) {
                     // todo: regex from stdout, get process and snapshot id
+                    // example:
+                    // nopepsi-dev@nopepsi:~/fullstack-project/backstream/server/src/test$ RESTIC_REPOSITORY=./second-repo/ RESTIC_PASSWORD=0608 restic copy 3f5 0334 --from-repo ./local-repo/ -v
+                    // enter password for source repository:
+                    // repository 75a8e710 opened (version 2, compression level auto)
+                    // repository 6c7d16f9 opened (version 2, compression level auto)
+                    // [0:00] 100.00%  3 / 3 index files loaded
+                    // [0:00] 100.00%  3 / 3 index files loaded
+                    //
+                    // snapshot 3f5d05b9 of [/home/nopepsi-dev/rclone-v1.70.3-linux-amd64] at 2026-03-21 20:46:00.040559172 +0800 CST by nopepsi-dev@nopepsi
+                    //   copy started, this may take a while...
+                    // [0:00]          0 packs copied
+                    // snapshot 7073c861 saved
+                    //
+                    // snapshot 03342d45 of [/home/nopepsi-dev/.vscode-server] at 2026-03-22 22:17:30.038772859 +0800 CST by nopepsi-dev@nopepsi
+                    //   copy started, this may take a while...
+                    // [0:02] 100.00%  11 / 11 packs copied
+                    // snapshot 3b3919bc saved
                 }
             } catch (err) {
                 logger.warn(err, "Stream processing error:");
@@ -193,34 +211,8 @@ export class RepositoryClient {
             signal,
             { env: this._env }
         );
-        // 更新 progress
-        const progress: Progress = { totalBytes: 0, bytesDone: 0, percentDone: 0 };
-        // 2. Process the stream in the background (Immediate Execution)
-        (async () => {
-            try {
-                // Execa v9+ yields lines automatically from the subprocess
-                for await (const line of process) {
-                    try {
-                        const data: {
-                            message_type: string,
-                            percent_done: number,
-                            total_bytes: number,
-                            bytes_restored: number
-                        } = JSON.parse(line.toString());
-                        // Restic specific JSON logic (adjust based on actual restic output)
-                        if (data.message_type === 'status') {
-                            progress.totalBytes = data.total_bytes;
-                            progress.bytesDone = data.bytes_restored;
-                            progress.percentDone = data.percent_done;
-                        }
-                    } catch {
-                        /* Ignore non-JSON lines or partial chunks */
-                    }
-                }
-            } catch (err) {
-                logger.warn(err, "Stream processing error:");
-            }
-        })();
+        // dump 不支持 progress
+        const progress: Progress = { percentDone: -1 };
         // 处理结果
         const result = (async (): Promise<ResticResult<string>> => {
             const result:Result = await process;
@@ -527,6 +519,7 @@ export class RepositoryClient {
     }
 
     public async createRepoWithSameChunker(fromClient: RepositoryClient): Promise<ResticResult<boolean>> {
+        // todo: move to upper class
         if (this.repoType !== RepoType.LOCAL && this.repoType === fromClient.repoType) {
             throw new Error('init repository from same type is not supported');
         }
