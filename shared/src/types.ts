@@ -219,7 +219,7 @@ export const finishedSnapshotsMetaSchema = z.object({
     size: z.number().min(0),
 })
 export type FinishedSnapshotsMetaSchema = z.infer<typeof finishedSnapshotsMetaSchema>;
-export const onGoingBackupProcess = z.object({
+export const onGoingProcess = z.object({
     executionId: z.number().nonnegative(),
     uuid: z.string(),
     status: z.enum(['running', 'pending']),
@@ -233,13 +233,7 @@ export const onGoingBackupProcess = z.object({
     repoName: z.string(),
     commandType: z.string(),
 })
-export type OnGoingBackupProcess = z.infer<typeof onGoingBackupProcess>;
-export const scheduledSnapshotsMetaSchema = z.object({
-    uuid: z.string(),
-    status: z.literal('scheduled'),
-    createdAtTimestamp: z.number().min(0)
-})
-export type ScheduledSnapshotsMetaSchema = z.infer<typeof scheduledSnapshotsMetaSchema>;
+export type OnGoingProcess = z.infer<typeof onGoingProcess>;
 // activity interface
 export interface Activity {
     id: number;

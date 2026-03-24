@@ -7,7 +7,7 @@ import {
     repository,
     snapshotsMetadata,
     execution,
-    filterQuery, failHistory, type FilterQuery, commandType
+    filterQuery, failHistory, type FilterQuery, commandType, type OnGoingProcess, updateExecutionSchema
 } from '@backstream/shared';
 import {zValidator} from "@hono/zod-validator";
 import {RepositoryClient} from '../service/restic';
@@ -37,6 +37,49 @@ const storageRoute = new Hono<Env>()
             lastCheckTimestamp: checkTime,
             lastPruneTimestamp: pruneTime
         });
+    })
+    .get('/process/:id', async (c) => {
+        const storageId = Number(c.req.param('id'));
+        const result:OnGoingProcess[] = [];
+        // 查询 ongoing snapshot
+        const onGoingProcess = await getRepoProcess(c.var.db, storageId);
+        if (onGoingProcess === null) return c.json(result);
+        for (const exec of onGoingProcess) {
+            const repo = updateRepositorySchema.parse(exec.repository);
+            const clientRecord = await c.var.scheduler.getResticService(repo);
+            if (clientRecord.status !== 'active') return c.json(result);
+            const runningJob = clientRecord.client.getRunningJob(updateExecutionSchema.parse(exec));
+            if (runningJob === null) {
+                result.push({
+                    executionId: exec.id,
+                    uuid: exec.uuid,
+                    status: 'pending',
+                    createdAtTimestamp: exec.startedAt || exec.scheduledAt,
+                    repoName: repo.name,
+                    commandType: exec.commandType,
+                })
+            } else {
+                // 获取 progress
+                const progress = runningJob.getProgress()
+                // 获取 logs
+                const logs = await getLogs(runningJob.logFile, runningJob.errorFile);
+                result.push({
+                    executionId: exec.id,
+                    uuid: exec.uuid,
+                    status: 'running',
+                    createdAtTimestamp: exec.startedAt || exec.scheduledAt,
+                    progress: {
+                        percent: progress.percentDone,
+                        bytesDone: progress.bytesDone,
+                        totalBytes: progress.totalBytes,
+                        logs: logs
+                    },
+                    repoName: repo.name,
+                    commandType: exec.commandType,
+                })
+            }
+        }
+        return c.json(result);
     })
     .post('/fail-history',
         zValidator('json', z.object({
@@ -165,6 +208,39 @@ const storageRoute = new Hono<Env>()
         await c.var.db.delete(repository).where(eq(repository.id, id))
         return c.json({ success: true, id });
     });
+
+async function getRepoProcess(db: Env['Variables']['db'], repoId: number) {
+    const [ [checkExec], [pruneExec] ] = await Promise.all([
+        db.query.execution.findMany({
+            where: (execution, { and, eq, inArray }) => and(
+                eq(execution.repositoryId, repoId),
+                inArray(execution.executeStatus, ['running', 'pending']),
+                eq(execution.commandType, commandType.check)
+            ),
+            orderBy: (execution, { desc }) => [desc(execution.scheduledAt)],
+            limit: 1,
+            with: {
+                repository: true
+            }
+        }),
+        db.query.execution.findMany({
+            where: (execution, { and, eq, inArray }) => and(
+                eq(execution.repositoryId, repoId),
+                inArray(execution.executeStatus, ['running', 'pending']),
+                eq(execution.commandType, commandType.prune)
+            ),
+            orderBy: (execution, { desc }) => [desc(execution.scheduledAt)],
+            limit: 1,
+            with: {
+                repository: true
+            }
+        }),
+    ]);
+    if (checkExec && pruneExec) return [checkExec, pruneExec];
+    if (checkExec) return [checkExec];
+    if (pruneExec) return [pruneExec];
+    return null;
+}
 
 async function getRepoData(db: Env['Variables']['db'], repoId: number) {
     return db

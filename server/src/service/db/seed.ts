@@ -66,7 +66,7 @@ async function main() {
                 repositoryType: RepoType.LOCAL,
                 repositoryStatus: "Active",
                 checkSchedule: "44 * * * * *",
-                checkPercentage: 0.2,
+                checkPercentage: 1,
                 nextCheckAt: 1770967868630,
                 pruneSchedule: "44 * * * * *",
                 nextPruneAt: 1770967868630

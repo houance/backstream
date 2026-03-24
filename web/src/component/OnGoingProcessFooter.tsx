@@ -1,11 +1,11 @@
 import { Box, Progress, Group, Text, UnstyledButton, Modal, Badge, Tooltip } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconTerminal2 } from '@tabler/icons-react';
-import type {OnGoingBackupProcess} from "@backstream/shared";
-import {formatBytes, formatPercentage} from "../../../util/format.ts";
-import {LogTerminal} from "../../../component/LogTerminal.tsx";
+import type {OnGoingProcess} from "@backstream/shared";
+import {formatBytes, formatPercentage} from "../util/format.ts";
+import {LogTerminal} from "./LogTerminal.tsx";
 
-export default function OnGoingProcessFooter({ data }: { data: OnGoingBackupProcess }) {
+export default function OnGoingProcessFooter({ data }: { data: OnGoingProcess }) {
     const [opened, { open, close }] = useDisclosure(false);
 
     // Destructure with schema-based fallbacks

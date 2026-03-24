@@ -3,7 +3,7 @@ import {type Env} from '../index'
 import {
     backupTarget,
     execution, failHistory, type FilterQuery, filterQuery,
-    insertBackupPolicySchema, type OnGoingBackupProcess,
+    insertBackupPolicySchema, type OnGoingProcess,
     strategy,
     updateBackupPolicySchema, updateExecutionSchema, updateRepositorySchema
 } from "@backstream/shared";
@@ -32,47 +32,46 @@ const policyRoute = new Hono<Env>()
     })
     .get('/process/:id', async (c) => {
         const strategyId = Number(c.req.param('id'));
-        const result:OnGoingBackupProcess[] = [];
+        const result:OnGoingProcess[] = [];
         // 查询 ongoing snapshot
         const onGoingProcess = await getStrategyOnGoingProcess(c.var.db, strategyId);
         if (onGoingProcess === null) return c.json(result);
         for (const target of onGoingProcess.targets) {
             const [exec] = target.executions;
+            if (!exec) continue;
+            // 判断 exec 是 pending 还是 running
             const repo = updateRepositorySchema.parse(target.repository)
-            if (exec) {
-                // 判断 exec 是 pending 还是 running
-                const clientRecord = await c.var.scheduler.getResticService(repo);
-                if (clientRecord.status !== 'active') return c.json(result);
-                const runningJob = clientRecord.client.getRunningJob(updateExecutionSchema.parse(exec));
-                if (runningJob === null) {
-                    result.push({
-                        executionId: exec.id,
-                        uuid: exec.uuid,
-                        status: 'pending',
-                        createdAtTimestamp: exec.startedAt || exec.scheduledAt,
-                        repoName: repo.name,
-                        commandType: exec.commandType,
-                    })
-                } else {
-                    // 获取 progress
-                    const progress = runningJob.getProgress()
-                    // 获取 logs
-                    const logs = await getLogs(runningJob.logFile, runningJob.errorFile);
-                    result.push({
-                        executionId: exec.id,
-                        uuid: exec.uuid,
-                        status: 'running',
-                        createdAtTimestamp: exec.startedAt || exec.scheduledAt,
-                        progress: {
-                            percent: progress.percentDone,
-                            bytesDone: progress.bytesDone,
-                            totalBytes: progress.totalBytes,
-                            logs: logs
-                        },
-                        repoName: repo.name,
-                        commandType: exec.commandType,
-                    })
-                }
+            const clientRecord = await c.var.scheduler.getResticService(repo);
+            if (clientRecord.status !== 'active') return c.json(result);
+            const runningJob = clientRecord.client.getRunningJob(updateExecutionSchema.parse(exec));
+            if (runningJob === null) {
+                result.push({
+                    executionId: exec.id,
+                    uuid: exec.uuid,
+                    status: 'pending',
+                    createdAtTimestamp: exec.startedAt || exec.scheduledAt,
+                    repoName: repo.name,
+                    commandType: exec.commandType,
+                })
+            } else {
+                // 获取 progress
+                const progress = runningJob.getProgress()
+                // 获取 logs
+                const logs = await getLogs(runningJob.logFile, runningJob.errorFile);
+                result.push({
+                    executionId: exec.id,
+                    uuid: exec.uuid,
+                    status: 'running',
+                    createdAtTimestamp: exec.startedAt || exec.scheduledAt,
+                    progress: {
+                        percent: progress.percentDone,
+                        bytesDone: progress.bytesDone,
+                        totalBytes: progress.totalBytes,
+                        logs: logs
+                    },
+                    repoName: repo.name,
+                    commandType: exec.commandType,
+                })
             }
         }
         return c.json(result);

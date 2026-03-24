@@ -8,7 +8,7 @@ import { client } from "../../api";
 import SnapshotExplorer from './component/SnapshotsExplorer.tsx';
 import PolicySummary from "./component/PolicySummary.tsx";
 import PolicyActionCenter from "./component/PolicyActionCenter.tsx";
-import OnGoingProcessFooter from "./component/OnGoingProcessFooter.tsx";
+import OnGoingProcessFooter from "../../component/OnGoingProcessFooter.tsx";
 import FailHistory from "./component/FailHistory.tsx";
 
 export default function PolicyDetailPage() {
@@ -22,13 +22,14 @@ export default function PolicyDetailPage() {
             if (!res.ok) throw new Error('Failed to fetch policy');
             return res.json();
         },
+        refetchInterval: 5000
     });
 
     const { data: onGoingProcess, isPending: isOnGoingProcessLoading } = useQuery({
-        queryKey: ['process', id],
+        queryKey: ['policy-process', id],
         queryFn: async () => {
             const res = await client.api.policy['process'][':id'].$get({ param: { id: id! } });
-            if (!res.ok) throw new Error('Failed to fetch on going process');
+            if (!res.ok) throw new Error('Failed to fetch policy on going process');
             return res.json();
         },
         refetchInterval: 5000,

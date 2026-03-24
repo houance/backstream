@@ -7,6 +7,7 @@ import { FailHistoryTab } from './component/FailHistoryTab.tsx';
 import ActionCenter from "./component/ActionCenter.tsx";
 import {useQuery} from "@tanstack/react-query";
 import {client} from "../../api";
+import OnGoingProcessFooter from "../../component/OnGoingProcessFooter.tsx";
 
 export default function StorageDetailPage() {
     const navigate = useNavigate();
@@ -20,8 +21,20 @@ export default function StorageDetailPage() {
             })
             if (!res.ok) throw new Error('Failed to fetch storage loc.');
             return res.json()
-        }
+        },
+        refetchInterval: 5000
     })
+
+    const { data: onGoingProcess, isPending: isOnGoingProcessLoading } = useQuery({
+        queryKey: ['storage-process', id],
+        queryFn: async () => {
+            const res = await client.api.storage['process'][':id'].$get({ param: { id: id! } });
+            if (!res.ok) throw new Error('Failed to fetch storage on going process');
+            return res.json();
+        },
+        refetchInterval: 5000,
+    });
+    const hasProcesses = !isOnGoingProcessLoading && onGoingProcess && onGoingProcess.length > 0;
 
     if (isDetailLoading) return <Center h="100vh"><Loader size="xl" /></Center>;
     if (!storageLocDetail) return <Center h="100vh">Storage not found</Center>;
@@ -74,8 +87,25 @@ export default function StorageDetailPage() {
                 </Stack>
             </Container>
 
-            {/* Note: Logic for OngoingProcessFooter can be added here if
-                repo maintenance tasks (Prune/Check) are trackable */}
+            {/* --- FIXED PROGRESS FOOTER --- */}
+            {hasProcesses && (
+                <Box
+                    style={{
+                        position: 'fixed',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        zIndex: 1000,
+                        boxShadow: '0 -4px 20px rgba(0,0,0,0.1)',
+                    }}
+                >
+                    <Stack gap={0}>
+                        {onGoingProcess.map((exec) => (
+                            <OnGoingProcessFooter key={exec.uuid} data={exec} />
+                        ))}
+                    </Stack>
+                </Box>
+            )}
         </Box>
     );
 }
