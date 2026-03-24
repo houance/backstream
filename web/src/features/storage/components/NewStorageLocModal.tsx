@@ -9,7 +9,6 @@ import {
 } from '@backstream/shared'
 import {PROVIDER_MAP} from "../provider-map.tsx";
 import MaintainPolicyConfig from "./MaintainPolicyConfig.tsx";
-import PathSuggestion from "../../../component/PathSuggestion.tsx";
 
 interface ModalProps {
     opened: boolean;
@@ -57,24 +56,6 @@ export default function NewStorageLocModal({ opened, onClose, onSubmit, onConnec
                         {...form.getInputProps('name')}
                         withAsterisk
                     />
-                    {form.values.repositoryType === 'LOCAL'
-                        ? (
-                            <PathSuggestion
-                                label="Path"
-                                placeholder="/mnt/nas/..."
-                                required={true}
-                                {...form.getInputProps('path')}
-                            />
-                        )
-                        : (
-                            <TextInput
-                                label="Path"
-                                placeholder="/mnt/nas/..."
-                                {...form.getInputProps('path')}
-                                withAsterisk
-                            />
-                        )
-                    }
                     <PasswordInput
                         variant={"default"}
                         label="Password"
@@ -86,8 +67,7 @@ export default function NewStorageLocModal({ opened, onClose, onSubmit, onConnec
                     />
                     <MaintainPolicyConfig form={form} />
 
-                    {form.values.repositoryType !== 'LOCAL' &&
-                        <Divider label="Authentication Details" labelPosition="center"/>}
+                    <Divider label="Authentication Details" labelPosition="center"/>
                     {providerMeta.component !== null && <providerMeta.component form={form} />}
 
                     <Group justify="flex-end" mt="xl">

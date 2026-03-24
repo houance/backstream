@@ -9,6 +9,7 @@ import OSSSubform from "./components/OSSSubForm.tsx";
 import SFTPSubform from "./components/SFTPSubform.tsx";
 import B2SubForm from "./components/B2SubForm.tsx";
 import S3SubForm from "./components/S3SubForm.tsx";
+import LocalSubForm from "./components/LocalSubForm.tsx";
 
 interface ProviderMeta {
     component: React.FC<{ form: UseFormReturnType<InsertRepositorySchema> }> | null // for local repo type
@@ -68,7 +69,7 @@ export const PROVIDER_MAP: Record<RepoType, ProviderMeta> = {
         }
     },
     LOCAL: {
-        component: null,
+        component: LocalSubForm,
         initSubForm: {}
     }
 }

@@ -6,6 +6,12 @@ export function OSSSubform({form}: { form: UseFormReturnType<InsertRepositorySch
     return (
         <>
             <TextInput
+                label="Path"
+                placeholder="/mnt/nas/..."
+                {...form.getInputProps('path')}
+                withAsterisk
+            />
+            <TextInput
                 label="ACCESS KEY ID"
                 {...form.getInputProps('certification.oss.OSS_ACCESS_KEY_ID')}
                 withAsterisk

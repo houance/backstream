@@ -6,6 +6,12 @@ export function B2SubForm({form}: { form: UseFormReturnType<InsertRepositorySche
     return (
         <>
             <TextInput
+                label="Path"
+                placeholder="/mnt/nas/..."
+                {...form.getInputProps('path')}
+                withAsterisk
+            />
+            <TextInput
                 label="B2 ACCOUNT ID"
                 {...form.getInputProps('certification.b2.B2_ACCOUNT_ID')}
                 placeholder="Enter B2 ACCOUNT ID"
