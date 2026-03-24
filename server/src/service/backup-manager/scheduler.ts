@@ -22,6 +22,62 @@ import {FileManager} from "./file-manager";
 import { logger } from '../log/logger'
 import {ResticError} from "../restic";
 
+/**
+ * Generates a randomized cron string (6 fields: s m h d M dw)
+ * @param interval The frequency (e.g., every 5 units)
+ * @param unit The time unit to apply the interval to
+ */
+function randomizedCron(
+    interval: number, unit: 'sec' | 'minute' | 'hour' | 'day' | 'month' | 'year'
+) {
+    const rnd = (max: number) => Math.floor(Math.random() * max);
+    // Default values (0 for small units, * for large units)
+    let s: string = "0";
+    let m: string = "0";
+    let h: string = "0";
+    let d: string = "*";
+    let M: string = "*";
+    const dw: string = "*";
+    switch (unit) {
+        case 'sec':
+            s = `*/${interval}`;
+            m = "*";
+            h = "*";
+            break;
+        case 'minute':
+            s = `${rnd(60)}`; // Randomize second
+            m = `*/${interval}`;
+            h = "*";
+            break;
+        case 'hour':
+            s = `${rnd(60)}`; // Randomize second
+            m = `${rnd(60)}`; // Randomize minute
+            h = `*/${interval}`;
+            break;
+        case 'day':
+            s = `${rnd(60)}`;
+            m = `${rnd(60)}`;
+            h = `${rnd(24)}`; // Randomize hour
+            d = `*/${interval}`;
+            break;
+        case 'month':
+            s = `${rnd(60)}`;
+            m = `${rnd(60)}`;
+            h = `${rnd(24)}`;
+            d = `${1 + rnd(28)}`; // Randomize day (1-28 to be safe)
+            M = `*/${interval}`;
+            break;
+        case 'year':
+            s = `${rnd(60)}`;
+            m = `${rnd(60)}`;
+            h = `${rnd(24)}`;
+            d = `${1 + rnd(28)}`;
+            M = `${1 + rnd(12)}`; // Randomize month (1-12)
+            break;
+    }
+    return `${s} ${m} ${h} ${d} ${M} ${dw}`;
+}
+
 async function getPolicyById(strategyId: number): Promise<Policy | null> {
     const result = await db.query.strategy.findFirst({
         where: (strategy, { eq }) => eq(strategy.id, strategyId),
@@ -97,7 +153,7 @@ function updateRepoNextRunAt(repoId: number, type: 'check' | 'prune') {
 
 // Discriminated Union for all kind of job
 type JobMetadata =
-    | { category: 'repo'; type: 'check' | 'prune' | 'stat' | 'snapshots'; repoId: number; }
+    | { category: 'repo'; type: 'check' | 'prune' | 'stat' | 'snapshots' | 'heartbeat'; repoId: number; }
     | { category: 'policy-target'; type: 'backup' | 'copy'; strategyId: number; targetId: number; repoId: number; }
     | { category: 'policy'; type: 'datasize'; strategyId: number }
     | { category: 'system'; type: 'clean' };
@@ -135,6 +191,8 @@ const getJobKey = (meta: JobMetadata): string => {
             return 'unknown';
     }
 };
+
+const random = (max: number) => Math.floor(Math.random() * max);
 
 export class Scheduler {
     private readonly clientMap: Map<string, ClientRecord>;
@@ -266,7 +324,7 @@ export class Scheduler {
 
     private createRepoJobMeta(
         repoId: number,
-        type: 'check' | 'prune' | 'stat' | 'snapshots'
+        type: 'check' | 'prune' | 'stat' | 'snapshots' | 'heartbeat'
     ) {
         const job = {
             category: 'repo',
@@ -322,19 +380,19 @@ export class Scheduler {
                 status: 'active',
             })
         }
-        // stat(repo status, usage, capacity) job
-        const { job, key } = this.createRepoJobMeta(repo.id, 'stat');
-        const cron = new Cron("25 */2 * * * *", { protect: true }, async () => {
+        // heartbeat
+        const { job, key } = this.createRepoJobMeta(repo.id, 'heartbeat');
+        const cron = new Cron(randomizedCron(5, 'minute'), { protect: true }, async () => {
             const [dbResult] = await db.select().from(repository)
                 .where(eq(repository.id, repo.id));
             if (!dbResult) {
-                logger.error(`get repo ${repo.id} for stat job fail`);
+                logger.error(`get repo ${repo.id} for heartbeat job fail`);
                 return;
             }
             // get rs
             const validRepo = updateRepositorySchema.parse(dbResult);
             const rs = await this.getResticService(validRepo);
-            if (rs.status === 'active') await rs.client.updateStat();
+            if (rs.status === 'active') await rs.client.heartbeat();
         });
         this.cronJobMap.set(key, {
             ...job,
@@ -342,10 +400,33 @@ export class Scheduler {
             key,
             status: 'active',
         })
-        // run stat immediately
+        // run heartbeat immediately
         void cron.trigger();
+        // fetch repo stats job
+        const { job: statJob, key: statJobKey } = this.createRepoJobMeta(repo.id, 'stat');
+        const statCron = new Cron(randomizedCron(12, 'hour'), { protect: true }, async () => {
+            const [dbResult] = await db.select().from(repository)
+                .where(eq(repository.id, repo.id));
+            if (!dbResult) {
+                logger.error(`get repo ${repo.id} for stats job fail`);
+                return;
+            }
+            // get rs
+            const validRepo = updateRepositorySchema.parse(dbResult);
+            const rs = await this.getResticService(validRepo);
+            if (rs.status === 'active') await rs.client.updateRepoStat();
+        })
+        this.cronJobMap.set(key, {
+            ...statJob,
+            cron: statCron,
+            key: statJobKey,
+            status: 'active',
+        })
+        // run stat immediately
+        void statCron.trigger();
+        // index snapshots job
         const { job: indexJob, key: indexJobKey } = this.createRepoJobMeta(repo.id, 'snapshots');
-        const indexCron = new Cron("5 */5 * * * *", { protect: true }, async () => {
+        const indexCron = new Cron(randomizedCron(1, "hour"), { protect: true }, async () => {
             const [dbResult] = await db.select().from(repository)
                 .where(eq(repository.id, repo.id));
             if (!dbResult) {
@@ -369,7 +450,6 @@ export class Scheduler {
 
     private addDataSizeUpdate(policy: Policy) {
         const strategyId = policy.id;
-        const datasizeUpdateSchedule = "5 */5 * * * *";
         const job = {
             category: 'policy',
             type: 'datasize',
@@ -379,7 +459,7 @@ export class Scheduler {
         // stop previous job
         const previousJob = this.cronJobMap.get(key);
         if (previousJob && previousJob.status === 'active') previousJob.cron.stop();
-        const cron = new Cron(datasizeUpdateSchedule, { protect: true }, async () => {
+        const cron = new Cron(randomizedCron(1, 'day'), { protect: true }, async () => {
             const rc = new RcloneClient(); // local rclone
             const sizeResult = await rc.getSize(policy.dataSource);
             const size = sizeResult.success ? sizeResult.result.bytes : policy.dataSourceSize;
@@ -392,6 +472,8 @@ export class Scheduler {
             status: 'active',
         } as const;
         this.cronJobMap.set(key, jobRecord);
+        // run data size update immediately
+        void cron.trigger();
     }
 
     public async addPolicyScheduleByStrategyId(strategyId: number) {

@@ -2,7 +2,7 @@ import {
     commandType,
     type CommandType,
     execution,
-    type InsertExecutionSchema, type InsertRestoreSchema,
+    type InsertExecutionSchema, type InsertRepositorySchema, type InsertRestoreSchema,
     type InsertSnapshotsMetadataSchema,
     insertSnapshotsMetadataSchema,
     repository,
@@ -156,7 +156,7 @@ export class ResticService {
         this.taskMap.delete(exec.id);
     }
 
-    public async updateStat() {
+    public async heartbeat() {
         if (this.repo.repositoryStatus === "Corrupt") return;
         let status: 'Active' | 'Disconnected';
         if (this.taskMap.size !== 0) {
@@ -165,29 +165,42 @@ export class ResticService {
             const result = await this.repoClient.isRepoExist();
             status = (result.success && result.result) ? 'Active' : 'Disconnected';
         }
-        // shortcut later db update
-        if (status === 'Disconnected') {
-            const updatedResult = await db.update(repository)
-                .set({ repositoryStatus: status })
-                .where(eq(repository.id, this.repo.id))
-                .returning()
-            this.repo = updateRepositorySchema.parse(updatedResult[0]);
-            return;
-        }
+        const updatedResult = await db.update(repository)
+            .set({ repositoryStatus: status })
+            .where(eq(repository.id, this.repo.id))
+            .returning()
+        this.repo = updateRepositorySchema.parse(updatedResult[0]);
+        return;
+    }
+
+    public async updateRepoStat() {
         // update repo stat
-        const repoSize = await this.repoClient.getRepoSize();
-        const size = repoSize.success ? repoSize.result.totalSize : null;
+        let values: Partial<InsertRepositorySchema> = {};
+        const repoStatResult = await this.repoClient.getRepoStat();
+        if (repoStatResult.success) {
+            const repoStat = repoStatResult.result;
+            values = {
+                size: repoStat.totalSize,
+                uncompressedSize: repoStat.totalUncompressedSize,
+                blobCount: repoStat.totalBlobCount,
+                snapshotsCount: repoStat.snapshotsCount,
+            }
+        }
         // get repo capacity, only support local repo currently
         let capacity = this.repo.capacity;
         if (this.rcloneClient !== null && this.rcloneClient !== undefined) {
             const repoStat = await this.rcloneClient.getBackendStat(this.repo.path);
-            if (repoStat.success && repoStat.result.total) capacity = repoStat.result.total;
+            if (repoStat.success && repoStat.result.total) values.capacity = repoStat.result.total;
         }
-        const [updatedResult] = await db.update(repository)
-            .set({ repositoryStatus: status, size: size, capacity: capacity })
-            .where(eq(repository.id, this.repo.id))
-            .returning();
-        this.repo = updateRepositorySchema.parse(updatedResult);
+        if (Object.keys(values).length > 0) {
+            const [updatedResult] = await db.update(repository)
+                .set(values)
+                .where(eq(repository.id, this.repo.id))
+                .returning();
+            if (updatedResult) {
+                this.repo = updateRepositorySchema.parse(updatedResult);
+            }
+        }
     }
 
     public async getSnapshotFiles(snapshot: UpdateSnapshotsMetadataSchema) {

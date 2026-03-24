@@ -459,7 +459,7 @@ export class RepositoryClient {
         return success(nodes, result);
     }
 
-    public async getRepoSize(): Promise<ResticResult<RepoStat>> {
+    public async getRepoStat(): Promise<ResticResult<RepoStat>> {
         const result = await execute(`restic stats --mode raw-data --json`, { env: this._env });
         if (mapResticCode(result.exitCode) !== ExitCode.Success) return fail(result);
         try {
@@ -480,7 +480,7 @@ export class RepositoryClient {
     }
 
     public async isRepoExist(): Promise<ResticResult<boolean>> {
-        const result = await execute('restic cat config', { env: this._env });
+        const result = await execute('restic cat config --no-lock', { env: this._env });
         const code:ExitCode = mapResticCode(result.exitCode)
         switch (code) {
             case ExitCode.Success: return success(true, result);
