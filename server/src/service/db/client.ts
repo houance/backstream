@@ -20,4 +20,4 @@ class DrizzleLogger implements Logger {
 const sqlite = new Database(path.resolve(env.SQLITE_FOLDER, 'backstream_app.db'));
 
 // Export the singleton instance
-export const db = drizzle(sqlite, { schema, logger: new DrizzleLogger() });
+export const db = drizzle(sqlite, { schema });

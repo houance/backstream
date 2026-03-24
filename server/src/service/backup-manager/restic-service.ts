@@ -349,9 +349,11 @@ export class ResticService {
     ) {
         if (this.repo.repositoryStatus !== 'Active') return;
         // forget old data
+        // todo: chance to get lock fail, consider using queue too
         const retryResult = await this.retryOnLock(
             () => this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy),
             true,
+            5000
         );
         if (!retryResult.success) logger.warn(`forget ${path} at ${this.repo.name} fail: ${retryResult.error.toString()}`);
         // only index just backup + forget snapshot
