@@ -1,7 +1,7 @@
 import {useMemo, useState} from 'react';
 import {Grid, Container, Stack, Center, Loader, Group, TextInput, Title} from '@mantine/core';
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 
 import { BackupPolicyCard } from "./components/BackupPolicyCard.tsx";
 import { StatsCardGroup } from "./components/StatsCardGroup.tsx";
@@ -60,6 +60,8 @@ export function OverviewPage()  {
             if (!res.ok) throw new Error('Failed to fetch all activity');
             return res.json();
         },
+        refetchInterval: 5000,
+        placeholderData: keepPreviousData
     });
 
     // --- FETCH STATS DATA ---

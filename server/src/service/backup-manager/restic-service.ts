@@ -174,9 +174,13 @@ export class ResticService {
     }
 
     public async updateRepoStat() {
+        if (this.repo.repositoryStatus !== 'Active') return;
         // update repo stat
         let values: Partial<InsertRepositorySchema> = {};
-        const repoStatResult = await this.repoClient.getRepoStat();
+        const repoStatResult = await this.retryOnLock(
+            () => this.repoClient.getRepoStat(),
+            false
+        );
         if (repoStatResult.success) {
             const repoStat = repoStatResult.result;
             values = {
@@ -343,6 +347,7 @@ export class ResticService {
         executionId: number,
         snapshotId: string | undefined | null, // handle backup skipped
     ) {
+        if (this.repo.repositoryStatus !== 'Active') return;
         // forget old data
         const retryResult = await this.retryOnLock(
             () => this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy),
@@ -426,28 +431,34 @@ export class ResticService {
     }
 
     public async check() {
-        if (this.repo.repositoryStatus !== 'Active') return;
+        if (this.repo.repositoryStatus === 'Disconnected') return;
         // insert execution as pending
         const newExecution = await this.createExecution(commandType.check);
         // add to queue
         const task = await this.startJob(
             newExecution,
             (log, err, signal) =>
-                this.repoClient.check(log, err, this.repo.checkPercentage, newExecution.uuid, signal),
+                this.repoClient.check(log, err, this.repo.checkPercentage *  100, newExecution.uuid, signal),
         )
         if (!task) return;
         // update repo as corrupt if check failed
         const result = await task.result;
-        if (!result.success) return;
-        if (result.result!.numErrors > 0) {
-            const updatedResult = await db.update(repository)
+        if (!result.success) {
+            if (!result.output) return; // not check command itself error;
+            const [updatedResult] = await db.update(repository)
                 .set({ repositoryStatus: 'Corrupt' })
                 .where(eq(repository.id, this.repo.id))
                 .returning()
-            this.repo = updateRepositorySchema.parse(updatedResult[0]);
+            this.repo = updateRepositorySchema.parse(updatedResult);
             logger.debug(`check repo ${this.repo.name} with num error > 0`)
             return;
         }
+        // update repo as active
+        const [updatedResult] = await db.update(repository)
+            .set({ repositoryStatus: 'Active' })
+            .where(eq(repository.id, this.repo.id))
+            .returning()
+        this.repo = updateRepositorySchema.parse(updatedResult);
         logger.debug(`check repo ${this.repo.name} with num error = 0`)
     }
 
@@ -464,7 +475,7 @@ export class ResticService {
         if (!task) return;
         const result = await task.result;
         if (!result.success) return;
-        logger.debug(`repo ${this.repo.name} prune at ${this.repo.nextPruneAt} success`)
+        logger.debug(`prune repo ${this.repo.name} success`)
     }
 
     private async startJob<T> (

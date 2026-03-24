@@ -361,7 +361,7 @@ export class Scheduler {
         }
         // create prune job
         if (repo.pruneSchedule !== 'manual') {
-            const { job, key } = this.createRepoJobMeta(repo.id, 'check');
+            const { job, key } = this.createRepoJobMeta(repo.id, 'prune');
             const cron = new Cron(repo.pruneSchedule, { protect: true }, async () => {
                 const dbResult = updateRepoNextRunAt(repo.id, 'prune');
                 if (!dbResult) {

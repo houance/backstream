@@ -51,8 +51,8 @@ export class ResticError {
 }
 
 export type ResticResult<T> =
-    { success: true, result: T, rawResult: Result } |
-    { success: false; error: ResticError};
+    | { success: true, result: T, rawResult: Result }
+    | { success: false; error: ResticError, output?: T} // output design for check command
 
 export function success<T>(result: T, rawResult: Result): ResticResult<T> {
     return {success: true, result, rawResult};
@@ -60,6 +60,10 @@ export function success<T>(result: T, rawResult: Result): ResticResult<T> {
 
 export function fail<T>(rawResult: Result, parseError?: any): ResticResult<T> {
     return {success: false, error: new ResticError(rawResult, parseError)};
+}
+
+export function failWithOutput<T>(output: T, rawResult: Result): ResticResult<T> {
+    return {success: false, error: new ResticError(rawResult), output: output};
 }
 
 export interface Snapshot {

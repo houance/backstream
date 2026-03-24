@@ -65,10 +65,10 @@ async function main() {
                 password: "0608",
                 repositoryType: RepoType.LOCAL,
                 repositoryStatus: "Active",
-                checkSchedule: "manual",
+                checkSchedule: "44 * * * * *",
                 checkPercentage: 0.2,
                 nextCheckAt: 1770967868630,
-                pruneSchedule: "manual",
+                pruneSchedule: "44 * * * * *",
                 nextPruneAt: 1770967868630
             },
         ])

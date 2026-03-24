@@ -1,18 +1,23 @@
 import { useState } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { Stack, Paper, SegmentedControl, Center, Text, LoadingOverlay, Accordion, Group, Select, Pagination } from '@mantine/core';
-import { IconCloud, IconDatabase } from '@tabler/icons-react';
-import type {FilterQuery, UpdateBackupPolicySchema} from "@backstream/shared";
-import { FailHistoryRow } from '../../../component/FailHistoryRow.tsx';
-import {client} from "../../../api";
-import {DatePickerInput} from "@mantine/dates";
-import {formatTimeString} from "../../../util/format.ts";
+import { Stack, Paper, LoadingOverlay, Accordion, Group, Select, Pagination, Text } from '@mantine/core';
+import { DatePickerInput } from "@mantine/dates";
 import dayjs from "dayjs";
+import { client } from "../../../api"; // Adjust path
+import { formatTimeString } from "../../../util/format.ts"; // Adjust path
+import { FailHistoryRow } from '../../../component/FailHistoryRow';
+import type {FilterQuery, UpdateRepositorySchema} from "@backstream/shared";
 
-export default function FailHistory({ policy }: { policy: UpdateBackupPolicySchema }) {
+export function FailHistoryTab({ storage }: {
+    storage: {
+        repo: UpdateRepositorySchema,
+        snapshotCount: number,
+        snapshotSize: number,
+        lastCheckTimestamp: number | null,
+        lastPruneTimestamp: number | null,
+    }
+}) {
     const today = dayjs();
-    const targets = policy.targets || [];
-    const [selectedTargetId, setSelectedTargetId] = useState<string>(targets[0]?.id.toString());
     const [activeLogId, setActiveLogId] = useState<number | null>(null);
     const [filter, setFilter] = useState<FilterQuery>({
         page: 0,
@@ -20,65 +25,38 @@ export default function FailHistory({ policy }: { policy: UpdateBackupPolicySche
         startTime: 0,
         endTime: 0
     });
+    const repo = storage.repo;
 
-    // 1. Fetch failure list metadata
+    // 1. Fetch Failure Metadata List
     const { data: listData, isLoading: isListLoading, isPlaceholderData } = useQuery({
-        queryKey: ['target-fail-history-list', selectedTargetId, filter],
+        queryKey: ['storage-fail-history-list', filter, repo.id],
         queryFn: async () => {
-            const res = await client.api.policy['fail-history'].$post({
-                json: {
-                    targetId: Number(selectedTargetId),
-                    filterQuery: filter,
-                }
-            })
-            if (!res.ok) throw new Error('Failed to fetch target fail history');
+            const res = await client.api.storage['fail-history'].$post({
+                json: { storageId: repo.id, filterQuery: filter }
+            });
+            if (!res.ok) throw new Error('Failed to fetch repository fail history');
             return res.json();
         },
-        enabled: !!selectedTargetId,
         refetchInterval: 5000,
-        placeholderData: keepPreviousData, // Replaces v4's keepPreviousData: true
+        placeholderData: keepPreviousData,
     });
 
-    // 2. Fetch specific logs (Lazy)
+    // 2. Fetch Detailed Logs (Lazy)
     const { data: logData, isLoading: isLogLoading } = useQuery({
-        queryKey: ['target-fail-logs', activeLogId],
+        queryKey: ['storage-fail-logs', activeLogId],
         queryFn: async () => {
-            const res = await client.api.policy['fail-history-log'][':id'].$get({
+            const res = await client.api.storage['fail-history-log'][':id'].$get({
                 param: { id: activeLogId!.toString() },
             });
-            if (!res.ok) throw new Error('Failed to fetch target logs');
+            if (!res.ok) throw new Error('Failed to fetch repository logs')
             return res.json();
         },
-        enabled: !!activeLogId, // Only fetch when an execution is opened
-        staleTime: Infinity,    // Keep logs cached once loaded
+        enabled: !!activeLogId,
+        staleTime: Infinity,
     });
 
     return (
-        <Stack pt="md" gap="lg">
-            {/* CLEAN TARGET SELECTOR */}
-            {targets.length > 1 && (
-                <SegmentedControl
-                    fullWidth
-                    size="sm"
-                    value={selectedTargetId}
-                    onChange={(val) => {
-                        setSelectedTargetId(val);
-                        setActiveLogId(null);
-                        setFilter(f => ({ ...f, page: 1 }));
-                    }}
-                    data={targets.map(t => ({
-                        label: (
-                            <Center style={{ gap: 8 }}>
-                                {t.repository.repositoryType !== 'LOCAL' ? <IconCloud size={14}/> : <IconDatabase size={14}/>}
-                                <Text size="xs" fw={500}>{t.repository.name}</Text>
-                            </Center>
-                        ),
-                        value: t.id.toString()
-                    }))}
-                />
-            )}
-
-            {/* FAILURE HISTORY AREA */}
+        <Stack gap="md">
             <Paper withBorder radius="md" p="md" bg="var(--mantine-color-body)" pos="relative">
                 <Stack gap="xs" pos="relative">
                     <LoadingOverlay visible={isListLoading && !isPlaceholderData} overlayProps={{ blur: 1 }} />
@@ -140,13 +118,14 @@ export default function FailHistory({ policy }: { policy: UpdateBackupPolicySche
                             },
                         ]}
                     />
-                    {/* Fail History Row */}
-                    <Accordion variant="unstyled">
+
+                    {/* ACCORDION LIST */}
+                    <Accordion variant="separated" chevronPosition="right">
                         {listData?.failHistory.map((item) => (
                             <FailHistoryRow
                                 key={item.uuid}
                                 item={item}
-                                onOpen={setActiveLogId}
+                                onOpen={(id) => setActiveLogId(id)}
                                 logs={activeLogId === item.executionId ? logData?.logs : []}
                                 isLoadingLogs={activeLogId === item.executionId && isLogLoading}
                             />
@@ -154,7 +133,7 @@ export default function FailHistory({ policy }: { policy: UpdateBackupPolicySche
                     </Accordion>
 
                     {/* PAGINATION FOOTER */}
-                    <Group justify="flex-end" gap="sm" mt="md">
+                    <Group justify="flex-end" gap="sm">
                         <Text size="xs" c="dimmed">Items per page:</Text>
                         <Select
                             size="xs"
@@ -166,9 +145,8 @@ export default function FailHistory({ policy }: { policy: UpdateBackupPolicySche
                         <Pagination
                             size="sm"
                             value={filter.page}
-                            total={Math.ceil((listData?.count ?? 0) / filter.pageSize)}
-                            onChange={(p) => setFilter(prev => ({ ...prev, page: p }))}
-                            withEdges
+                            total={Math.ceil((listData?.count || 0) / filter.pageSize)}
+                            onChange={(page) => setFilter(prev => ({ ...prev, page }))}
                         />
                     </Group>
                 </Stack>

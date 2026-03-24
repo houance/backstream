@@ -3,7 +3,7 @@ import {Box, Container, Stack, Group, Button, Title, Paper, Tabs, Center, Loader
 import { IconArrowLeft, IconInfoCircle, IconActivity, IconPlayerPlay } from '@tabler/icons-react';
 // Import your sub-components
 import { OverviewTab } from './component/OverviewTab';
-import { HealthLogTab } from './component/HealthLogTab';
+import { FailHistoryTab } from './component/FailHistoryTab.tsx';
 import ActionCenter from "./component/ActionCenter.tsx";
 import {useQuery} from "@tanstack/react-query";
 import {client} from "../../api";
@@ -24,10 +24,7 @@ export default function StorageDetailPage() {
     })
 
     if (isDetailLoading) return <Center h="100vh"><Loader size="xl" /></Center>;
-    if (!storageLocDetail) return <Center h="100vh">Policy not found</Center>;
-
-    // Mock data - replace with your actual repository fetching logic
-    const repoName = "jing-dong-cloud";
+    if (!storageLocDetail) return <Center h="100vh">Storage not found</Center>;
 
     return (
         <Box style={{ position: 'relative', minHeight: '100vh' }}>
@@ -43,7 +40,7 @@ export default function StorageDetailPage() {
                             >
                                 Back
                             </Button>
-                            <Title order={2}>{repoName}</Title>
+                            <Title order={2}>{storageLocDetail.repo.name}</Title>
                         </Group>
                     </Group>
 
@@ -54,7 +51,7 @@ export default function StorageDetailPage() {
                                     Overview
                                 </Tabs.Tab>
                                 <Tabs.Tab value="health" leftSection={<IconActivity size={14} />}>
-                                    Health Log
+                                    Fail History
                                 </Tabs.Tab>
                                 <Tabs.Tab value="action" leftSection={<IconPlayerPlay size={14} />}>
                                     Action Center
@@ -66,7 +63,7 @@ export default function StorageDetailPage() {
                             </Tabs.Panel>
 
                             <Tabs.Panel value="health" pt="md">
-                                <HealthLogTab />
+                                <FailHistoryTab storage={storageLocDetail} />
                             </Tabs.Panel>
 
                             <Tabs.Panel value="action" pt="md">

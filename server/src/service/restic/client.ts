@@ -8,7 +8,7 @@ import {
     type RepoConfig, type ResticResult,
     type Snapshot, type SnapshotSummary, success,
     type RepoStat,
-    type Task,
+    type Task, failWithOutput,
 } from "./types";
 import {RepoType, type CertificateSchema, type RetentionPolicy} from "@backstream/shared"
 import type {Result} from "execa";
@@ -357,18 +357,25 @@ export class RepositoryClient {
         const progress: Progress = { percentDone: -1 };
         // 处理结果
         const result = (async (): Promise<ResticResult<CheckSummary>> => {
-            let lastLine:string = "";
+            let summaryLine:string = "";
             try {
                 for await (const line of process) {
-                    lastLine = line as string;
+                    const data: { message_type: string } = JSON.parse(line.toString());
+                    if (data.message_type === 'summary') {
+                        summaryLine = line as string;
+                    }
                 }
             } catch (err) {
                 logger.warn(err, "Stream processing error:");
             }
             const result:Result = await process;
-            if (result.failed) return fail(result);
             try {
-                return success(this.parse(lastLine, "{}"), result);
+                // if check fail, it will exit as code 1 with summary output at stdout
+                if (result.failed) {
+                    return failWithOutput(this.parse(summaryLine, "{}"), result);
+                } else {
+                    return success(this.parse(summaryLine, "{}"), result);
+                }
             } catch (e:any) {
                 return fail(result, e);
             }

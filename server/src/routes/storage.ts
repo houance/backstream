@@ -1,9 +1,19 @@
 import { Hono } from 'hono';
-import {and, desc, eq, getTableColumns, sql} from 'drizzle-orm';
+import {and, count, desc, eq, getTableColumns, gte, lte, sql} from 'drizzle-orm';
 import {type Env} from '../index'
-import {updateRepositorySchema, insertRepositorySchema, repository, snapshotsMetadata, execution} from '@backstream/shared';
+import {
+    updateRepositorySchema,
+    insertRepositorySchema,
+    repository,
+    snapshotsMetadata,
+    execution,
+    filterQuery, failHistory, type FilterQuery, commandType
+} from '@backstream/shared';
 import {zValidator} from "@hono/zod-validator";
-import {RepositoryClient} from '../service/restic'
+import {RepositoryClient} from '../service/restic';
+import { z } from 'zod';
+import {getExitCodeName} from "./policy";
+import {readFile} from "node:fs/promises";
 
 
 const storageRoute = new Hono<Env>()
@@ -27,6 +37,65 @@ const storageRoute = new Hono<Env>()
             lastCheckTimestamp: checkTime,
             lastPruneTimestamp: pruneTime
         });
+    })
+    .post('/fail-history',
+        zValidator('json', z.object({
+            storageId: z.number().positive(),
+            filterQuery: filterQuery
+        })),
+        async (c) => {
+            const validated = c.req.valid('json');
+            const { storageId, filterQuery } = validated;
+            const {start, end} = getTimeRange(filterQuery);
+            // get all execution by filter
+            const [execs, totalCount] = await Promise.all([
+                c.var.db.select().from(execution)
+                    .where(and(
+                        eq(execution.executeStatus, 'fail'),
+                        eq(execution.repositoryId, storageId),
+                        gte(execution.scheduledAt, start),
+                        lte(execution.scheduledAt, end),
+                    ))
+                    .limit(filterQuery.pageSize)
+                    .offset(filterQuery.page - 1 < 0 ? 0 : filterQuery.page - 1),
+                c.var.db.select({ count: count() }).from(execution)
+                    .where(and(
+                        eq(execution.executeStatus, 'fail'),
+                        eq(execution.repositoryId, storageId),
+                        gte(execution.scheduledAt, start),
+                        lte(execution.scheduledAt, end),
+                    ))
+            ])
+            if (!execs || !totalCount) {
+                c.var.logger.warn('query fail history db fail');
+                return c.json({ error: 'Query fail history fail' }, 500);
+            } else {
+                const mappedFailHistory = execs.map(exec => ({
+                    executionId: exec.id,
+                    uuid: exec.uuid,
+                    scheduledAt: exec.startedAt,
+                    startAt: exec.startedAt,
+                    finishedAt: exec.scheduledAt,
+                    commandType: exec.commandType,
+                    fullCommand: exec.fullCommand,
+                    failReason: getExitCodeName(exec.exitCode),
+                }))
+                const result = failHistory.array().parse(mappedFailHistory);
+                return c.json({
+                    failHistory: result,
+                    count: totalCount[0].count,
+                });
+            }
+        })
+    // get fail log by execution id
+    .get('/fail-history-log/:id', async (c) => {
+        const executionId = Number(c.req.param('id'));
+        const [exec] = await c.var.db.select().from(execution)
+            .where(eq(execution.id, executionId));
+        if (!exec) return c.json({ message: 'Not found' }, 404);
+        return c.json({
+            logs: await getLogs(exec.logFile!, exec.errorFile!)
+        })
     })
     // test conn
     .post('/test-connection',
@@ -120,7 +189,7 @@ async function getRepoLastMaintTime(db: Env['Variables']['db'], repoId: number) 
         db.select().from(execution)
             .where(and(
                 eq(execution.repositoryId, repoId),
-                eq(execution.commandType, 'check'),
+                eq(execution.commandType, commandType.check),
                 eq(execution.executeStatus, 'success')
             ))
             .orderBy(desc(execution.finishedAt))
@@ -128,13 +197,44 @@ async function getRepoLastMaintTime(db: Env['Variables']['db'], repoId: number) 
         db.select().from(execution)
             .where(and(
                 eq(execution.repositoryId, repoId),
-                eq(execution.commandType, 'prune'),
+                eq(execution.commandType, commandType.prune),
                 eq(execution.executeStatus, 'success')
             ))
             .orderBy(desc(execution.finishedAt))
             .limit(1)
     ]);
     return { checkTime: checkExec?.finishedAt, pruneTime: pruneExec?.finishedAt };
+}
+
+function getTimeRange(filter: FilterQuery) {
+    const start = Math.max(0, filter.startTime ?? 0);
+    let end = Date.now();
+    if (filter.endTime !== undefined && filter.endTime !== 0) {
+        end = filter.endTime;
+    }
+    return { start, end };
+}
+
+async function getLogs(stdout: string, stderr: string): Promise<string[]> {
+    try {
+        // Read both files concurrently to save time
+        const [stdoutRaw, stderrRaw] = await Promise.all([
+            readFile(stdout, 'utf-8'),
+            readFile(stderr, 'utf-8')
+        ]);
+
+        // Split by newline (handles \n and \r\n)
+        const stdoutLines = stdoutRaw.split(/\r?\n/);
+        const stderrLines = stderrRaw.split(/\r?\n/);
+
+        // Remove the trailing empty line often left by loggers at the end of a file
+        const cleanStdout = stdoutLines.filter((line, i) => line !== "" || i !== stdoutLines.length - 1);
+        const cleanStderr = stderrLines.filter((line, i) => line !== "" || i !== stderrLines.length - 1);
+
+        return [...cleanStdout, ...cleanStderr];
+    } catch (error) {
+        return [`Failed to combine logs: ${(error as Error).message}`];
+    }
 }
 
 export default storageRoute;

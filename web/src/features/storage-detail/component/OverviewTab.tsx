@@ -65,7 +65,9 @@ export function OverviewTab({ storage }: {
                 <Paper withBorder p="md" radius="md">
                     <Badge variant="light" color="indigo" mb="sm">Maintenance</Badge>
                     <Stack gap="xs">
+                        <DetailRow label="Check Schedule" value={repo.checkSchedule} />
                         <DetailRow label="Last Check" value={formatTimestamp(storage.lastCheckTimestamp)} />
+                        <DetailRow label="Prune Schedule" value={repo.pruneSchedule} />
                         <DetailRow label="Last Prune" value={formatTimestamp(storage.lastPruneTimestamp)} />
                     </Stack>
                 </Paper>
