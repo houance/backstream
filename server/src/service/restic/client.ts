@@ -470,7 +470,7 @@ export class RepositoryClient {
     }
 
     public async getRepoConfig(): Promise<ResticResult<RepoConfig>> {
-        const result = await execute('restic cat config --json', { env: this._env });
+        const result = await execute('restic cat config --no-lock --json', { env: this._env });
         if (mapResticCode(result.exitCode) !== ExitCode.Success) return fail(result);
         try {
             return success(this.parse(result.stdout as string, "{}"), result);

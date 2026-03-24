@@ -12,7 +12,7 @@ export default function StorageLocTable(
     }) {
 
     const rows = data.map((item) => {
-        const { usedStr, totalStr, percentage } = getRepositoryStats(item.usage, item.capacity);
+        const { usedStr, totalStr, percentage } = getRepositoryStats(item.size, item.capacity);
         // Map status to specific Mantine colors
         const statusColor =
             item.repositoryStatus === 'Active' ? 'green' :

@@ -1,14 +1,30 @@
 import { useNavigate, useParams } from 'react-router-dom';
-import { Box, Container, Stack, Group, Button, Title, Paper, Tabs } from '@mantine/core';
+import {Box, Container, Stack, Group, Button, Title, Paper, Tabs, Center, Loader} from '@mantine/core';
 import { IconArrowLeft, IconInfoCircle, IconActivity, IconPlayerPlay } from '@tabler/icons-react';
 // Import your sub-components
 import { OverviewTab } from './component/OverviewTab';
 import { HealthLogTab } from './component/HealthLogTab';
 import ActionCenter from "./component/ActionCenter.tsx";
+import {useQuery} from "@tanstack/react-query";
+import {client} from "../../api";
 
 export default function StorageDetailPage() {
     const navigate = useNavigate();
     const { id } = useParams<{ id: string }>();
+
+    const { data: storageLocDetail, isPending: isDetailLoading } = useQuery({
+        queryKey: ['storage-loc-detail', id],
+        queryFn: async () => {
+            const res = await client.api.storage['storage-detail'][':id'].$get({
+                param: { id: id! }
+            })
+            if (!res.ok) throw new Error('Failed to fetch storage loc.');
+            return res.json()
+        }
+    })
+
+    if (isDetailLoading) return <Center h="100vh"><Loader size="xl" /></Center>;
+    if (!storageLocDetail) return <Center h="100vh">Policy not found</Center>;
 
     // Mock data - replace with your actual repository fetching logic
     const repoName = "jing-dong-cloud";
@@ -46,7 +62,7 @@ export default function StorageDetailPage() {
                             </Tabs.List>
 
                             <Tabs.Panel value="overview" pt="md">
-                                <OverviewTab />
+                                <OverviewTab storage={storageLocDetail} />
                             </Tabs.Panel>
 
                             <Tabs.Panel value="health" pt="md">

@@ -183,8 +183,12 @@ export class ResticService {
                 size: repoStat.totalSize,
                 uncompressedSize: repoStat.totalUncompressedSize,
                 blobCount: repoStat.totalBlobCount,
-                snapshotsCount: repoStat.snapshotsCount,
             }
+        }
+        // update repo version
+        const repoConfigResult = await this.repoClient.getRepoConfig();
+        if (repoConfigResult.success) {
+            values.version = repoConfigResult.result.version;
         }
         // get repo capacity, only support local repo currently
         let capacity = this.repo.capacity;

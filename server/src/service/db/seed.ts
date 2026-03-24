@@ -35,7 +35,7 @@ async function main() {
         .values([
             {
                 name: "主备份仓库",
-                path: "/home/nopepsi-dev/fullstack-project/backstream/server/src/test/local-repo",
+                path: "/home/nopepsi-lenovo-laptop/backstream/server/src/test/local-repo",
                 password: "0608",
                 repositoryType: RepoType.LOCAL,
                 repositoryStatus: "Active",
@@ -61,7 +61,7 @@ async function main() {
             },
             {
                 name: "归档仓库",
-                path: "/home/nopepsi-dev/fullstack-project/backstream/server/src/test/second-repo",
+                path: "/home/nopepsi-lenovo-laptop/backstream/server/src/test/second-repo",
                 password: "0608",
                 repositoryType: RepoType.LOCAL,
                 repositoryStatus: "Active",

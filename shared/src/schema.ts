@@ -8,10 +8,10 @@ export const repository = sqliteTable("repository_table", {
     path: text("path").notNull(),
     password: text("password").notNull(),
     repositoryType: text("repository_type").notNull(),
+    version: integer("version"),
     size: integer("size"),
     uncompressedSize: integer("uncompressed_size"),
     blobCount: integer("blob_count"),
-    snapshotsCount: integer("snapshots_count"),
     capacity: integer("capacity"), // null for infinity or not retrievable
     certification: text("certification", { mode: "json" }),
     checkSchedule: text("check_schedule").notNull(),

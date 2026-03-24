@@ -1,7 +1,25 @@
 import {Badge, Group, Paper, SimpleGrid, Stack, Text} from "@mantine/core";
 import type {ReactNode} from "react";
+import type {UpdateRepositorySchema} from "@backstream/shared";
+import {calPercentage, formatBytes, formatTimestamp} from "../../../util/format.ts";
 
-export function OverviewTab() {
+export function OverviewTab({ storage }: {
+    storage: {
+        repo: UpdateRepositorySchema,
+        snapshotCount: number,
+        snapshotSize: number,
+        lastCheckTimestamp: number | null,
+        lastPruneTimestamp: number | null,
+    }
+}) {
+
+    const repo = storage.repo;
+
+    const statusColor =
+        repo.repositoryStatus === 'Active' ? 'green' :
+            repo.repositoryStatus === 'Disconnected' ? 'yellow' :
+                repo.repositoryStatus === 'Corrupt' ? 'red' : 'gray';
+
     return (
         <Stack pt="md" gap="xl">
             {/* Header - Unified Blue Identity */}
@@ -9,12 +27,15 @@ export function OverviewTab() {
                 <Stack gap={4}>
                     <DetailRow
                         label="Status"
-                        value={<Badge variant="dot" color="green" size="sm">Active</Badge>}
+                        value={
+                        <Badge variant="dot" color={statusColor} size="sm">
+                            {repo.repositoryStatus}
+                        </Badge>
+                    }
                     />
-                    <DetailRow label="Type" value="S3 Compatible (Minio)" />
-                    <DetailRow label="Endpoint" value="https://s3.example.com" />
-                    <DetailRow label="Format" value="v2 (Compression)" />
-                    <DetailRow label="Full Hash" value="7b2a9f4...28394" isMonospace />
+                    <DetailRow label="Type" value={repo.repositoryType} />
+                    <DetailRow label="Path" value={repo.path} />
+                    <DetailRow label="Version" value={`V${repo.version}`} />
                 </Stack>
             </Paper>
 
@@ -25,9 +46,9 @@ export function OverviewTab() {
                 <Paper withBorder p="md" radius="md">
                     <Badge variant="light" color="indigo" mb="sm">Storage</Badge>
                     <Stack gap="xs">
-                        <DetailRow label="Disk Usage" value="290 GB" />
-                        <DetailRow label="Restore Size" value="1.2 TB" />
-                        <DetailRow label="Deduplication" value="75% Saved" />
+                        <DetailRow label="Disk Usage" value={formatBytes(repo.size)} />
+                        <DetailRow label="Restore Size" value={formatBytes(storage.snapshotSize)} />
+                        <DetailRow label="Efficiency" value={calPercentage(repo.size, storage.snapshotSize, true) + ` (${formatBytes(storage.snapshotSize - (repo.size??0))} Saved)`} />
                     </Stack>
                 </Paper>
 
@@ -35,9 +56,8 @@ export function OverviewTab() {
                 <Paper withBorder p="md" radius="md">
                     <Badge variant="light" color="indigo" mb="sm">Index</Badge>
                     <Stack gap="xs">
-                        <DetailRow label="Snapshots" value="142" />
-                        <DetailRow label="Total Blobs" value="42,019" />
-                        <DetailRow label="Unique Data" value="215 GB" />
+                        <DetailRow label="Snapshots" value={storage.snapshotCount} />
+                        <DetailRow label="Total Blobs" value={repo.blobCount} />
                     </Stack>
                 </Paper>
 
@@ -45,9 +65,8 @@ export function OverviewTab() {
                 <Paper withBorder p="md" radius="md">
                     <Badge variant="light" color="indigo" mb="sm">Maintenance</Badge>
                     <Stack gap="xs">
-                        <DetailRow label="Last Check" value="2 hours ago" />
-                        <DetailRow label="Last Prune" value="Yesterday" />
-                        <DetailRow label="Cache Size" value="4.2 GB" />
+                        <DetailRow label="Last Check" value={formatTimestamp(storage.lastCheckTimestamp)} />
+                        <DetailRow label="Last Prune" value={formatTimestamp(storage.lastPruneTimestamp)} />
                     </Stack>
                 </Paper>
 
@@ -69,7 +88,7 @@ function DetailRow({
         <Group justify="apart" wrap="nowrap">
             <Text size="sm" fw={500}>{label}:</Text>
             {/* If value is a string, wrap it in Text; otherwise, render it directly */}
-            {typeof value === 'string' ? (
+            {['string', 'number'].includes(typeof value) ? (
                 <Text size="sm" c="dimmed" ff={isMonospace ? 'monospace' : undefined}>
                     {value}
                 </Text>

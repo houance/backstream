@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
-import { eq } from 'drizzle-orm';
+import {and, desc, eq, getTableColumns, sql} from 'drizzle-orm';
 import {type Env} from '../index'
-import { updateRepositorySchema, insertRepositorySchema, repository } from '@backstream/shared';
+import {updateRepositorySchema, insertRepositorySchema, repository, snapshotsMetadata, execution} from '@backstream/shared';
 import {zValidator} from "@hono/zod-validator";
 import {RepositoryClient} from '../service/restic'
 
@@ -14,6 +14,19 @@ const storageRoute = new Hono<Env>()
         // validate it through zod schema
         const validated = updateRepositorySchema.array().parse(locations)
         return c.json(validated);
+    })
+    .get('/storage-detail/:id', async (c) => {
+        const storageId = Number(c.req.param('id'));
+        const [repoData] = await getRepoData(c.var.db, storageId);
+        if (!repoData) return c.json({ message: 'Not found'}, 404);
+        const { checkTime, pruneTime } = await getRepoLastMaintTime(c.var.db, storageId);
+        return c.json({
+            repo: updateRepositorySchema.parse(repoData),
+            snapshotCount: repoData.snapshotCount,
+            snapshotSize: repoData.snapshotSize,
+            lastCheckTimestamp: checkTime,
+            lastPruneTimestamp: pruneTime
+        });
     })
     // test conn
     .post('/test-connection',
@@ -83,5 +96,45 @@ const storageRoute = new Hono<Env>()
         await c.var.db.delete(repository).where(eq(repository.id, id))
         return c.json({ success: true, id });
     });
+
+async function getRepoData(db: Env['Variables']['db'], repoId: number) {
+    return db
+        .select({
+            // Spreads all columns from the repository table automatically
+            ...getTableColumns(repository),
+            // Add your aggregate fields
+            snapshotCount: sql<number>`count(${snapshotsMetadata.id})`.mapWith(Number),
+            snapshotSize: sql<number>`coalesce(sum(${snapshotsMetadata.size}),0)`.mapWith(Number),
+        })
+        .from(repository)
+        .leftJoin(
+            snapshotsMetadata,
+            eq(repository.id, snapshotsMetadata.repositoryId)
+        )
+        .where(eq(repository.id, repoId))
+        .groupBy(repository.id);
+}
+
+async function getRepoLastMaintTime(db: Env['Variables']['db'], repoId: number) {
+    const [ [checkExec], [pruneExec] ] = await Promise.all([
+        db.select().from(execution)
+            .where(and(
+                eq(execution.repositoryId, repoId),
+                eq(execution.commandType, 'check'),
+                eq(execution.executeStatus, 'success')
+            ))
+            .orderBy(desc(execution.finishedAt))
+            .limit(1),
+        db.select().from(execution)
+            .where(and(
+                eq(execution.repositoryId, repoId),
+                eq(execution.commandType, 'prune'),
+                eq(execution.executeStatus, 'success')
+            ))
+            .orderBy(desc(execution.finishedAt))
+            .limit(1)
+    ]);
+    return { checkTime: checkExec?.finishedAt, pruneTime: pruneExec?.finishedAt };
+}
 
 export default storageRoute;

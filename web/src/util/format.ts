@@ -35,11 +35,26 @@ export function formatPath(path: string, maxLength = 60) {
     return `${start}...${end}`;
 }
 
+export function calPercentage(
+    n: number | null | undefined,
+    d: number,
+    reverse: boolean = false
+): string {
+    if (!n || !d || d === 0) return "0.00%"; // Prevent division by zero
+
+    let percentage = (n / d) * 100;
+    if (reverse) {
+        percentage = 100 - percentage;
+    }
+    return `${percentage.toFixed(2)}%`;
+}
+
+
 export function formatPercentage(value: number): number {
     return Number((value * 100).toFixed(2));
 }
 
-export function formatTimestamp(timestamp: number): string {
+export function formatTimestamp(timestamp: number | null): string {
     return dayjs(timestamp).format('YYYY-MM-DD HH:mm:ss');
 }
 

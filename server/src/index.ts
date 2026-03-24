@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import infoRoute from './routes/info'
-import storageRoute from "./routes/storage-location";
+import storageRoute from "./routes/storage";
 import policyRoute from "./routes/policy";
 import settingRoute from "./routes/setting";
 import snapshotRoute from "./routes/snapshots";
