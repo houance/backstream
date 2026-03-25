@@ -158,7 +158,7 @@ type JobMetadata =
     | { category: 'policy'; type: 'datasize'; strategyId: number }
     | { category: 'system'; type: 'clean' };
 
-// Error type if create/update record fail
+// Error type if create/update job record fail
 type InitError = {
     error: any;
     message: string;
@@ -222,7 +222,7 @@ export class Scheduler {
             // convert to validate zod schema
             const validated = updateRepositorySchema.parse(repository);
             // add client to schedule
-            scheduler.addResticService(validated);
+            scheduler.addResticService(validated, true);
         })
         // init policy schedule
         const allPolicy = await getAllPolicy();
@@ -232,7 +232,7 @@ export class Scheduler {
         return scheduler;
     }
 
-    public async addResticService(repo: UpdateRepositorySchema) {
+    public async addResticService(repo: UpdateRepositorySchema, exist: boolean) {
         const key = repo.id.toString();
         if (this.clientMap.has(key)) {
             const stopResult = await this.stopResticService(repo);
@@ -243,29 +243,30 @@ export class Scheduler {
                 key: key
             })
         }
-        const createResult = await ResticService.create(repo, this.globalQueue);
-        if (createResult instanceof ResticError) {
+        const createResult = await ResticService.create(repo, this.globalQueue, exist);
+        if (createResult instanceof ResticService) {
             this.clientMap.set(key, {
-                error: createResult,
-                message: `create ResticService ${repo.name} fail: ${createResult.toString()}`,
+                client: createResult,
+                status: 'active',
+                key: key
+            });
+            // add repo schedule
+            void this.addRepoMaintainSchedule(repo);
+        } else {
+            this.clientMap.set(key, {
+                error: new Error('create repo fail'),
+                message: `create ResticService ${repo.name} fail: ${createResult}`,
                 status: 'error',
                 key: key
             });
             return createResult.toString();
         }
-        this.clientMap.set(key, {
-            client: createResult,
-            status: 'active',
-            key: key
-        });
-        // add repo schedule
-        void this.addRepoMaintainSchedule(repo);
     }
 
     public async getResticService(repo: UpdateRepositorySchema) {
         const key = repo.id.toString();
         if (!this.clientMap.has(key)) {
-            await this.addResticService(repo);
+            await this.addResticService(repo, true);
         }
         return this.clientMap.get(key)!;
     }

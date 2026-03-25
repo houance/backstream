@@ -13,8 +13,8 @@ import MaintainPolicyConfig from "./MaintainPolicyConfig.tsx";
 interface ModalProps {
     opened: boolean;
     onClose: () => void;
-    onSubmit: (values: InsertRepositorySchema) => Promise<void> | void;
-    onConnect: (values: InsertRepositorySchema) => Promise<void> | void;
+    onSubmit: (values: InsertRepositorySchema, exist: boolean) => Promise<void> | void;
+    onConnect: (values: InsertRepositorySchema, exist: boolean) => Promise<void> | void;
     isSubmitting: boolean;
     isConnecting: boolean;
     title: string;

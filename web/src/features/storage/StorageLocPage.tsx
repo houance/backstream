@@ -29,7 +29,7 @@ export default function StorageLocPage() {
 
     // --- 3. CREATE/UPDATE MUTATION ---
     const submitMutation = useMutation({
-        mutationFn: async (item: InsertRepositorySchema | UpdateRepositorySchema) => {
+        mutationFn: async (item: InsertRepositorySchema | UpdateRepositorySchema, exist: boolean) => {
             if ('id' in item && item.id) {
                 return ensureSuccess(
                     client.api.storage[':id'].$patch({
@@ -39,7 +39,7 @@ export default function StorageLocPage() {
                 )
             }
             return ensureSuccess(
-                client.api.storage.$post({json: item})
+                client.api.storage.$post({json: {repo: item, exist: exist}})
             )
         },
         onSuccess: async () => {
@@ -63,8 +63,11 @@ export default function StorageLocPage() {
     });
     // --- TEST CONNECTION MUTATION ---
     const testConnMutation = useMutation({
-        mutationFn: async (item: InsertRepositorySchema | UpdateRepositorySchema) => {
-            const response = await client.api.storage['test-connection'].$post({json: item});
+        mutationFn: async (item: InsertRepositorySchema | UpdateRepositorySchema, exist: boolean) => {
+            const response = await client.api.storage['test-connection'].$post(
+                {
+                    json: {repo: item, exist: exist }
+                });
             if (!response.ok) throw new Error('Connection failed');
             return response.json();
         },
@@ -91,7 +94,7 @@ export default function StorageLocPage() {
             <StorageLocTable
                 data={data!}
                 onDetail={(repoId: number) => navigate(`/storage/detail/${repoId}`)}
-                onDelete={(item) => deleteMutation.mutate(item)}
+                onDelete={deleteMutation.mutate}
             />
             {/* Add Storage Location Button */}
             <Group justify="flex-end" mt="xl" pt="md" style={{borderTop: '1px solid var(--mantine-color-gray-3)'}}>
@@ -102,9 +105,9 @@ export default function StorageLocPage() {
             {/* The modal component instance */}
             <NewStorageLocModal
                 key={'create-storage-location'}
-                onSubmit={(item) => submitMutation.mutate(item)}
+                onSubmit={submitMutation.mutate}
                 isSubmitting={submitMutation.isPending}
-                onConnect={(item) => testConnMutation.mutate(item)}
+                onConnect={testConnMutation.mutate}
                 isConnecting={testConnMutation.isPending}
                 title={"Create storage location"}
                 opened={opened}

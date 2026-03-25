@@ -142,29 +142,43 @@ const storageRoute = new Hono<Env>()
     })
     // test conn
     .post('/test-connection',
-        zValidator('json', insertRepositorySchema),
+        zValidator('json', z.object({
+            repo: insertRepositorySchema,
+            exist: z.boolean()
+        })),
         async (c) => {
-            const values = c.req.valid('json');
+            const validated = c.req.valid('json');
+            const values = validated.repo;
             const client = new RepositoryClient(
                 values.path,
                 values.password,
                 values.repositoryType,
                 values.certification
             )
-            const result = await client.isRepoExist()
-            if (result.success) return c.json( { message: 'OK'} );
-            return c.json({ error: result.error.toString() }, 400);
+            const result = await client.isRepoExist();
+            if (!result.success) return c.json({ error: 'please check connection detail' }, 400);
+            const repoExist = result.result;
+            if (validated.exist && !repoExist) return c.json({ error: 'repo not exist' }, 400);
+            if (!validated.exist && repoExist) return c.json({ error: 'repo already exist' }, 400);
+            return c.json( { message: 'OK'} );
         }
     )
     // create repo
     .post('/',
-        zValidator('json', insertRepositorySchema),
+        zValidator('json', z.object({
+            repo: insertRepositorySchema,
+            exist: z.boolean()
+        })),
         async (c) => {
-            const values = c.req.valid('json');
+            const validated = c.req.valid('json');
             // 校验重复 repo
+            const values = validated.repo;
             const [dbResult] = await c.var.db.select()
                 .from(repository)
-                .where(eq(repository.path, values.path));
+                .where(and(
+                    eq(repository.path, values.path),
+                    eq(repository.repositoryType, values.repositoryType)
+                ));
             if (dbResult !== undefined) {
                 return c.json({ error: `duplicate path` }, 400);
             }
@@ -174,9 +188,12 @@ const storageRoute = new Hono<Env>()
                 .values(values)
                 .returning();
             // scheduler 创建仓库并开始调度
-            const createResult = await c.var.scheduler.addResticService(updateRepositorySchema.parse(newRepo));
-            if (createResult !== undefined) {
-                return c.json({error: createResult}, 500);
+            const createError = await c.var.scheduler.addResticService(
+                updateRepositorySchema.parse(newRepo),
+                validated.exist
+            );
+            if (createError !== undefined) {
+                return c.json({error: createError}, 500);
             }
             return c.json(newRepo, 201);
         })

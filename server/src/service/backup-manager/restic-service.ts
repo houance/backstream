@@ -71,11 +71,15 @@ export class ResticService {
         this.globalQueue = queue
     }
 
-    public static async create(repo: UpdateRepositorySchema, queue: PQueue): Promise<ResticService | ResticError> {
+    public static async create(
+        repo: UpdateRepositorySchema,
+        queue: PQueue,
+        exist: boolean,
+    ): Promise<ResticService | string> {
         const resticService = new ResticService(repo, queue);
         // create repo if not exist
-        const initResult = await resticService.initRepo();
-        if (!initResult.success) return initResult.error;
+        const initResult = await resticService.initRepo(exist);
+        if (!initResult.success) return initResult.reason;
         return resticService;
     }
 
@@ -87,44 +91,44 @@ export class ResticService {
         return updateRepositorySchema.parse(updatedRepo);
     }
 
-    private async initRepo() {
-        // 检查 repo 是否存在
-        const isRepoExists = await this.repoClient.isRepoExist();
-        // 检查失败
-        if (!isRepoExists.success) {
-            const [dbResult] = await db.update(repository)
-                .set({ repositoryStatus: 'Disconnected' })
-                .where(eq(repository.id, this.repo.id))
-                .returning()
-            this.repo = updateRepositorySchema.parse(dbResult);
-            return isRepoExists;
-        }
-        // repo 已创建
-        if (isRepoExists.result) {
-            const [dbResult] = await db.update(repository)
-                .set({ repositoryStatus: 'Active' })
-                .where(eq(repository.id, this.repo.id))
-                .returning()
-            this.repo = updateRepositorySchema.parse(dbResult);
-            return isRepoExists;
-        }
-        // repo 未创建
-        const result = await this.repoClient.createRepo();
-        if (result.success) {
-            const [dbResult] = await db.update(repository)
-                .set({ repositoryStatus: 'Active' })
-                .where(eq(repository.id, this.repo.id))
-                .returning()
-            this.repo = updateRepositorySchema.parse(dbResult);
+    private async initRepo(exist: boolean): Promise<{ success: true } | { success: false, reason: string }> {
+        if (exist) {
+            const result = await this.repoClient.createRepo();
+            if (!result.success) {
+                const [dbResult] = await db.update(repository)
+                    .set({ repositoryStatus: 'Corrupt' })
+                    .where(eq(repository.id, this.repo.id))
+                    .returning()
+                this.repo = updateRepositorySchema.parse(dbResult);
+                return { success: false, reason: 'create repo fail. ' + result.error.toString() };
+            }
         } else {
-            // 创建失败
-            const [dbResult] = await db.update(repository)
-                .set({ repositoryStatus: 'Corrupt' })
-                .where(eq(repository.id, this.repo.id))
-                .returning()
-            this.repo = updateRepositorySchema.parse(dbResult);
+            const result = await this.repoClient.isRepoExist();
+            // 检查失败
+            if (!result.success) {
+                const [dbResult] = await db.update(repository)
+                    .set({ repositoryStatus: 'Disconnected' })
+                    .where(eq(repository.id, this.repo.id))
+                    .returning()
+                this.repo = updateRepositorySchema.parse(dbResult);
+                return { success: false, reason: 'repo not connected.' + result.error.toString() };
+            }
+            // 检查成功但是 repo 不存在
+            if (!result.result) {
+                const [dbResult] = await db.update(repository)
+                    .set({ repositoryStatus: 'Corrupt' })
+                    .where(eq(repository.id, this.repo.id))
+                    .returning()
+                this.repo = updateRepositorySchema.parse(dbResult);
+                return { success: false, reason: 'repo not exist' };
+            }
         }
-        return result;
+        const [dbResult] = await db.update(repository)
+            .set({ repositoryStatus: 'Active' })
+            .where(eq(repository.id, this.repo.id))
+            .returning()
+        this.repo = updateRepositorySchema.parse(dbResult);
+        return { success: true };
     }
 
     public getRunningJob(execution: UpdateExecutionSchema): Task<ResticResult<any>> | null {
