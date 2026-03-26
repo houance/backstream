@@ -222,7 +222,7 @@ export class Scheduler {
             // convert to validate zod schema
             const validated = updateRepositorySchema.parse(repository);
             // add client to schedule
-            scheduler.addResticService(validated, true);
+            scheduler.addResticService(validated);
         })
         // init policy schedule
         const allPolicy = await getAllPolicy();
@@ -232,7 +232,7 @@ export class Scheduler {
         return scheduler;
     }
 
-    public async addResticService(repo: UpdateRepositorySchema, exist: boolean) {
+    public async addResticService(repo: UpdateRepositorySchema, fromRepo?: UpdateRepositorySchema) {
         const key = repo.id.toString();
         if (this.clientMap.has(key)) {
             const stopResult = await this.stopResticService(repo);
@@ -243,7 +243,17 @@ export class Scheduler {
                 key: key
             })
         }
-        const createResult = await ResticService.create(repo, this.globalQueue, exist);
+        let fromRs: ResticService | undefined;
+        if (fromRepo) {
+            const clientRecord = await this.getResticService(fromRepo);
+            if (clientRecord.status !== 'active') return clientRecord.message;
+            fromRs = clientRecord.client;
+        }
+        const createResult = await ResticService.create(
+            repo,
+            this.globalQueue,
+            fromRs,
+        );
         if (createResult instanceof ResticService) {
             this.clientMap.set(key, {
                 client: createResult,
@@ -266,7 +276,7 @@ export class Scheduler {
     public async getResticService(repo: UpdateRepositorySchema) {
         const key = repo.id.toString();
         if (!this.clientMap.has(key)) {
-            await this.addResticService(repo, true);
+            await this.addResticService(repo);
         }
         return this.clientMap.get(key)!;
     }

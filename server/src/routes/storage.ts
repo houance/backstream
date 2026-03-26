@@ -7,7 +7,13 @@ import {
     repository,
     snapshotsMetadata,
     execution,
-    filterQuery, failHistory, type FilterQuery, commandType, type OnGoingProcess, updateExecutionSchema
+    filterQuery,
+    failHistory,
+    type FilterQuery,
+    commandType,
+    type OnGoingProcess,
+    updateExecutionSchema,
+    type UpdateRepositorySchema
 } from '@backstream/shared';
 import {zValidator} from "@hono/zod-validator";
 import {RepositoryClient} from '../service/restic';
@@ -156,18 +162,18 @@ const storageRoute = new Hono<Env>()
                 values.certification
             )
             const result = await client.isRepoExist();
-            if (!result.success) return c.json({ error: 'please check connection detail' }, 400);
+            if (!result.success) return c.json({ success: false, error: 'please check connection detail' }, 400);
             const repoExist = result.result;
-            if (validated.exist && !repoExist) return c.json({ error: 'repo not exist' }, 400);
-            if (!validated.exist && repoExist) return c.json({ error: 'repo already exist' }, 400);
-            return c.json( { message: 'OK'} );
+            if (validated.exist && !repoExist) return c.json({ success: false, error: 'repo not exist' }, 400);
+            if (!validated.exist && repoExist) return c.json({ success: false, error: 'repo already exist' }, 400);
+            return c.json( { success: true, message: 'OK'} );
         }
     )
     // create repo
     .post('/',
         zValidator('json', z.object({
             repo: insertRepositorySchema,
-            exist: z.boolean()
+            fromRepoId: z.number().optional(),
         })),
         async (c) => {
             const validated = c.req.valid('json');
@@ -182,15 +188,22 @@ const storageRoute = new Hono<Env>()
             if (dbResult !== undefined) {
                 return c.json({ error: `duplicate path` }, 400);
             }
+            // 查找 fromRepo 记录
+            let fromRepo: UpdateRepositorySchema | undefined;
+            if (validated.fromRepoId) {
+                const [fromRepoDb] = await c.var.db.select().from(repository)
+                    .where(eq(repository.id, validated.fromRepoId));
+                if (!fromRepoDb) return c.json({ error: `From repo not found` }, 404);
+                fromRepo = updateRepositorySchema.parse(fromRepoDb);
+            }
             // 数据库新增记录
-            values.repositoryStatus = 'Disconnected'
             const [newRepo] = await c.var.db.insert(repository)
-                .values(values)
+                .values({ ...values, repositoryStatus: 'Disconnected' })
                 .returning();
             // scheduler 创建仓库并开始调度
             const createError = await c.var.scheduler.addResticService(
                 updateRepositorySchema.parse(newRepo),
-                validated.exist
+                fromRepo
             );
             if (createError !== undefined) {
                 return c.json({error: createError}, 500);

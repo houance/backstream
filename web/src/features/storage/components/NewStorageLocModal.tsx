@@ -1,26 +1,44 @@
-import {Modal, Button, TextInput, Select, Group, Stack, PasswordInput, Divider} from '@mantine/core';
+import {Modal, Button, TextInput, Select, Group, Stack, PasswordInput, Divider, SegmentedControl, Text} from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { zod4Resolver } from 'mantine-form-zod-resolver';
 import {
     RepoType,
     insertRepositorySchema,
     type InsertRepositorySchema,
-    EMPTY_REPOSITORY_SCHEMA,
+    EMPTY_REPOSITORY_SCHEMA, type UpdateRepositorySchema,
 } from '@backstream/shared'
 import {PROVIDER_MAP} from "../provider-map.tsx";
 import MaintainPolicyConfig from "./MaintainPolicyConfig.tsx";
+import { useState } from "react";
 
 interface ModalProps {
+    repoList: UpdateRepositorySchema[];
     opened: boolean;
     onClose: () => void;
-    onSubmit: (values: InsertRepositorySchema, exist: boolean) => Promise<void> | void;
-    onConnect: (values: InsertRepositorySchema, exist: boolean) => Promise<void> | void;
+    onSubmit: (param: {item: InsertRepositorySchema, fromRepoId?: number}) => Promise<void> | void;
+    onConnect: (param: {item: InsertRepositorySchema, exist: boolean}) => Promise<void> | void;
     isSubmitting: boolean;
     isConnecting: boolean;
+    isConnectSuccess: boolean;
     title: string;
 }
 
-export default function NewStorageLocModal({ opened, onClose, onSubmit, onConnect, title, isSubmitting, isConnecting }: ModalProps) {
+export default function NewStorageLocModal({
+                                               repoList,
+                                               opened,
+                                               onClose,
+                                               onSubmit,
+                                               onConnect,
+                                               title,
+                                               isSubmitting,
+                                               isConnecting,
+                                               isConnectSuccess,
+}: ModalProps) {
+    // State to track if we are creating or connecting
+    const [mode, setMode] = useState<'create' | 'connect'>('create');
+    // value to track selected repo id
+    const [fromRepoId, setFromRepoId] = useState<string | null>(null);
+
     const form = useForm<InsertRepositorySchema>({
         initialValues: EMPTY_REPOSITORY_SCHEMA,
         validate: zod4Resolver(insertRepositorySchema),
@@ -39,44 +57,87 @@ export default function NewStorageLocModal({ opened, onClose, onSubmit, onConnec
 
     return (
         <Modal opened={opened} onClose={onClose} title={title} centered size="xl">
-            <form onSubmit={form.onSubmit((values) => onSubmit(values))}>
-                <Stack>
-                    <Select
-                        label="Type"
-                        data={Object.values(RepoType)}
-                        value={form.values.repositoryType}
-                        defaultValue={RepoType.LOCAL}
-                        onChange={handleTypeChange}
-                        withAsterisk
-                        allowDeselect={false}
+            <Stack gap="md">
+                {/* [NEW] Mode Switcher */}
+                <Stack gap={4}>
+                    <Text size="sm" fw={500}>Mode</Text>
+                    <SegmentedControl
+                        fullWidth
+                        value={mode}
+                        onChange={(value) => setMode(value as 'create' | 'connect')}
+                        data={[
+                            { label: 'Create New', value: 'create' },
+                            { label: 'Connect Existing', value: 'connect' },
+                        ]}
                     />
-                    <TextInput
-                        label="Location Name"
-                        placeholder="Location Name"
-                        {...form.getInputProps('name')}
-                        withAsterisk
-                    />
-                    <PasswordInput
-                        variant={"default"}
-                        label="Password"
-                        placeholder="Enter restic password"
-                        {...form.getInputProps('password')} // Use dot notation
-                        withAsterisk
-                        description="Required to encrypt/decrypt your backups"
-                        autoComplete="new-password"
-                    />
-                    <MaintainPolicyConfig form={form} />
-
-                    <Divider label="Authentication Details" labelPosition="center"/>
-                    {providerMeta.component !== null && <providerMeta.component form={form} />}
-
-                    <Group justify="flex-end" mt="xl">
-                        <Button variant="subtle" color="gray" onClick={onClose}>Cancel</Button>
-                        <Button variant="outline" loading={isConnecting} onClick={() => onConnect(form.values)}>Test</Button>
-                        <Button type="submit" loading={isSubmitting}>{'Save'} Location</Button>
-                    </Group>
                 </Stack>
-            </form>
+
+                <form onSubmit={form.onSubmit((values) =>
+                    onSubmit({ item: values, fromRepoId: fromRepoId !== null ? Number(fromRepoId) : undefined }))}
+                >
+                    <Stack>
+                        {/* [NEW] Conditional Select for "Create" mode */}
+                        {mode === 'create' && (
+                            <Select
+                                label="Initialize From"
+                                placeholder="Select an existing repo to clone config"
+                                data={repoList.map(repo => ({
+                                    label: repo.name,
+                                    value: String(repo.id)
+                                }))}
+                                value={fromRepoId}
+                                onChange={setFromRepoId}
+                                clearable
+                                description="Select a repository to copy settings and encryption from"
+                            />
+                        )}
+
+                        <Select
+                            label="Provider Type"
+                            data={Object.values(RepoType)}
+                            value={form.values.repositoryType}
+                            onChange={handleTypeChange}
+                            withAsterisk
+                            allowDeselect={false}
+                        />
+
+                        <TextInput
+                            label="Location Name"
+                            placeholder="e.g. My Offsite Backup"
+                            {...form.getInputProps('name')}
+                            withAsterisk
+                        />
+
+                        <PasswordInput
+                            label="Password"
+                            placeholder="Enter restic password"
+                            {...form.getInputProps('password')}
+                            withAsterisk
+                            description="Required to encrypt/decrypt your backups"
+                            autoComplete="new-password"
+                        />
+
+                        <MaintainPolicyConfig form={form} />
+
+                        <Divider label="Authentication Details" labelPosition="center" />
+                        {providerMeta.component !== null && <providerMeta.component form={form} />}
+
+                        <Group justify="flex-end" mt="xl">
+                            <Button variant="subtle" color="gray" onClick={onClose}>Cancel</Button>
+                            <Button
+                                variant="outline"
+                                loading={isConnecting}
+                                onClick={() => onConnect({ item: form.values, exist: mode === 'connect' })}
+                            >
+                                Test
+                            </Button>
+                            <Button type="submit" loading={isSubmitting} disabled={!isConnectSuccess}>
+                                Save
+                            </Button>
+                        </Group>
+                    </Stack>
+                </form>
+            </Stack>
         </Modal>
     );
 }

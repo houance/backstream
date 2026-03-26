@@ -526,10 +526,6 @@ export class RepositoryClient {
     }
 
     public async createRepoWithSameChunker(fromClient: RepositoryClient): Promise<ResticResult<boolean>> {
-        // todo: move to upper class
-        if (this.repoType !== RepoType.LOCAL && this.repoType === fromClient.repoType) {
-            throw new Error('init repository from same type is not supported');
-        }
         const command = `restic init --copy-chunker-params`;
         const result = await execute(
             command,

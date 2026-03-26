@@ -37,7 +37,7 @@ import {Semaphore, withTimeout, E_TIMEOUT, Mutex} from 'async-mutex'
 
 export class ResticService {
     public repo: UpdateRepositorySchema;
-    private repoClient: RepositoryClient;
+    private readonly repoClient: RepositoryClient;
     private globalQueue: PQueue; // global concurrency limit
     private MAX_SEM_WEIGHT: number = 1000;
     private resticSem: Semaphore;
@@ -74,11 +74,18 @@ export class ResticService {
     public static async create(
         repo: UpdateRepositorySchema,
         queue: PQueue,
-        exist: boolean,
+        fromRs?: ResticService,
     ): Promise<ResticService | string> {
+        if (
+            fromRs
+            && repo.repositoryType !== RepoType.LOCAL
+            && repo.repositoryType === fromRs.repo.repositoryType)
+        {
+            return 'init repository from same type is not supported';
+        }
         const resticService = new ResticService(repo, queue);
         // create repo if not exist
-        const initResult = await resticService.initRepo(exist);
+        const initResult = await resticService.initRepo(fromRs);
         if (!initResult.success) return initResult.reason;
         return resticService;
     }
@@ -91,9 +98,9 @@ export class ResticService {
         return updateRepositorySchema.parse(updatedRepo);
     }
 
-    private async initRepo(exist: boolean): Promise<{ success: true } | { success: false, reason: string }> {
-        if (exist) {
-            const result = await this.repoClient.createRepo();
+    private async initRepo(fromRs?: ResticService): Promise<{ success: true } | { success: false, reason: string }> {
+        if (fromRs) {
+            const result = await this.repoClient.createRepoWithSameChunker(fromRs.repoClient);
             if (!result.success) {
                 const [dbResult] = await db.update(repository)
                     .set({ repositoryStatus: 'Corrupt' })
@@ -353,7 +360,6 @@ export class ResticService {
     ) {
         if (this.repo.repositoryStatus !== 'Active') return;
         // forget old data
-        // todo: chance to get lock fail, consider using queue too
         const retryResult = await this.retryOnLock(
             () => this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy),
             true,

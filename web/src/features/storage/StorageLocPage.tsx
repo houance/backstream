@@ -29,7 +29,7 @@ export default function StorageLocPage() {
 
     // --- 3. CREATE/UPDATE MUTATION ---
     const submitMutation = useMutation({
-        mutationFn: async (item: InsertRepositorySchema | UpdateRepositorySchema, exist: boolean) => {
+        mutationFn: async ({ item, fromRepoId }: {item: InsertRepositorySchema | UpdateRepositorySchema, fromRepoId?: number}) => {
             if ('id' in item && item.id) {
                 return ensureSuccess(
                     client.api.storage[':id'].$patch({
@@ -39,7 +39,7 @@ export default function StorageLocPage() {
                 )
             }
             return ensureSuccess(
-                client.api.storage.$post({json: {repo: item, exist: exist}})
+                client.api.storage.$post({json: {repo: item, fromRepoId: fromRepoId}})
             )
         },
         onSuccess: async () => {
@@ -63,13 +63,14 @@ export default function StorageLocPage() {
     });
     // --- TEST CONNECTION MUTATION ---
     const testConnMutation = useMutation({
-        mutationFn: async (item: InsertRepositorySchema | UpdateRepositorySchema, exist: boolean) => {
+        mutationFn: async ({ item, exist }: { item: InsertRepositorySchema | UpdateRepositorySchema, exist: boolean }) => {
             const response = await client.api.storage['test-connection'].$post(
                 {
                     json: {repo: item, exist: exist }
                 });
-            if (!response.ok) throw new Error('Connection failed');
-            return response.json();
+            const result = await response.json()
+            if (!response.ok) throw new Error(!result.success ? result.error : 'Connection failed');
+            return result;
         },
         onSuccess: () => {
             // You can trigger a Mantine notification here
@@ -104,11 +105,13 @@ export default function StorageLocPage() {
             </Group>
             {/* The modal component instance */}
             <NewStorageLocModal
-                key={'create-storage-location'}
+                key={opened ? 'open' : 'closed'} // Forcing a remount
+                repoList={data!}
                 onSubmit={submitMutation.mutate}
                 isSubmitting={submitMutation.isPending}
                 onConnect={testConnMutation.mutate}
                 isConnecting={testConnMutation.isPending}
+                isConnectSuccess={testConnMutation.isSuccess}
                 title={"Create storage location"}
                 opened={opened}
                 onClose={close}
