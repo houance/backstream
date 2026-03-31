@@ -251,8 +251,19 @@ export const commandType = {
     copy: "copy",
 } as const;
 export type CommandType = typeof commandType[keyof typeof commandType];
+export const execStatus = {
+    SUCCESS: "success",
+    FAIL: "fail",
+    RUNNING: "running",
+    PENDING: "pending",
+    CANCEL: "cancel",
+    KILL: "kill",
+} as const;
+// This extracts "success" | "fail" | "running" | etc.
+export type ExecutionStatus = typeof execStatus[keyof typeof execStatus];
 export const insertExecutionSchema = createInsertSchema(execution, {
     commandType: z.enum(Object.values(commandType)),
+    executeStatus: z.enum(Object.values(execStatus)),
 }).omit({ id: true })
 export type InsertExecutionSchema = z.infer<typeof insertExecutionSchema>;
 export const updateExecutionSchema = insertExecutionSchema.safeExtend({ id: z.number().positive() })

@@ -84,10 +84,12 @@ const snapshotsRoute = new Hono<Env>()
             // 查询 restic
             const clientRecord = await c.var.scheduler.getResticService(updateRepositorySchema.parse(repo));
             if (clientRecord.status !== 'active') return c.json({ error: `repo ${repo.name} is not active`}, 500);
-            const result = await clientRecord.client.getSnapshotFiles(updateSnapshotsMetadataSchema.parse(snapshot));
-            if (!result.success) return c.json({error: result.error.toString()}, 500);
-            if (result.result.length === 0) return c.json([]);
-            return c.json(result.result.map(node => snapshotFile.parse({
+            const result = await clientRecord.client.getSnapshotFiles(
+                updateSnapshotsMetadataSchema.parse(snapshot)
+            );
+            if (result.status !== 'success') return c.json({ error: result.message }, 500);
+            if (result.data.length === 0) return c.json([]);
+            return c.json(result.data.map(node => snapshotFile.parse({
                 snapshotId: snapshot.snapshotId,
                 repoId: repo.id,
                 name: node.name,
