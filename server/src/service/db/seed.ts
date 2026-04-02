@@ -6,10 +6,8 @@ import {
     snapshotsMetadata,
     execution,
     setting,
-    RepoType,
-    StrategyType,
-    RetentionType,
-    WindowType
+    repoType,
+    scheduleStatus,
 } from "@backstream/shared";
 
 
@@ -37,39 +35,32 @@ async function main() {
                 name: "主备份仓库",
                 path: "/home/nopepsi-lenovo-laptop/backstream/server/src/test/local-repo",
                 password: "0608",
-                repositoryType: RepoType.LOCAL,
-                repositoryStatus: "Active",
-                checkSchedule: "manual",
-                checkPercentage: 0.2,
-                pruneSchedule: "manual",
+                repositoryType: repoType.LOCAL,
+                linkStatus: 'DOWN',
+                healthStatus: 'INITIALIZING',
+                adminStatus: 'ACTIVE',
             },
             {
                 name: "云备份仓库",
                 path: "s3://my-backup-bucket",
                 password: "encrypted_password_456",
-                repositoryType: RepoType.S3,
+                repositoryType: repoType.S3,
                 certification: {
                     AWS_ACCESS_KEY_ID: "DSAEF",
                     AWS_SECRET_ACCESS_KEY: "XVDSAE",
                 },
-                repositoryStatus: "Corrupt",
-                checkSchedule: "manual",
-                checkPercentage: 0.2,
-                nextCheckAt: 1770967868630,
-                pruneSchedule: "manual",
-                nextPruneAt: 1770967868630
+                linkStatus: 'DOWN',
+                healthStatus: 'INITIALIZING',
+                adminStatus: 'ACTIVE',
             },
             {
                 name: "归档仓库",
                 path: "/home/nopepsi-lenovo-laptop/backstream/server/src/test/second-repo",
                 password: "0608",
-                repositoryType: RepoType.LOCAL,
-                repositoryStatus: "Active",
-                checkSchedule: "44 * * * * *",
-                checkPercentage: 1,
-                nextCheckAt: 1770967868630,
-                pruneSchedule: "44 * * * * *",
-                nextPruneAt: 1770967868630
+                repositoryType: repoType.LOCAL,
+                linkStatus: 'DOWN',
+                healthStatus: 'INITIALIZING',
+                adminStatus: 'ACTIVE',
             },
         ])
         .returning();

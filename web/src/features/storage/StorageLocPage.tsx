@@ -29,7 +29,7 @@ export default function StorageLocPage() {
 
     // --- 3. CREATE/UPDATE MUTATION ---
     const submitMutation = useMutation({
-        mutationFn: async ({ item, fromRepoId }: {item: InsertRepositorySchema | UpdateRepositorySchema, fromRepoId?: number}) => {
+        mutationFn: async ({ item, exist, fromRepoId }: {item: InsertRepositorySchema | UpdateRepositorySchema, exist: boolean, fromRepoId?: number}) => {
             if ('id' in item && item.id) {
                 return ensureSuccess(
                     client.api.storage[':id'].$patch({
@@ -39,7 +39,7 @@ export default function StorageLocPage() {
                 )
             }
             return ensureSuccess(
-                client.api.storage.$post({json: {repo: item, fromRepoId: fromRepoId}})
+                client.api.storage.$post({json: {repo: item, exist: exist, fromRepoId: fromRepoId}})
             )
         },
         onSuccess: async () => {

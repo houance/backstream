@@ -2,10 +2,10 @@ import {Modal, Button, TextInput, Select, Group, Stack, PasswordInput, Divider, 
 import { useForm } from '@mantine/form';
 import { zod4Resolver } from 'mantine-form-zod-resolver';
 import {
-    RepoType,
+    repoType,
     insertRepositorySchema,
     type InsertRepositorySchema,
-    EMPTY_REPOSITORY_SCHEMA, type UpdateRepositorySchema,
+    EMPTY_REPOSITORY_SCHEMA, type UpdateRepositorySchema, type RepoType,
 } from '@backstream/shared'
 import {PROVIDER_MAP} from "../provider-map.tsx";
 import MaintainPolicyConfig from "./MaintainPolicyConfig.tsx";
@@ -15,7 +15,7 @@ interface ModalProps {
     repoList: UpdateRepositorySchema[];
     opened: boolean;
     onClose: () => void;
-    onSubmit: (param: {item: InsertRepositorySchema, fromRepoId?: number}) => Promise<void> | void;
+    onSubmit: (param: {item: InsertRepositorySchema, exist: boolean, fromRepoId?: number}) => Promise<void> | void;
     onConnect: (param: {item: InsertRepositorySchema, exist: boolean}) => Promise<void> | void;
     isSubmitting: boolean;
     isConnecting: boolean;
@@ -46,9 +46,9 @@ export default function NewStorageLocModal({
 
     const handleTypeChange = (newType: string | null) => {
         // 1. Update the top-level repositoryType
-        const repoType: RepoType = newType === null ? RepoType.LOCAL : newType as RepoType;
-        form.setFieldValue('repositoryType', repoType);
-        const newConfig = PROVIDER_MAP[repoType];
+        const repositoryType: RepoType = newType === null ? repoType.LOCAL : newType as RepoType;
+        form.setFieldValue('repositoryType', repositoryType);
+        const newConfig = PROVIDER_MAP[repositoryType];
         form.setFieldValue('certification', newConfig.initSubForm);
     };
 
@@ -73,7 +73,7 @@ export default function NewStorageLocModal({
                 </Stack>
 
                 <form onSubmit={form.onSubmit((values) =>
-                    onSubmit({ item: values, fromRepoId: fromRepoId !== null ? Number(fromRepoId) : undefined }))}
+                    onSubmit({ item: values, exist: mode === 'connect', fromRepoId: fromRepoId !== null ? Number(fromRepoId) : undefined }))}
                 >
                     <Stack>
                         {/* [NEW] Conditional Select for "Create" mode */}
@@ -94,7 +94,7 @@ export default function NewStorageLocModal({
 
                         <Select
                             label="Provider Type"
-                            data={Object.values(RepoType)}
+                            data={Object.values(repoType)}
                             value={form.values.repositoryType}
                             onChange={handleTypeChange}
                             withAsterisk

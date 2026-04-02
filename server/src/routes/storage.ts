@@ -9,6 +9,7 @@ import {
     execution,
     filterQuery,
     failHistory,
+    scheduleStatus,
     type FilterQuery,
     commandType,
     type OnGoingProcess,
@@ -18,7 +19,6 @@ import {
 import {zValidator} from "@hono/zod-validator";
 import {RepositoryClient} from '../service/restic';
 import { z } from 'zod';
-import {getExitCodeName} from "./policy";
 import {readFile} from "node:fs/promises";
 
 
@@ -127,7 +127,7 @@ const storageRoute = new Hono<Env>()
                     finishedAt: exec.scheduledAt,
                     commandType: exec.commandType,
                     fullCommand: exec.fullCommand,
-                    failReason: getExitCodeName(exec.exitCode),
+                    failReason: exec.errorMessage,
                 }))
                 const result = failHistory.array().parse(mappedFailHistory);
                 return c.json({
@@ -173,6 +173,7 @@ const storageRoute = new Hono<Env>()
     .post('/',
         zValidator('json', z.object({
             repo: insertRepositorySchema,
+            exist: z.boolean(),
             fromRepoId: z.number().optional(),
         })),
         async (c) => {
@@ -188,6 +189,9 @@ const storageRoute = new Hono<Env>()
             if (dbResult !== undefined) {
                 return c.json({ error: `duplicate path` }, 400);
             }
+            // 初始化 checkStatus and pruneStatus
+            if (values.checkSchedule !== 'manual') values.checkStatus = scheduleStatus.ACTIVE;
+            if (values.pruneSchedule !== 'manual') values.pruneStatus = scheduleStatus.ACTIVE;
             // 查找 fromRepo 记录
             let fromRepo: UpdateRepositorySchema | undefined;
             if (validated.fromRepoId) {
@@ -198,11 +202,12 @@ const storageRoute = new Hono<Env>()
             }
             // 数据库新增记录
             const [newRepo] = await c.var.db.insert(repository)
-                .values({ ...values, repositoryStatus: 'Disconnected' })
+                .values({ ...values, linkStatus: 'DOWN', healthStatus: 'INITIALIZING', adminStatus: 'ACTIVE' })
                 .returning();
             // scheduler 创建仓库并开始调度
             const createError = await c.var.scheduler.addResticService(
                 updateRepositorySchema.parse(newRepo),
+                validated.exist,
                 fromRepo
             );
             if (createError !== undefined) {

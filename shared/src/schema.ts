@@ -14,12 +14,9 @@ export const repository = sqliteTable("repository_table", {
     blobCount: integer("blob_count"),
     capacity: integer("capacity"), // null for infinity or not retrievable
     certification: text("certification", { mode: "json" }),
-    checkSchedule: text("check_schedule").notNull(),
-    checkPercentage: real("check_percentage").notNull(),
-    nextCheckAt: integer("next_check_at"),
-    pruneSchedule: text("prune_schedule").notNull(),
-    nextPruneAt: integer("next_prune_at"),
-    repositoryStatus: text("repository_status").notNull(),
+    linkStatus: text('link_status').notNull(), // network
+    healthStatus: text("health_status").notNull(), // check result
+    adminStatus: text("admin_status").notNull(), // active or paused
 });
 
 // Strategy Table
@@ -38,8 +35,6 @@ export const backupTarget = sqliteTable("backup_target_table", {
     backupStrategyId: integer("backup_strategy_id").references(() => strategy.id, { onDelete: 'cascade' }).notNull(),
     repositoryId: integer("repository_id").references(() => repository.id, { onDelete: 'cascade' }).notNull(),
     retentionPolicy: text("retention_policy", { mode: "json"}).notNull(),
-    schedulePolicy: text("schedule_policy").notNull(),
-    nextBackupAt: integer("next_backup_at"), // null for frontend to bind, set when insert
     index: integer("index").notNull(),
 }, (table) => [
     index("target_strategy_id_idx").on(table.backupStrategyId),
@@ -85,6 +80,21 @@ export const restores = sqliteTable("restores_table", {
     index("restores_snapshots_metadata_id_idx").on(table.snapshotsMetadataId),
 ])
 
+// Job Schedule Table
+export const jobSchedules = sqliteTable("job_schedules_table", {
+    id: integer("job_schedule_id").primaryKey({ autoIncrement: true }),
+    category: text("category").notNull(),
+    type: text("type").notNull(),
+    repositoryId: integer("repository_id").references(() => repository.id, { onDelete: 'cascade' }),
+    backupStrategyId: integer("backup_strategy_id").references(() => strategy.id, { onDelete: 'cascade' }),
+    backupTargetId: integer("backup_target_id").references(() => backupTarget.id, { onDelete: 'cascade' }),
+    cron: text("cron").notNull(),
+    jobStatus: text("job_status").notNull(),
+    lastRunAt: integer("last_run_at"),
+    nextRunAt: integer("next_run_at"),
+    extraConfig: text("extra_config", { mode: "json" }),
+})
+
 // Execution Table
 export const execution = sqliteTable("execution_table", {
     id: integer("execution_id").primaryKey({ autoIncrement: true }),
@@ -94,6 +104,8 @@ export const execution = sqliteTable("execution_table", {
     commandType: text("command_type").notNull(),
     fullCommand: text("full_command"),
     exitCode: integer("exit_code"),
+    errorMessage: text("error_message"),
+    attempt: integer("attempt").notNull().default(1),
     scheduledAt: integer("scheduled_at").notNull(),
     startedAt: integer("started_at"),
     finishedAt: integer("finished_at"),
@@ -121,6 +133,7 @@ export const setting = sqliteTable("system_setting", {
 // strategy => many targets
 export const strategyRelations = relations(strategy, ({ many }) => ({
     targets: many(backupTarget),
+    jobs: many(jobSchedules)
 }));
 // target => 1 strategy, 1 repository, many execution
 export const backupTargetRelations = relations(backupTarget, ({ one, many }) => ({
@@ -133,6 +146,10 @@ export const backupTargetRelations = relations(backupTarget, ({ one, many }) => 
         references: [repository.id],
     }),
     executions: many(execution),
+    job: one(jobSchedules, {
+        fields: [backupTarget.id],
+        references: [jobSchedules.backupTargetId],
+    })
 }));
 // execution => one target or one repository
 export const executionRelations = relations(execution, ({ one }) => ({
@@ -160,6 +177,7 @@ export const executionRelations = relations(execution, ({ one }) => ({
 // repository => multiple execution
 export const repositoryRelations = relations(repository, ({ many }) => ({
     executions: many(execution),
+    jobs: many(jobSchedules),
 }))
 // restore => multiple execution
 export const restoresRelations = relations(restores, ({ one, many }) => ({
@@ -176,5 +194,19 @@ export const snapshotsMetadataRelations = relations(snapshotsMetadata, ({ one, m
     repository: one(repository, {
         fields: [snapshotsMetadata.repositoryId],
         references: [repository.id],
+    })
+}))
+export const jobScheduleRelations = relations(jobSchedules, ({ one, many }) => ({
+    repository: one(repository, {
+        fields: [jobSchedules.repositoryId],
+        references: [repository.id],
+    }),
+    target: one(backupTarget, {
+        fields: [jobSchedules.backupTargetId],
+        references: [backupTarget.id],
+    }),
+    strategy: one(strategy, {
+        fields: [jobSchedules.backupStrategyId],
+        references: [strategy.id],
     })
 }))

@@ -10,7 +10,7 @@ import {
     type RepoStat,
     type Task, failWithOutput,
 } from "./types";
-import {RepoType, type CertificateSchema, type RetentionPolicy} from "@backstream/shared"
+import {repoType, type CertificateSchema, type RetentionPolicy, type RepoType} from "@backstream/shared"
 import type {Result} from "execa";
 import {join} from "node:path";
 import camelcaseKeys from "camelcase-keys";
@@ -60,7 +60,7 @@ export class RepositoryClient {
         signal: AbortSignal,
     ): Task<ResticResult<boolean>> {
         // todo: move to upper class
-        if (this.repoType !== RepoType.LOCAL && this.repoType === targetClient.repoType) {
+        if (this.repoType !== repoType.LOCAL && this.repoType === targetClient.repoType) {
             throw new Error('copy between same type of repositories is not supported');
         }
         const command = `restic copy ${snapshotIds.join(' ')} -v`;

@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { IconArrowLeft } from '@tabler/icons-react';
 import { client } from "../../api";
 
-// Re-using your existing sub-components
+// Re-using your existing subcomponents
 import SnapshotExplorer from './component/SnapshotsExplorer.tsx';
 import PolicySummary from "./component/PolicySummary.tsx";
 import PolicyActionCenter from "./component/PolicyActionCenter.tsx";

@@ -10,7 +10,7 @@ export function BackupPolicyCard({ policy, onDetail, onDelete, isDeleting }: {
     isDeleting: boolean
 }) {
     const MAX_VISIBLE_TARGETS = 3;
-    const isCritical = policy.targets.some(t => (t.repository.usage / (t.repository.capacity || Infinity)) > 0.8);
+    const isCritical = policy.targets.some(t => (t.repository.size || 0 / (t.repository.capacity || Infinity)) > 0.8);
 
     // Slice targets for display
     const visibleTargets = policy.targets.slice(0, MAX_VISIBLE_TARGETS);
@@ -63,7 +63,7 @@ export function BackupPolicyCard({ policy, onDetail, onDelete, isDeleting }: {
 
             <Stack gap="sm" style={{ flex: 1 }}>
                 {visibleTargets.map((target) => {
-                    const { percentage } = getRepositoryStats(target.repository.usage, target.repository.capacity || Infinity);
+                    const { percentage } = getRepositoryStats(target.repository.size, target.repository.capacity || Infinity);
 
                     return (
                         <Box key={target.repositoryId}>

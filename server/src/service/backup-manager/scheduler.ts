@@ -1,19 +1,40 @@
 import {
     backupTarget,
+    commandType,
+    type CommandType,
+    execStatus,
     execution,
+    type InsertExecutionSchema,
+    jobSchedules,
     repository,
+    type ScheduleStatus,
+    scheduleStatus,
     setting,
     strategy,
     StrategyType,
     updateBackupStrategySchema,
+    type UpdateBackupTargetSchema,
     updateBackupTargetSchema,
+    updateExecutionSchema,
+    type UpdateExecutionSchema,
+    updateJobScheduleSchema,
+    type UpdateJobScheduleSchema,
+    updateRepoScheduleSchema,
+    type UpdateRepoScheduleSchema,
     updateRepositorySchema,
-    type UpdateRepositorySchema
+    type UpdateRepositorySchema,
+    type UpdateRestoreSchema,
+    updateStrategyScheduleSchema,
+    type UpdateStrategyScheduleSchema,
+    updateSystemScheduleSchema,
+    type UpdateSystemScheduleSchema,
+    type UpdateTargetScheduleSchema,
+    updateTargetScheduleSchema
 } from "@backstream/shared";
 import {db} from "../db";
 import {type ExecResult, ResticService} from "./restic-service";
 import PQueue from "p-queue";
-import {desc, eq, inArray} from "drizzle-orm";
+import {and, desc, eq, inArray, ne} from "drizzle-orm";
 import {Cron} from "croner";
 import {RcloneClient} from "../rclone";
 import {FileManager} from "./file-manager";
@@ -75,125 +96,133 @@ function randomizedCron(
     return `${s} ${m} ${h} ${d} ${M} ${dw}`;
 }
 
-async function getPolicyById(strategyId: number): Promise<Policy | null> {
-    const result = await db.query.strategy.findFirst({
+async function createExecution(commandType: CommandType, targetId?: number | null, repoId?: number | null) {
+    let value: InsertExecutionSchema = {
+        commandType: commandType,
+        executeStatus: execStatus.PENDING,
+        scheduledAt: Date.now(),
+        uuid: crypto.randomUUID(),
+    };
+    if (targetId !== null) {
+        value.backupTargetId = targetId;
+    } else if (repoId !== null) {
+        value.repositoryId = repoId
+    }
+    const [row] = await db.insert(execution).values(value).returning();
+    return updateExecutionSchema.parse(row);
+}
+
+async function getJobWithRepo(jobScheduleId: number) {
+    const dbResult = await db.query.jobSchedules.findFirst({
+        where: (jobSchedules, { and, eq, ne }) => and(
+            eq(jobSchedules.id, jobScheduleId),
+            ne(jobSchedules.jobStatus, scheduleStatus.PAUSED)
+        ),
+        with: {
+            repository: true,
+        }
+    });
+    if (!dbResult || !dbResult.repository) return null;
+    const job = updateJobScheduleSchema.parse(dbResult);
+    const repo = updateRepositorySchema.parse(dbResult.repository);
+    if (repo.adminStatus !== 'ACTIVE') return null;
+    return {job, repo};
+}
+
+async function getJobWithTarget(jobScheduleId: number) {
+    const dbResult = await db.query.jobSchedules.findFirst({
+        where: (jobSchedules, { and, eq, ne }) => and(
+            eq(jobSchedules.id, jobScheduleId),
+            ne(jobSchedules.jobStatus, scheduleStatus.PAUSED)
+        ),
+        with: {
+            repository: true,
+            target: true,
+            strategy: true
+        }
+    });
+    if (!dbResult || !dbResult.repository || !dbResult.target || !dbResult.strategy) return null;
+    const job = updateTargetScheduleSchema.parse(dbResult);
+    const repo = updateRepositorySchema.parse(dbResult.repository);
+    if (repo.adminStatus !== 'ACTIVE') return null;
+    const target = updateBackupTargetSchema.parse(dbResult.target);
+    const strategy = updateBackupStrategySchema.parse(dbResult.strategy);
+    return {job, repo, target, strategy};
+}
+
+async function getRepoJob(repoId: number) {
+    const dbResult = await db.query.repository.findFirst({
+        where: (repository, { and, eq }) => and(
+            eq(repository.id, repoId),
+            eq(repository.adminStatus, 'ACTIVE'),
+        ),
+        with: {
+            jobs: {
+                where: (jobSchedules, { and, eq, ne }) => and(
+                    eq(jobSchedules.category, 'repository'),
+                    ne(jobSchedules.jobStatus, scheduleStatus.PAUSED)
+                )
+            }
+        }
+    });
+    if (!dbResult || !dbResult.jobs?.length) return null;
+    const repo = updateRepositorySchema.parse(dbResult);
+    const jobs = updateRepoScheduleSchema.array().parse(dbResult.jobs);
+    return {jobs, repo};
+}
+
+async function getTargetJob(strategyId: number) {
+    const dbResult = await db.query.strategy.findFirst({
         where: (strategy, { eq }) => eq(strategy.id, strategyId),
         with: {
-            targets: {
-                with: {
-                    repository: true,
-                }
+            jobs: {
+                where: (jobSchedules, { and, eq, ne }) => and(
+                    eq(jobSchedules.category, 'target'),
+                    ne(jobSchedules.jobStatus, scheduleStatus.PAUSED)
+                )
             }
         }
     });
-    if (!result) return null;
-    return result;
+    if (!dbResult || !dbResult.jobs?.length) return null;
+    const strategy = updateBackupStrategySchema.parse(dbResult);
+    const jobs = updateTargetScheduleSchema.array().parse(dbResult.jobs);
+    return {jobs, strategy};
 }
 
-async function getAllPolicy() {
-    return await db.query.strategy.findMany({
+async function getStrategyJob(strategyId: number) {
+    const dbResult = await db.query.strategy.findFirst({
+        where: (strategy, { eq }) => eq(strategy.id, strategyId),
         with: {
-            targets: {
-                with: {
-                    repository: true,
-                }
+            jobs: {
+                where: (jobSchedules, { and, eq, ne }) => and(
+                    eq(jobSchedules.category, 'strategy'),
+                    ne(jobSchedules.jobStatus, scheduleStatus.PAUSED)
+                )
             }
         }
     });
+    if (!dbResult || !dbResult.jobs?.length) return null;
+    const strategy = updateBackupStrategySchema.parse(dbResult);
+    const strategyJob = updateStrategyScheduleSchema.parse(dbResult.jobs[0]);
+    return {job: strategyJob, strategy: strategy};
 }
 
-type AllPolicy = Awaited<ReturnType<typeof getAllPolicy>>;
-type Policy = AllPolicy[number]
-type Target = Policy["targets"][number];
-
-function updateTargetNextRunAt(targetId: number) {
-    // The outer function can stay async, but the callback MUST be sync
-    return db.transaction((tx) => {
-        // 1. Query target (Synchronous relational query)
-        const result = tx.query.backupTarget.findFirst({
-            where: (backupTarget, { eq }) => eq(backupTarget.id, targetId),
-            with: {
-                repository: true,
-                strategy: true
-            }
-        }).sync();
-        if (!result) return null;
-        // 2. Calculate next run (Standard JS logic)
-        const nextBackupTime = new Cron(result.schedulePolicy).nextRun()!.getTime();
-        // 3. Update target (Use .run() instead of awaiting)
-        tx.update(backupTarget)
-            .set({ nextBackupAt: nextBackupTime })
-            .where(eq(backupTarget.id, targetId))
-            .run(); // .run() is synchronous for better-sqlite3
-        return result;
-    });
-}
-
-
-function updateRepoNextRunAt(repoId: number, type: 'check' | 'prune') {
-    return db.transaction(tx => {
-        // query repository
-        const result = tx.query.repository.findFirst({
-            where: (repository, { eq }) => eq(repository.id, repoId),
-        }).sync();
-        if (!result) return null;
-        tx.update(repository)
-            .set( type === 'check' ?
-                { nextCheckAt: new Cron(result.checkSchedule).nextRun()!.getTime() } :
-                { nextPruneAt: new Cron(result.pruneSchedule).nextRun()!.getTime() }
-            )
-            .where(eq(repository.id, repoId))
-            .run();
-        return result;
-    })
-}
-
-// Discriminated Union for all kind of job
-type JobMetadata =
-    | { category: 'repo'; type: 'check' | 'prune' | 'stat' | 'snapshots' | 'heartbeat'; repoId: number; }
-    | { category: 'policy-target'; type: 'backup' | 'copy'; strategyId: number; targetId: number; repoId: number; }
-    | { category: 'policy'; type: 'datasize'; strategyId: number }
-    | { category: 'system'; type: 'clean' };
-
-// Error type if create/update job record fail
-type RuntimeError = {
+type ClientInitialError = {
     error: any;
     message: string;
+    initTimestamp: number;
 }
-
-// Type Alias combine metadata with the Cron instance
-export type JobRecord =
-    | ( JobMetadata & { cron: Cron } & { status: 'active'; key: string })
-    | ( JobMetadata & { cron: Cron } & { pauseTime: number } & { status: 'pause'; key: string })
-    | ( JobMetadata & { cron: Cron } & RuntimeError & { status: 'error'; key: string })
 
 // Type Alias combine repo with error
 type ClientRecord =
-    | ({ client: ResticService } & { status: 'active'; key: string })
-    | ({ client?: ResticService } & RuntimeError & { status: 'error'; key: string })
-
-const getJobKey = (meta: JobMetadata): string => {
-    switch (meta.category) {
-        case 'repo':
-            // Format: repo:123:check
-            return `repo:${meta.repoId}:${meta.type}`;
-        case 'policy-target':
-            // Format: policy:10:target:12
-            return `policy:${meta.strategyId}:target:${meta.targetId}`;
-        case 'policy':
-            // Format: policy:5:datasize
-            return `policy:${meta.strategyId}:datasize`;
-        case 'system':
-            return `system:${meta.type}`;
-        default:
-            return 'unknown';
-    }
-};
+    | ({ client: ResticService } & { status: 'active' })
+    | (ClientInitialError & { status: 'error' })
 
 export class Scheduler {
-    private readonly clientMap: Map<string, ClientRecord>;
-    private readonly cronJobMap: Map<string, JobRecord>;
+    private readonly clientMap: Map<number, ClientRecord>;
+    private readonly cronJobMap: Map<number, { cron: Cron, job: UpdateJobScheduleSchema }>; // only job's category, type and ids is reliable
     private readonly globalQueue: PQueue;
+    private readonly neverDate: string = "0 0 0 1 1 2099";
 
     private constructor(globalQueue: PQueue) {
         this.clientMap = new Map();
@@ -218,70 +247,90 @@ export class Scheduler {
             // convert to validate zod schema
             const validated = updateRepositorySchema.parse(repository);
             // add client to schedule
-            scheduler.addResticService(validated);
+            if (validated.adminStatus === 'ACTIVE') scheduler.addResticService(validated, true);
         })
-        // init policy schedule
-        const allPolicy = await getAllPolicy();
-        allPolicy.forEach(policy => scheduler.addPolicySchedule(policy))
+        // init strategy schedule
+        const allStrategyIds = await db.select({ id: strategy.id}).from(strategy);
+        allStrategyIds.forEach(({id}) => scheduler.addPolicySchedule(id))
         // init system schedule
-        void scheduler.addTmpFolderCleanSchedule();
+        void scheduler.startSystemCron();
         return scheduler;
     }
 
-    public async addResticService(repo: UpdateRepositorySchema, fromRepo?: UpdateRepositorySchema) {
-        const key = repo.id.toString();
+    public async addResticService(
+        repo: UpdateRepositorySchema,
+        exist: boolean,
+        fromRepo?: UpdateRepositorySchema
+    ) {
+        const key = repo.id;
+        // check if already exist
         if (this.clientMap.has(key)) {
             const stopResult = await this.stopResticService(repo);
-            if (stopResult.length > 0) this.clientMap.set(key, {
-                error: stopResult,
-                message: `stop ResticService ${repo.name} fail: ${stopResult} still running`,
-                status: 'error',
-                key: key
-            })
+            if (stopResult.length > 0) {
+                this.clientMap.set(key, {
+                    error: stopResult,
+                    message: `stop ResticService ${repo.name} fail: ${stopResult} still running`,
+                    status: 'error',
+                    initTimestamp: Date.now(),
+                })
+                return `stop ResticService ${repo.name} fail: ${stopResult} still running`;
+            }
         }
+        // check if fromRepo is active
         let fromRs: ResticService | undefined;
         if (fromRepo) {
             const clientRecord = await this.getResticService(fromRepo);
-            if (clientRecord.status !== 'active') return clientRecord.message;
+            if (clientRecord.status !== 'active') {
+                const errorMsg = `fromRepo ${fromRepo.name} has error: ${clientRecord.message}`;
+                this.clientMap.set(key, {
+                    error: clientRecord.error,
+                    message: errorMsg,
+                    status: 'error',
+                    initTimestamp: Date.now(),
+                })
+                return errorMsg;
+            }
             fromRs = clientRecord.client;
         }
+        // create repo
         const createResult = await ResticService.create(
             repo,
             this.globalQueue,
+            exist,
             fromRs,
         );
         if (createResult instanceof ResticService) {
             this.clientMap.set(key, {
                 client: createResult,
                 status: 'active',
-                key: key
             });
-            // add repo schedule
-            void this.addRepoMaintainSchedule(repo);
+            // start repo schedule
+            void this.startRepoMaintainJob(repo.id);
         } else {
             this.clientMap.set(key, {
                 error: new Error('create repo fail'),
                 message: `create ResticService ${repo.name} fail: ${createResult}`,
                 status: 'error',
-                key: key
+                initTimestamp: Date.now(),
             });
             return createResult.toString();
         }
     }
 
     public async getResticService(repo: UpdateRepositorySchema) {
-        const key = repo.id.toString();
+        const key = repo.id;
         if (!this.clientMap.has(key)) {
-            await this.addResticService(repo);
+            await this.addResticService(repo, true);
         }
         return this.clientMap.get(key)!;
     }
 
     private async getRunningPolicyByRepo(repo: UpdateRepositorySchema): Promise<string[]> {
         const strategyIds: number[] = [];
-        this.cronJobMap.forEach((job) => {
-            if (job.category === 'policy-target' && job.repoId === repo.id) {
-                strategyIds.push(job.strategyId)
+        this.cronJobMap.forEach((jobRecord) => {
+            const job = jobRecord.job;
+            if (job.category === 'target' && job.repositoryId === repo.id) {
+                strategyIds.push(job.backupStrategyId)
             }
         })
         if (strategyIds.length === 0) return [];
@@ -296,403 +345,355 @@ export class Scheduler {
         const strategyNames = await this.getRunningPolicyByRepo(repo);
         if (strategyNames.length !== 0) return strategyNames;
         // 停止并删除所有 repo job
-        this.cronJobMap.forEach((job, key) => {
-            if (job.category === 'repo' && job.repoId === repo.id) {
-                if (job.status === 'active') job.cron.stop();
+        this.cronJobMap.forEach((jobRecord, key) => {
+            const job = jobRecord.job;
+            if (job.category === 'repository' && job.repositoryId === repo.id) {
+                if (jobRecord.cron.isRunning()) jobRecord.cron.stop();
                 this.cronJobMap.delete(key);
             }
         });
         // 停止 restic service 所有任务
-        const clientRecord = this.clientMap.get(repo.id.toString());
+        const clientRecord = this.clientMap.get(repo.id);
         if (!clientRecord) return [];
         if (clientRecord.status === 'active') clientRecord.client.stopAllRunningJob();
-        this.clientMap.delete(repo.id.toString());
+        this.clientMap.delete(repo.id);
         return [];
     }
 
     public async stopPolicy(strategyId: number) {
-        const dbResult = await getPolicyById(strategyId);
-        if (!dbResult) return { status: 'Not found' };
-        // stop and delete policy-target job
-        this.cronJobMap.forEach((job, key) => {
-            if ((job.category === 'policy' || job.category === 'policy-target') && job.strategyId === strategyId) {
-                if (job.status === 'active') job.cron.stop();
+        // stop and delete target job
+        this.cronJobMap.forEach((jobRecord, key) => {
+            const job = jobRecord.job;
+            if ((job.category === 'strategy' || job.category === 'target') && job.backupStrategyId === strategyId) {
+                if (jobRecord.cron.isRunning()) jobRecord.cron.stop();
                 this.cronJobMap.delete(key);
             }
-            if (job.category === 'policy-target' && job.strategyId === strategyId) {
-                const clientRecord = this.clientMap.get(job.repoId.toString());
+            if (job.category === 'target' && job.backupStrategyId === strategyId) {
+                const clientRecord = this.clientMap.get(job.repositoryId);
                 if (clientRecord && clientRecord.status === 'active') {
-                    clientRecord.client.stopPolicyJob(job.targetId);
+                    clientRecord.client.stopPolicyJob(job.backupTargetId);
                 }
             }
         });
         return { status: 'success' };
     }
 
-    public pauseJob(meta: JobMetadata) {
-        const jobKey = getJobKey(meta);
-        const jobRecord = this.cronJobMap.get(jobKey);
+    public async pauseJob(jobScheduleId: number) {
+        const jobRecord = this.cronJobMap.get(jobScheduleId);
         if (!jobRecord) return { message: 'Not found' };
-        if (jobRecord.status !== 'active') return { message: 'success' };
-        // stop job and update job record
+        if (!jobRecord.cron.isRunning()) return { message: 'success' };
+        // stop job and update job schedule
         jobRecord.cron.pause();
-        this.cronJobMap.set(jobKey, { ...jobRecord, pauseTime: Date.now(), status: 'pause'})
-        return { message: 'success' }
-    }
-
-    public resumeJob(meta: JobMetadata) {
-        const jobKey = getJobKey(meta);
-        const jobRecord = this.cronJobMap.get(jobKey);
-        if (!jobRecord) return { message: 'Not found' };
-        if (jobRecord.status !== 'active') {
-            if (jobRecord.cron.isStopped()) return { message: `can't resume, job permanently stopped` };
-            jobRecord.cron.resume();
-            if (jobRecord.status === 'pause') {
-                const { pauseTime, ...partialJobRecord} = jobRecord;
-                this.cronJobMap.set(jobKey, { ...partialJobRecord, status: 'active'})
-            } else {
-                const { error, message, ...partialJobRecord } = jobRecord;
-                this.cronJobMap.set(jobKey, { ...partialJobRecord, status: 'active'})
-            }
-        }
+        const [dbResult] = await db.update(jobSchedules)
+            .set({ jobStatus: scheduleStatus.PAUSED })
+            .where(eq(jobSchedules.id, jobRecord.job.id))
+            .returning();
+        if (!dbResult) return { message: 'job db not found' };
         return { message: 'success' };
     }
 
-    public triggerJob(meta: JobMetadata) {
-        const jobKey = getJobKey(meta);
-        const jobRecord = this.cronJobMap.get(jobKey);
+    public async resumeJob(jobScheduleId: number) {
+        const jobRecord = this.cronJobMap.get(jobScheduleId);
+        if (!jobRecord) return { message: 'Not found' };
+        if (jobRecord.cron.isRunning()) return { message: 'success' };
+        if (jobRecord.cron.isStopped()) return { message: `can't resume, job permanently stopped` };
+        // resume job and update job schedule
+        jobRecord.cron.resume();
+        const [dbResult] = await db.update(jobSchedules)
+            .set({ jobStatus: scheduleStatus.ACTIVE })
+            .where(eq(jobSchedules.id, jobRecord.job.id))
+            .returning();
+        if (!dbResult) return { message: 'job db not found' };
+        return { message: 'success' };
+    }
+
+    public triggerJob(jobScheduleId: number) {
+        const jobRecord = this.cronJobMap.get(jobScheduleId);
         if (!jobRecord) return { message: 'Not found' };
         void jobRecord.cron.trigger();
         return { message: 'success' };
     }
 
-    private createRepoJobMeta(
-        repoId: number,
-        type: 'check' | 'prune' | 'stat' | 'snapshots' | 'heartbeat'
-    ) {
-        const job = {
-            category: 'repo',
-            type: type,
-            repoId: repoId
-        } as const;
-        const key = getJobKey(job);
-        const previousJob = this.cronJobMap.get(key);
-        if (previousJob && previousJob.status === 'active') previousJob.cron.stop();
-        return { job, key }
-    }
-
-    private async addRepoMaintainSchedule(repo: UpdateRepositorySchema) {
-        // create check job
-        if (repo.checkSchedule !== 'manual') {
-            const { job, key } = this.createRepoJobMeta(repo.id, 'check');
-            const cron = this.createRetryCron(key, repo.checkSchedule, async () => {
-                const dbResult = updateRepoNextRunAt(repo.id, 'check');
-                if (!dbResult) throw new Error(`update repo ${repo.id} nextCheckAt fail`);
-                // get rs
-                const validRepo = updateRepositorySchema.parse(dbResult);
-                const rs = await this.getResticService(validRepo);
-                if (rs.status !== 'active') throw new Error(`repo ${validRepo.name} is not active`);
-                return await rs.client.check();
-            });
-            this.cronJobMap.set(key, {
-                ...job,
-                cron,
-                key,
-                status: 'active',
-            })
+    private async startRepoMaintainJob(repoId: number) {
+        // get repo job
+        const result = await getRepoJob(repoId);
+        if (!result) return;
+        const { jobs, repo } = result;
+        for (const job of jobs) {
+            switch (job.type) {
+                case 'check': this.startRepoCheckCron(job); break;
+                case 'prune': this.startRepoPruneCron(job); break;
+                case 'heartbeat': await this.startRepoHeartBeat(job).trigger(); break;
+                case 'stat': await this.startRepoStat(job).trigger(); break;
+                case 'snapshots': await this.startRepoIndex(job).trigger(); break;
+            }
         }
-        // create prune job
-        if (repo.pruneSchedule !== 'manual') {
-            const { job, key } = this.createRepoJobMeta(repo.id, 'prune');
-            const cron = this.createRetryCron(key, repo.pruneSchedule, async () => {
-                const dbResult = updateRepoNextRunAt(repo.id, 'prune');
-                if (!dbResult) throw new Error(`update repo ${repo.id} nextPruneAt fail`);
-                // get rs
-                const validRepo = updateRepositorySchema.parse(dbResult);
-                const rs = await this.getResticService(validRepo);
-                if (rs.status !== 'active') throw new Error(`repo ${validRepo.name} is not active`);
-                return await rs.client.prune();
-            });
-            this.cronJobMap.set(key, {
-                ...job,
-                cron,
-                key,
-                status: 'active',
-            })
-        }
-        // heartbeat
-        const { job: heartBeatJob, key: heartBeatKey } = this.createRepoJobMeta(repo.id, 'heartbeat');
-        const cron = this.createRetryCron(heartBeatKey, randomizedCron(5, 'minute'), async () => {
-            const [dbResult] = await db.select().from(repository)
-                .where(eq(repository.id, repo.id));
-            if (!dbResult) throw new Error(`get repo ${repo.id} for heartbeat job fail`);
-            // get rs
-            const validRepo = updateRepositorySchema.parse(dbResult);
-            const rs = await this.getResticService(validRepo);
-            if (rs.status !== 'active') throw new Error(`repo ${validRepo.name} is not active`);
-            return await rs.client.heartbeat();
-        });
-        this.cronJobMap.set(heartBeatKey, {
-            ...heartBeatJob,
-            cron,
-            key: heartBeatKey,
-            status: 'active',
-        })
-        // run heartbeat immediately
-        void cron.trigger();
-        // fetch repo stats job
-        const { job: statJob, key: statJobKey } = this.createRepoJobMeta(repo.id, 'stat');
-        const statCron = this.createRetryCron(statJobKey, randomizedCron(12, 'hour'), async () => {
-            const [dbResult] = await db.select().from(repository)
-                .where(eq(repository.id, repo.id));
-            if (!dbResult) throw new Error(`get repo ${repo.id} for stats job fail`);
-            // get rs
-            const validRepo = updateRepositorySchema.parse(dbResult);
-            const rs = await this.getResticService(validRepo);
-            if (rs.status !== 'active') throw new Error(`repo ${validRepo.name} is not active`);
-            return await rs.client.updateRepoStat();
-        })
-        this.cronJobMap.set(statJobKey, {
-            ...statJob,
-            cron: statCron,
-            key: statJobKey,
-            status: 'active',
-        })
-        // run stat immediately
-        void statCron.trigger();
-        // index snapshots job
-        const { job: indexJob, key: indexJobKey } = this.createRepoJobMeta(repo.id, 'snapshots');
-        const indexCron = this.createRetryCron(indexJobKey, randomizedCron(1, "hour"), async () => {
-            const [dbResult] = await db.select().from(repository)
-                .where(eq(repository.id, repo.id));
-            if (!dbResult) throw new Error(`get repo ${repo.id} for snapshots job fail`);
-            // get rs
-            const validRepo = updateRepositorySchema.parse(dbResult);
-            const rs = await this.getResticService(validRepo);
-            if (rs.status !== 'active') throw new Error(`repo ${validRepo.name} is not active`);
-            return await rs.client.indexSnapshots();
-        });
-        this.cronJobMap.set(indexJobKey, {
-            ...indexJob,
-            cron: indexCron,
-            key: indexJobKey,
-            status: 'active',
-        })
-        // run index immediately
-        void indexCron.trigger();
     }
 
-    private addDataSizeUpdate(policy: Policy) {
-        const strategyId = policy.id;
-        const job = {
-            category: 'policy',
-            type: 'datasize',
-            strategyId: strategyId,
-        } as const;
-        const key = getJobKey(job);
-        // stop previous job
-        const previousJob = this.cronJobMap.get(key);
-        if (previousJob && previousJob.status === 'active') previousJob.cron.stop();
-        const cron = this.createRetryCron(key, randomizedCron(1, 'day'), async () => {
-            const rc = new RcloneClient(); // local rclone
-            const sizeResult = await rc.getSize(policy.dataSource);
-            if (!sizeResult.success) throw new Error(`get data size at path ${policy.dataSource} failed.`);
-            const dbResult = await db.update(strategy)
-                .set({ dataSourceSize: sizeResult.result.bytes })
-                .where(eq(strategy.id, policy.id))
-                .returning();
-            if (!dbResult) throw new Error(`update data size at path ${policy.dataSource} failed.`);
-        });
-        const jobRecord = {
-            ...job,
-            cron,
-            key,
-            status: 'active',
-        } as const;
-        this.cronJobMap.set(key, jobRecord);
-        // run data size update immediately
-        void cron.trigger();
-    }
-
-    public async addPolicyScheduleByStrategyId(strategyId: number) {
-        const policy = await getPolicyById(strategyId);
-        if (policy === null) return;
-        this.addPolicySchedule(policy);
-    }
-
-    public addPolicySchedule(policy: Policy) {
-        const targets = policy.targets.sort((a, b) => a.index - b.index);
-        const validateStrategy = updateBackupStrategySchema.parse(policy);
-        switch (validateStrategy.strategyType) {
-            case StrategyType.MULTI_VERSION_BACKUP:
-                void this.scheduleVersioningBackup(
-                    policy,
-                    targets[0]
+    private startRepoCheckCron(job: UpdateRepoScheduleSchema) {
+        return this.startCron(
+            job,
+            async (exec: UpdateExecutionSchema) => {
+                // fetch job with repository
+                const result = await getJobWithRepo(job.id);
+                if (!result) throw new Error(`[Scheduler] can't find job or repo with id ${job.id}`);
+                const {job: refetchJob, repo} = result;
+                const rs = await this.getResticService(repo);
+                if (rs.status !== 'active') throw new Error(`repo ${repo.name} is not active`);
+                const reValidJob = updateRepoScheduleSchema.parse(refetchJob);
+                return await rs.client.check(
+                    exec,
+                    reValidJob.extraConfig?.checkPercentage ?? 0
                 );
-                break;
-            case StrategyType.STRATEGY_321:
-                // local backup, first target
-                void this.scheduleVersioningBackup(
-                    policy,
-                    targets[0]
-                )
-                // remote sync, second target
-                void this.scheduleLocalSyncBackup(
-                    policy,
-                    targets[0],
-                    targets[1]
-                )
-                break;
+            },
+            commandType.check
+        )
+    }
+
+    private startRepoPruneCron(job: UpdateRepoScheduleSchema) {
+        return this.startCron(
+            job,
+            async (exec: UpdateExecutionSchema) => {
+                // fetch job with repository
+                const result = await getJobWithRepo(job.id);
+                if (!result) throw new Error(`[Scheduler] can't find job or repo with id ${job.id}`);
+                const {job: _, repo} = result;
+                const rs = await this.getResticService(repo);
+                if (rs.status !== 'active') throw new Error(`repo ${repo.name} is not active`);
+                return await rs.client.prune(exec);
+            },
+            commandType.prune
+        )
+    }
+
+    private startRepoHeartBeat(job: UpdateRepoScheduleSchema) {
+        return this.startCron(
+            job,
+            async () => {
+                // fetch job with repository
+                const result = await getJobWithRepo(job.id);
+                if (!result) throw new Error(`[Scheduler] can't find job or repo with id ${job.id}`);
+                const {job: _, repo} = result;
+                const rs = await this.getResticService(repo);
+                if (rs.status !== 'active') throw new Error(`repo ${repo.name} is not active`);
+                return await rs.client.heartbeat();
+            },
+        )
+    }
+
+    private startRepoStat(job: UpdateRepoScheduleSchema) {
+        return this.startCron(
+            job,
+            async () => {
+                // fetch job with repository
+                const result = await getJobWithRepo(job.id);
+                if (!result) throw new Error(`[Scheduler] can't find job or repo with id ${job.id}`);
+                const {job: _, repo} = result;
+                const rs = await this.getResticService(repo);
+                if (rs.status !== 'active') throw new Error(`repo ${repo.name} is not active`);
+                return await rs.client.updateRepoStat();
+            }
+        );
+    }
+
+    private startRepoIndex(job: UpdateRepoScheduleSchema) {
+        return this.startCron(
+            job,
+            async () => {
+                // fetch job with repository
+                const result = await getJobWithRepo(job.id);
+                if (!result) throw new Error(`[Scheduler] can't find job or repo with id ${job.id}`);
+                const {job: _, repo} = result;
+                const rs = await this.getResticService(repo);
+                if (rs.status !== 'active') throw new Error(`repo ${repo.name} is not active`);
+                return await rs.client.indexSnapshots();
+            }
+        )
+    }
+
+    public async addPolicySchedule(strategyId: number) {
+        const targetJobResult = await getTargetJob(strategyId);
+        if (targetJobResult) {
+            targetJobResult.jobs.forEach((job: UpdateTargetScheduleSchema) => {
+                switch (job.type) {
+                    case 'backup': void this.scheduleVersioningBackup(job); break;
+                    case 'copy': void this.scheduleLocalSyncBackup(job); break;
+                }
+            })
         }
         // add strategy datasource size update
-        this.addDataSizeUpdate(policy);
+        const strategyJobResult = await getStrategyJob(strategyId);
+        if (!strategyJobResult) return;
+        void this.startPolicyDatasizeCron(strategyJobResult.job);
     }
 
-    private async createTargetJobMeta(strategyId: number, target: Target, type: 'backup' | 'copy') {
-        const targetId = target.id;
-        const job = {
-            category: 'policy-target',
-            type: type,
-            strategyId: strategyId,
-            targetId: targetId,
-            repoId: target.repositoryId
-        } as const;
-        const key = getJobKey(job);
-        // stop previous job
-        const previousJob = this.cronJobMap.get(key);
-        if (previousJob && previousJob.status === 'active') {
-            previousJob.cron.stop();
-        }
-        // stop previous policy-target running task
-        const validRepo = updateRepositorySchema.parse(target.repository);
-        const clientRecord = await this.getResticService(validRepo);
-        if (clientRecord && clientRecord.status === 'active') {
-            await clientRecord.client.stopPolicyJob(targetId);
-        }
-        return {job, key};
+    private async scheduleVersioningBackup(job: UpdateTargetScheduleSchema) {
+        return this.startCron(
+            job,
+            async (exec: UpdateExecutionSchema) => {
+                // fetch job with target
+                const result = await getJobWithTarget(job.id);
+                if (!result) throw new Error(`[Scheduler] can't find job or repo with id ${job.id}`);
+                const {job: _, repo, target, strategy} = result;
+                const rs = await this.getResticService(repo);
+                if (rs.status !== 'active') throw new Error(`repo ${repo.name} is not active`);
+                return await rs.client.backup(exec, strategy.dataSource, target)
+            },
+            commandType.backup
+        )
     }
 
-    private async scheduleVersioningBackup(policy: Policy, target: Target) {
-        const {job, key} = await this.createTargetJobMeta(
-            policy.id,
-            target,
-            'backup'
-        );
-        const cron = this.createRetryCron(key, target.schedulePolicy, async () => {
-            // update target nextRunAt
-            const result = updateTargetNextRunAt(target.id);
-            if (!result) throw new Error(`update target ${target.id} nextRunAt failed `);
-            const validRepo = updateRepositorySchema.parse(result.repository);
-            const clientRecord = await this.getResticService(validRepo);
-            const validTarget = updateBackupTargetSchema.parse(result);
-            if (clientRecord.status !== 'active') throw new Error(`repo ${validRepo.name} is not active`);
-            return await clientRecord.client.backup(result.strategy.dataSource, validTarget);
-        });
-        const jobRecord = {
-            ...job,
-            cron,
-            key,
-            status: 'active',
-        } as const;
-        this.cronJobMap.set(key, jobRecord);
+    private async scheduleLocalSyncBackup(job: UpdateTargetScheduleSchema) {
+        return this.startCron(
+            job,
+            async (exec: UpdateExecutionSchema) => {
+                // fetch job with target
+                const result = await getJobWithTarget(job.id);
+                if (!result) throw new Error(`[Scheduler] can't find job or repo with id ${job.id}`);
+                const {job: refetchJob, repo: remoteRepo, target: remoteTarget, strategy} = result;
+                // get remote restic service
+                const rs = await this.getResticService(remoteRepo);
+                if (rs.status !== 'active') throw new Error(`repo ${remoteRepo.name} is not active`);
+                const srcRepoId = refetchJob.extraConfig?.srcRepoId;
+                if (!srcRepoId) throw new Error(`[Scheduler] copy job ${job.id} missing srcRepoId`);
+                // get src restic service
+                const [localRepo] = await db.select().from(repository).where(eq(repository.id, srcRepoId));
+                if (!localRepo) throw new Error(`[Scheduler] can't find src repo ${srcRepoId}`);
+                const localRs = await this.getResticService(updateRepositorySchema.parse(localRepo));
+                if (localRs.status !== 'active') throw new Error(`repo ${localRepo.name} is not active`);
+                // start copy
+                return await localRs.client.copyTo(exec, strategy.dataSource, rs.client, remoteTarget);
+            },
+            commandType.copy
+        )
     }
 
-    private async scheduleLocalSyncBackup(policy: Policy, local: Target, remote: Target) {
-        const {job, key} = await this.createTargetJobMeta(
-            policy.id,
-            remote,
-            'copy'
-        );
-        const cron = this.createRetryCron(key, remote.schedulePolicy, async () => {
-            // update remote nextRunAt
-            const remoteTargetDbResult = updateTargetNextRunAt(remote.id);
-            if (!remoteTargetDbResult) throw new Error(`update target ${remote.id} nextRunAt failed`);
-            // get local target
-            const localTarget = await db.query.backupTarget.findFirst({
-                where: (backupTarget, { eq }) => eq(backupTarget.id, local.id),
-                with: {
-                    repository: true
+    private startPolicyDatasizeCron(job: UpdateStrategyScheduleSchema) {
+        return this.startCron(
+            job,
+            async () => {
+                // refetch strategy job
+                const result = await getStrategyJob(job.backupStrategyId);
+                if (!result) throw new Error(`[Scheduler] can't find strategy job with id ${job.id}`);
+                const rc = new RcloneClient(); // local rclone
+                const sizeResult = await rc.getSize(result.strategy.dataSource);
+                if (!sizeResult.success) throw new Error(`get data size at path ${result.strategy.dataSource} failed.`);
+                const dbResult = await db.update(strategy)
+                    .set({ dataSourceSize: sizeResult.result.bytes })
+                    .where(eq(strategy.id, result.strategy.id))
+                    .returning();
+                if (!dbResult) throw new Error(`update data size at path ${result.strategy.dataSource} failed.`);
+            }
+        )
+    }
+
+    private async startSystemCron() {
+        const dbResult = await db.select().from(jobSchedules)
+            .where(and(
+                eq(jobSchedules.category, 'system'),
+                ne(jobSchedules.jobStatus, scheduleStatus.PAUSED)
+            ));
+        if (!dbResult?.length) return;
+        updateSystemScheduleSchema.array().parse(dbResult).forEach(job => {
+            switch (job.type) {
+                case 'clean': this.startTmpFolderCleanCron(job); break;
+            }
+        })
+    }
+
+    private startTmpFolderCleanCron(job: UpdateSystemScheduleSchema) {
+        return this.startCron(
+            job,
+            async () => {
+                const [systemSettings] = await db.select().from(setting)
+                    .orderBy(desc(setting.id))
+                    .limit(1);
+                if (!systemSettings) throw new Error(`get system setting failed.`);
+                const errors = await FileManager.clearTmpFolder(systemSettings.logRetentionDays);
+                if (errors.length > 0) {
+                    throw new Error(`clean tmp folder fail.\n` + errors.join('\n'));
+                } else {
+                    logger.debug(`clean tmp folder success.`);
                 }
-            });
-            if (!localTarget) throw new Error(`find local target ${local.id} fail`);
-            const localValidRepo = updateRepositorySchema.parse(localTarget.repository);
-            const localClientRecord = await this.getResticService(localValidRepo);
-            if (localClientRecord.status !== 'active') throw new Error(`repo ${localValidRepo.name} is not active`);
-            // get remote target
-            const remoteValidTarget = updateBackupTargetSchema.parse(remoteTargetDbResult);
-            const remoteValidRepo = updateRepositorySchema.parse(remoteTargetDbResult.repository);
-            const remoteClientRecord = await this.getResticService(remoteValidRepo);
-            if (remoteClientRecord.status !== 'active') throw new Error(`repo ${remoteValidRepo.name} is not active`);
-            // run copy
-            return await localClientRecord.client.copyTo(policy.dataSource, remoteClientRecord.client, remoteValidTarget);
-        });
-        const jobRecord = {
-            ...job,
-            cron,
-            key,
-            status: 'active',
-        } as const;
-        this.cronJobMap.set(key, jobRecord);
+            }
+        )
     }
 
-    private async addTmpFolderCleanSchedule() {
-        const datasizeUpdateSchedule = '13 21 4 * * *';
-        const job = {
-            category: 'system',
-            type: 'clean'
-        } as const;
-        const key = getJobKey(job);
-        // stop previous job
-        const previousJob = this.cronJobMap.get(key);
-        if (previousJob && previousJob.status === 'active') previousJob.cron.stop();
-        const cron = this.createRetryCron(key, datasizeUpdateSchedule, async () => {
-            const [systemSettings] = await db.select().from(setting)
-                .orderBy(desc(setting.id))
-                .limit(1);
-            if (!systemSettings) throw new Error(`get system setting failed.`);
-            const errors = await FileManager.clearTmpFolder(systemSettings.logRetentionDays);
-            if (errors.length > 0) {
-                throw new Error(`clean tmp folder fail.\n` + errors.join('\n'));
-            } else {
-                logger.debug(`clean tmp folder success.`);
-            }});
-        const jobRecord = {
-            ...job,
-            cron,
-            key,
-            status: 'active',
-        } as const;
-        this.cronJobMap.set(key, jobRecord);
-    }
+    private startCron(
+        job: UpdateJobScheduleSchema,
+        taskFn: (execution: UpdateExecutionSchema) => Promise<ExecResult<any> | void>,
+        commandType: CommandType,
+    ): Cron;
 
-    private createRetryCron(jobKey: string, schedule: string, taskFn: () => Promise<ExecResult<any> | void>, {
-        maxRetries = 3, // Corresponds to retryLimit
-        initialDelayMs = 1000,
-        jitterFactor = 0.2
+    private startCron(
+        job: UpdateJobScheduleSchema,
+        taskFn: () => Promise<ExecResult<any> | void>,
+        commandType?: undefined,
+    ): Cron;
+
+    private startCron(
+        job: UpdateJobScheduleSchema,
+        taskFn: (execution?: any) => Promise<ExecResult<any> | void>,
+        commandType?: CommandType,
+        {
+            maxRetries = 3, // Corresponds to retryLimit
+            initialDelayMs = 1000,
+            jitterFactor = 0.2
     } = {}) {
-        return new Cron(schedule, { protect: true }, async (self) => {
-            // if cron already pause or delete, not try to run
-            const jobRecord = this.cronJobMap.get(jobKey);
-            if (!jobRecord) return;
-            if (!self.isRunning() || jobRecord.status !== 'active') return;
+        // stop previous job
+        const previousJob = this.cronJobMap.get(job.id);
+        if (previousJob) {
+            logger.warn(`[Cron] Found existing instance for job ${job.id}. Cleaning up before restart.`);
+            // Stop the cron execution
+            previousJob.cron.stop();
+            // Remove it from the map to ensure a clean slate
+            this.cronJobMap.delete(job.id);
+        }
+        const schedule = job.cron === 'manual' ? this.neverDate : job.cron;
+        // create cron
+        const cron = new Cron(schedule, { protect: true }, async (self) => {
+            // create execution if commandType is set
+            let exec = commandType ? await createExecution(
+                commandType,
+                job.backupTargetId,
+                job.repositoryId
+            ) : undefined;
             // execute with retry
             let lastError: any;
-            let lastMessage: string = `[Cron] job ${jobKey} error`;
+            let lastMessage: string = `[Cron] job ${job.id} error`;
             for (let attempt = 0; attempt <= maxRetries; attempt++) {
                 try {
-                    const execResult = await taskFn();
-                    // exec success then update map as active and return
+                    // update nextRunAt
+                    const nextRunAt = job.cron === this.neverDate ? undefined
+                        : new Cron(job.cron).nextRun()!.getTime();
+                    const [dbResult] = await db.update(jobSchedules)
+                        .set({ nextRunAt: nextRunAt })
+                        .where(eq(jobSchedules.id, job.id))
+                        .returning();
+                    if (!dbResult) throw new Error(`update job ${job.id} nextRunAt db fail`);
+                    const execResult = await taskFn(exec);
+                    // exec success then update lastRunAt return
                     if (!execResult || execResult.status === 'success') {
-
+                        // update lastRunAt, early return
+                        await db.update(jobSchedules).set({ lastRunAt: Date.now() }).where(eq(jobSchedules.id, job.id));
                         return;
                     }
+                    //
                     lastError = execResult.error;
                     lastMessage = execResult.message;
                 } catch (err: any) {
                     // Exception Case: Capture error and move to backoff
                     lastError = err;
                     lastMessage = err.message;
+                    // throwing error considered pre execution error
+                    if (exec) {
+                        await db.update(execution)
+                            .set({ errorMessage: lastMessage, finishedAt: Date.now(), executeStatus: execStatus.REJECT })
+                            .where(eq(execution.id, exec.id))
+                    }
                 }
+                // update lastRunAt, retry or exit
+                await db.update(jobSchedules).set({ lastRunAt: Date.now() }).where(eq(jobSchedules.id, job.id));
                 // Backoff Logic: Only runs if we haven't returned yet
                 if (attempt < maxRetries) {
                     const expDelay = initialDelayMs * Math.pow(2, attempt);
@@ -703,20 +704,17 @@ export class Scheduler {
                     await new Promise(res => setTimeout(res, backoffDelay));
                 } else {
                     // Exhaustion Case: Final attempt failed
-                    logger.error(lastError, `[Cron] Max retries (${maxRetries}) reached. Last error: ${lastError}. Pausing job.`);
-                    // stop cron, and update job record as 'error'
+                    logger.error(lastError, `[Cron] Max retries (${maxRetries}) reached. Last error: ${lastMessage}. Pausing job.`);
+                    // stop cron, and update job schedule as 'error'
                     self.pause();
-                    jobRecord.cron.pause(); // fall back
-                    // update job record
-                    const errorJobRecord: JobRecord = {
-                        ...jobRecord,
-                        status: 'error',
-                        error: lastError,
-                        message: lastMessage
-                    }
-                    this.cronJobMap.set(jobKey, errorJobRecord);
+                    await db.update(jobSchedules)
+                        .set({ jobStatus: scheduleStatus.ERROR })
+                        .where(eq(jobSchedules.id, job.id));
                 }
             }
         });
+        // add cron to map
+        this.cronJobMap.set(job.id, { cron, job });
+        return cron;
     }
 }

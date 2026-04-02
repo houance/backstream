@@ -3,7 +3,7 @@ import type {UseFormReturnType} from "@mantine/form";
 import type {
     CertificateSchema,
     InsertRepositorySchema,
-    RepoType,
+    repoType,
 } from "@backstream/shared";
 import OSSSubform from "./components/OSSSubForm.tsx";
 import SFTPSubform from "./components/SFTPSubform.tsx";
@@ -16,7 +16,7 @@ interface ProviderMeta {
     initSubForm: CertificateSchema
 }
 
-export const PROVIDER_MAP: Record<RepoType, ProviderMeta> = {
+export const PROVIDER_MAP: Record<repoType, ProviderMeta> = {
     ALIYUN_OSS: {
         component: OSSSubform,
         initSubForm: {

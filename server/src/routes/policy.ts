@@ -117,7 +117,7 @@ const policyRoute = new Hono<Env>()
                     finishedAt: exec.scheduledAt,
                     commandType: exec.commandType,
                     fullCommand: exec.fullCommand,
-                    failReason: getExitCodeName(exec.exitCode),
+                    failReason: exec.errorMessage,
                 }))
                 const result = failHistory.array().parse(mappedFailHistory);
                 return c.json({
@@ -161,7 +161,7 @@ const policyRoute = new Hono<Env>()
             })
             await c.var.db.insert(backupTarget).values(targetsValid).returning();
             // scheduler 开始调度
-            void c.var.scheduler.addPolicyScheduleByStrategyId(newStrategy.id);
+            void c.var.scheduler.addPolicySchedule(newStrategy.id);
             return c.json({ message: `success create policy ${newStrategy.name }`}, 200);
         })
     // delete policy

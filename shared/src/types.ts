@@ -1,11 +1,20 @@
 import { z } from "zod";
 import {createInsertSchema, createUpdateSchema} from 'drizzle-zod';
-import {backupTarget, execution, repository, restores, setting, snapshotsMetadata, strategy} from './schema';
+import {
+    backupTarget,
+    execution,
+    jobSchedules,
+    repository,
+    restores,
+    setting,
+    snapshotsMetadata,
+    strategy
+} from './schema';
 
 
 // cron format: sec min hour day month day-of-week
 const cronSecondRegex = /^(?:[0-9*,\/\-]+ ){5}[0-9*,\/\-]+$/;
-export const RepoType = {
+export const repoType = {
     LOCAL: "LOCAL",
     SFTP: "SFTP",
     BACKBLAZE_B2: "BACKBLAZE_B2",
@@ -13,7 +22,13 @@ export const RepoType = {
     S3: "S3",
     AWS_S3: "AWS_S3",
 } as const;
-export type RepoType = typeof RepoType[keyof typeof RepoType];
+export type RepoType = typeof repoType[keyof typeof repoType];
+export const scheduleStatus = {
+    ACTIVE: "ACTIVE",
+    PAUSED: "PAUSED",
+    ERROR: "ERROR",
+} as const;
+export type ScheduleStatus = typeof scheduleStatus[keyof typeof scheduleStatus];
 // Define the specific restic provider schemas
 const sftpSchema = z.object({SSH_AUTH_SOCK: z.string().optional()})
 const s3Schema = z.object({
@@ -44,20 +59,11 @@ export const insertRepositorySchema = createInsertSchema(repository, {
     name: z.string().min(1, 'Name is required'),
     path: z.string().min(1, 'Path is required'),
     password: z.string().min(4, 'Password must be at least 4 characters'),
-    repositoryType: z.enum(Object.values(RepoType)),
-    repositoryStatus: z.enum(['Active', 'Disconnected', 'Corrupt']),
+    repositoryType: z.enum(Object.values(repoType)),
     certification: certificateSchema,
-    checkSchedule: z.string()
-        .min(1, "Check Schedule is required")
-        .regex(cronSecondRegex, 'Invalid cron format (requires 6 fields: s m h D M d)')
-        .or(z.literal("manual")),
-    checkPercentage: z.number()
-        .min(0, "number between 0 ~ 1")
-        .max(1, "number between 0 ~ 1"),
-    pruneSchedule: z.string()
-        .min(1, "Check Schedule is required")
-        .regex(cronSecondRegex, 'Invalid cron format (requires 6 fields: s m h D M d)')
-        .or(z.literal("manual")),
+    linkStatus: z.enum(['UP', 'DOWN']).default('DOWN'),
+    healthStatus: z.enum(['HEALTH', 'CORRUPT', 'INITIALIZING', 'INITIALIZE_FAIL']).default('INITIALIZING'),
+    adminStatus: z.enum(['ACTIVE', 'PAUSED']).default('ACTIVE')
 }).omit({ id: true });
 // Insert Repository
 export type InsertRepositorySchema = z.infer<typeof insertRepositorySchema>
@@ -79,12 +85,14 @@ export const EMPTY_REPOSITORY_SCHEMA: InsertRepositorySchema = {
     name: '',
     path: '',
     password: '',
-    repositoryType: RepoType.LOCAL,
-    repositoryStatus: 'Disconnected',
+    repositoryType: repoType.LOCAL,
     certification: null,
     checkSchedule: "manual",
     checkPercentage: 0.20,
     pruneSchedule: "manual",
+    linkStatus: 'DOWN',
+    healthStatus: 'INITIALIZING',
+    adminStatus: 'ACTIVE'
 }
 // strategy type
 export const StrategyType = {
@@ -132,9 +140,6 @@ export type RetentionPolicy = z.infer<typeof retentionPolicy>
 export const insertBackupTargetSchema = createInsertSchema(backupTarget, {
     backupStrategyId: z.any().transform(() => 0),
     retentionPolicy: retentionPolicy,
-    schedulePolicy: z.string()
-        .min(1, 'Schedule Policy is required')
-        .regex(cronSecondRegex, 'Invalid cron format (requires 6 fields: s m h D M d)'),
     index: z.number().positive(),
     repositoryId: z.coerce.number().min(1, "Please select a value"),
 }).omit({ id: true });
@@ -180,6 +185,7 @@ export const EMPTY_BACKUP_POLICY_SCHEMA: InsertBackupPolicySchema = {
             countValue: "100"
         },
         schedulePolicy: "* * * * * *",
+        scheduleStatus: scheduleStatus.ACTIVE,
         index: 1
     }]
 }
@@ -254,6 +260,7 @@ export type CommandType = typeof commandType[keyof typeof commandType];
 export const execStatus = {
     SUCCESS: "success",
     FAIL: "fail",
+    REJECT: "reject",
     RUNNING: "running",
     PENDING: "pending",
     CANCEL: "cancel",
@@ -348,3 +355,74 @@ export const restoreDataSchema = updateRestoreSchema.safeExtend({
     executions: updateExecutionSchema.array()
 })
 export type RestoreDataSchema = z.infer<typeof restoreDataSchema>;
+// job schedules schema
+const baseInsertJobScheduleSchema = createInsertSchema(jobSchedules, {
+    cron: z.string()
+        .min(1, "Cron expression is required")
+        .regex(cronSecondRegex, 'Invalid cron format (requires 6 fields: s m h D M d)')
+        .or(z.literal("manual")),
+    jobStatus: z.enum(Object.values(scheduleStatus)),
+});
+export const insertRepoScheduleSchema = baseInsertJobScheduleSchema.safeExtend({
+    category: z.literal('repository'),
+    type: z.enum(['check', 'prune', 'stat', 'snapshots', 'heartbeat']),
+    repositoryId: z.number().positive(),
+    extraConfig: z.object({
+        checkPercentage: z.number()
+            .min(0, "number between 0 ~ 1")
+            .max(1, "number between 0 ~ 1"),
+    }).optional(),
+})
+export type InsertRepoScheduleSchema = z.infer<typeof insertRepoScheduleSchema>;
+export const updateRepoScheduleSchema = insertRepoScheduleSchema.safeExtend({
+    id: z.number().positive(),
+});
+export type UpdateRepoScheduleSchema = z.infer<typeof updateRepoScheduleSchema>;
+export const insertTargetScheduleSchema = baseInsertJobScheduleSchema.safeExtend({
+    category: z.literal('target'),
+    type: z.enum(['backup', 'copy']),
+    repositoryId: z.number().positive(),
+    backupStrategyId: z.number().positive(),
+    backupTargetId: z.number().positive(),
+    extraConfig: z.object({
+        srcRepoId: z.number().positive(), // for copy job to look up source repository
+    }).optional(),
+})
+export type insertTargetScheduleSchema = z.infer<typeof insertTargetScheduleSchema>;
+export const updateTargetScheduleSchema = insertTargetScheduleSchema.safeExtend({
+    id: z.number().positive(),
+})
+export type UpdateTargetScheduleSchema = z.infer<typeof updateTargetScheduleSchema>;
+export const insertStrategyScheduleSchema = baseInsertJobScheduleSchema.safeExtend({
+    category: z.literal('strategy'),
+    type: z.literal('datasize'),
+    backupStrategyId: z.number().positive(),
+})
+export type InsertStrategyScheduleSchema = z.infer<typeof insertStrategyScheduleSchema>;
+export const updateStrategyScheduleSchema = insertStrategyScheduleSchema.safeExtend({
+    id: z.number().positive(),
+})
+export type UpdateStrategyScheduleSchema = z.infer<typeof updateStrategyScheduleSchema>;
+export const insertSystemScheduleSchema = baseInsertJobScheduleSchema.safeExtend({
+    category: z.literal('system'),
+    type: z.literal('clean')
+})
+export type InsertSystemScheduleSchema = z.infer<typeof insertSystemScheduleSchema>;
+export const updateSystemScheduleSchema = insertSystemScheduleSchema.safeExtend({
+    id: z.number().positive(),
+})
+export type UpdateSystemScheduleSchema = z.infer<typeof updateSystemScheduleSchema>;
+export const insertJobScheduleSchema = z.discriminatedUnion('category', [
+    insertRepoScheduleSchema,
+    insertTargetScheduleSchema,
+    insertStrategyScheduleSchema,
+    insertSystemScheduleSchema
+]);
+export type InsertJobScheduleSchema = z.infer<typeof insertJobScheduleSchema>;
+export const updateJobScheduleSchema = z.discriminatedUnion('category', [
+    updateRepoScheduleSchema,
+    updateTargetScheduleSchema,
+    updateStrategyScheduleSchema,
+    updateSystemScheduleSchema
+]);
+export type UpdateJobScheduleSchema = z.infer<typeof updateJobScheduleSchema>;
