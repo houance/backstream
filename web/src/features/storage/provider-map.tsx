@@ -2,8 +2,8 @@ import React from "react";
 import type {UseFormReturnType} from "@mantine/form";
 import type {
     CertificateSchema,
-    InsertRepositorySchema,
-    repoType,
+    RepoType,
+    StorageCreateSchema,
 } from "@backstream/shared";
 import OSSSubform from "./components/OSSSubForm.tsx";
 import SFTPSubform from "./components/SFTPSubform.tsx";
@@ -12,11 +12,11 @@ import S3SubForm from "./components/S3SubForm.tsx";
 import LocalSubForm from "./components/LocalSubForm.tsx";
 
 interface ProviderMeta {
-    component: React.FC<{ form: UseFormReturnType<InsertRepositorySchema> }> | null // for local repo type
+    component: React.FC<{ form: UseFormReturnType<StorageCreateSchema> }> // for local repo type
     initSubForm: CertificateSchema
 }
 
-export const PROVIDER_MAP: Record<repoType, ProviderMeta> = {
+export const PROVIDER_MAP: Record<RepoType, ProviderMeta> = {
     ALIYUN_OSS: {
         component: OSSSubform,
         initSubForm: {

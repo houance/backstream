@@ -40,62 +40,6 @@ import {RcloneClient} from "../rclone";
 import {FileManager} from "./file-manager";
 import {logger} from '../log/logger'
 
-/**
- * Generates a randomized cron string (6 fields: s m h d M dw)
- * @param interval The frequency (e.g., every 5 units)
- * @param unit The time unit to apply the interval to
- */
-function randomizedCron(
-    interval: number, unit: 'sec' | 'minute' | 'hour' | 'day' | 'month' | 'year'
-) {
-    const rnd = (max: number) => Math.floor(Math.random() * max);
-    // Default values (0 for small units, * for large units)
-    let s: string = "0";
-    let m: string = "0";
-    let h: string = "0";
-    let d: string = "*";
-    let M: string = "*";
-    const dw: string = "*";
-    switch (unit) {
-        case 'sec':
-            s = `*/${interval}`;
-            m = "*";
-            h = "*";
-            break;
-        case 'minute':
-            s = `${rnd(60)}`; // Randomize second
-            m = `*/${interval}`;
-            h = "*";
-            break;
-        case 'hour':
-            s = `${rnd(60)}`; // Randomize second
-            m = `${rnd(60)}`; // Randomize minute
-            h = `*/${interval}`;
-            break;
-        case 'day':
-            s = `${rnd(60)}`;
-            m = `${rnd(60)}`;
-            h = `${rnd(24)}`; // Randomize hour
-            d = `*/${interval}`;
-            break;
-        case 'month':
-            s = `${rnd(60)}`;
-            m = `${rnd(60)}`;
-            h = `${rnd(24)}`;
-            d = `${1 + rnd(28)}`; // Randomize day (1-28 to be safe)
-            M = `*/${interval}`;
-            break;
-        case 'year':
-            s = `${rnd(60)}`;
-            m = `${rnd(60)}`;
-            h = `${rnd(24)}`;
-            d = `${1 + rnd(28)}`;
-            M = `${1 + rnd(12)}`; // Randomize month (1-12)
-            break;
-    }
-    return `${s} ${m} ${h} ${d} ${M} ${dw}`;
-}
-
 async function createExecution(commandType: CommandType, targetId?: number | null, repoId?: number | null) {
     let value: InsertExecutionSchema = {
         commandType: commandType,

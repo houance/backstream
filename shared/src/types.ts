@@ -80,20 +80,6 @@ export const updateSettingSchema = createUpdateSchema(setting, {
     logRetentionDays: z.number().min(1, 'Keep at least 1 day').max(365, 'Max 1 year'),
 }).safeExtend({ id: z.number() });
 export type UpdateSystemSettingSchema = z.infer<typeof updateSettingSchema>;
-// initial value for all field in repository schema
-export const EMPTY_REPOSITORY_SCHEMA: InsertRepositorySchema = {
-    name: '',
-    path: '',
-    password: '',
-    repositoryType: repoType.LOCAL,
-    certification: null,
-    checkSchedule: "manual",
-    checkPercentage: 0.20,
-    pruneSchedule: "manual",
-    linkStatus: 'DOWN',
-    healthStatus: 'INITIALIZING',
-    adminStatus: 'ACTIVE'
-}
 // strategy type
 export const StrategyType = {
     STRATEGY_321: "STRATEGY_321",
@@ -138,10 +124,9 @@ export const retentionPolicy = z.object({
 export type RetentionPolicy = z.infer<typeof retentionPolicy>
 // backup target schema
 export const insertBackupTargetSchema = createInsertSchema(backupTarget, {
-    backupStrategyId: z.any().transform(() => 0),
-    retentionPolicy: retentionPolicy,
-    index: z.number().positive(),
     repositoryId: z.coerce.number().min(1, "Please select a value"),
+    retentionPolicy: retentionPolicy,
+    index: z.number().positive().min(1),
 }).omit({ id: true });
 export type InsertBackupTargetSchema = z.infer<typeof insertBackupTargetSchema>;
 export const updateBackupTargetSchema = insertBackupTargetSchema.safeExtend({
@@ -162,41 +147,6 @@ export const updateBackupStrategySchema = insertBackupStrategySchema.safeExtend(
     id: z.number().positive(),
 })
 export type UpdateBackupStrategySchema = z.infer<typeof updateBackupStrategySchema>;
-// create backup policy schema
-export const insertBackupPolicySchema = z.object({
-    strategy: insertBackupStrategySchema,
-    targets: z.array(insertBackupTargetSchema)
-})
-export type InsertBackupPolicySchema = z.infer<typeof insertBackupPolicySchema>;
-export const EMPTY_BACKUP_POLICY_SCHEMA: InsertBackupPolicySchema = {
-    strategy: {
-        name: "",
-        hostname: "",
-        dataSource: "/",
-        dataSourceSize: 0,
-        strategyType: StrategyType.MULTI_VERSION_BACKUP
-    },
-    targets: [{
-        backupStrategyId: 0,
-        repositoryId: 0,
-        retentionPolicy: {
-            type: "count",
-            windowType: "last",
-            countValue: "100"
-        },
-        schedulePolicy: "* * * * * *",
-        scheduleStatus: scheduleStatus.ACTIVE,
-        index: 1
-    }]
-}
-export const updateBackupPolicySchema = z.object({
-    strategy: updateBackupStrategySchema,
-    targets: z.array(updateBackupTargetSchema.safeExtend({
-        repository: updateRepositorySchema,
-        lastBackupAt: z.number().min(0).nullable()
-    }))
-})
-export type UpdateBackupPolicySchema = z.infer<typeof updateBackupPolicySchema>;
 // snapshot file type
 export const SnapshotFileType = {
     FILE: 'file',
@@ -388,7 +338,7 @@ export const insertTargetScheduleSchema = baseInsertJobScheduleSchema.safeExtend
         srcRepoId: z.number().positive(), // for copy job to look up source repository
     }).optional(),
 })
-export type insertTargetScheduleSchema = z.infer<typeof insertTargetScheduleSchema>;
+export type InsertTargetScheduleSchema = z.infer<typeof insertTargetScheduleSchema>;
 export const updateTargetScheduleSchema = insertTargetScheduleSchema.safeExtend({
     id: z.number().positive(),
 })

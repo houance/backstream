@@ -5,17 +5,18 @@ import {
     repoType,
     insertRepositorySchema,
     type InsertRepositorySchema,
-    EMPTY_REPOSITORY_SCHEMA, type UpdateRepositorySchema, type RepoType,
+    type UpdateRepositorySchema,
+    type RepoType,
+    type StorageCreateSchema, EMPTY_STORAGE_CREATE_SCHEMA,
 } from '@backstream/shared'
 import {PROVIDER_MAP} from "../provider-map.tsx";
 import MaintainPolicyConfig from "./MaintainPolicyConfig.tsx";
-import { useState } from "react";
 
 interface ModalProps {
     repoList: UpdateRepositorySchema[];
     opened: boolean;
     onClose: () => void;
-    onSubmit: (param: {item: InsertRepositorySchema, exist: boolean, fromRepoId?: number}) => Promise<void> | void;
+    onSubmit: (param: {item: StorageCreateSchema}) => Promise<void> | void;
     onConnect: (param: {item: InsertRepositorySchema, exist: boolean}) => Promise<void> | void;
     isSubmitting: boolean;
     isConnecting: boolean;
@@ -34,26 +35,21 @@ export default function NewStorageLocModal({
                                                isConnecting,
                                                isConnectSuccess,
 }: ModalProps) {
-    // State to track if we are creating or connecting
-    const [mode, setMode] = useState<'create' | 'connect'>('create');
-    // value to track selected repo id
-    const [fromRepoId, setFromRepoId] = useState<string | null>(null);
-
-    const form = useForm<InsertRepositorySchema>({
-        initialValues: EMPTY_REPOSITORY_SCHEMA,
+    const form = useForm<StorageCreateSchema>({
+        initialValues: EMPTY_STORAGE_CREATE_SCHEMA,
         validate: zod4Resolver(insertRepositorySchema),
     });
 
     const handleTypeChange = (newType: string | null) => {
         // 1. Update the top-level repositoryType
         const repositoryType: RepoType = newType === null ? repoType.LOCAL : newType as RepoType;
-        form.setFieldValue('repositoryType', repositoryType);
+        form.setFieldValue('meta.repositoryType', repositoryType);
         const newConfig = PROVIDER_MAP[repositoryType];
-        form.setFieldValue('certification', newConfig.initSubForm);
+        form.setFieldValue('meta.certification', newConfig.initSubForm);
     };
 
     // Dynamically select the component based on repo type
-    const providerMeta = PROVIDER_MAP[form.values.repositoryType];
+    const providerMeta = PROVIDER_MAP[form.values.meta.repositoryType];
 
     return (
         <Modal opened={opened} onClose={onClose} title={title} centered size="xl">
@@ -63,8 +59,7 @@ export default function NewStorageLocModal({
                     <Text size="sm" fw={500}>Mode</Text>
                     <SegmentedControl
                         fullWidth
-                        value={mode}
-                        onChange={(value) => setMode(value as 'create' | 'connect')}
+                        value={form.values.mode}
                         data={[
                             { label: 'Create New', value: 'create' },
                             { label: 'Connect Existing', value: 'connect' },
@@ -73,29 +68,29 @@ export default function NewStorageLocModal({
                 </Stack>
 
                 <form onSubmit={form.onSubmit((values) =>
-                    onSubmit({ item: values, exist: mode === 'connect', fromRepoId: fromRepoId !== null ? Number(fromRepoId) : undefined }))}
+                    onSubmit({ item: values }))}
                 >
                     <Stack>
                         {/* [NEW] Conditional Select for "Create" mode */}
-                        {mode === 'create' && (
+                        {form.values.mode === 'create' && (
                             <Select
                                 label="Initialize From"
-                                placeholder="Select an existing repo to clone config"
+                                clearable
                                 data={repoList.map(repo => ({
                                     label: repo.name,
                                     value: String(repo.id)
                                 }))}
-                                value={fromRepoId}
-                                onChange={setFromRepoId}
-                                clearable
-                                description="Select a repository to copy settings and encryption from"
+                                // Convert form number to string for the UI
+                                value={form.values.fromRepoId ? String(form.values.fromRepoId) : null}
+                                // Convert UI string/null back to number/undefined for the form state
+                                onChange={(val) => form.setFieldValue('fromRepoId', val ? Number(val) : undefined)}
                             />
                         )}
 
                         <Select
                             label="Provider Type"
                             data={Object.values(repoType)}
-                            value={form.values.repositoryType}
+                            value={form.values.meta.repositoryType}
                             onChange={handleTypeChange}
                             withAsterisk
                             allowDeselect={false}
@@ -127,7 +122,7 @@ export default function NewStorageLocModal({
                             <Button
                                 variant="outline"
                                 loading={isConnecting}
-                                onClick={() => onConnect({ item: form.values, exist: mode === 'connect' })}
+                                onClick={() => onConnect({ item: form.values.meta, exist: form.values.mode === 'connect' })}
                             >
                                 Test
                             </Button>

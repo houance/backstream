@@ -1,14 +1,14 @@
-import type {InsertRepositorySchema} from "@backstream/shared";
+import type {StorageCreateSchema} from "@backstream/shared";
 import type {UseFormReturnType} from "@mantine/form";
 import PathSuggestion from "../../../component/PathSuggestion.tsx";
 
-export function LocalSubForm({form}: { form: UseFormReturnType<InsertRepositorySchema> }) {
+export function LocalSubForm({form}: { form: UseFormReturnType<StorageCreateSchema> }) {
     return (
         <PathSuggestion
             label="Path"
             placeholder="/mnt/nas/..."
             required={true}
-            {...form.getInputProps('path')}
+            {...form.getInputProps('meta.path')}
         />
     )
 }

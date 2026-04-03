@@ -3,7 +3,7 @@ import {IconPlus} from '@tabler/icons-react';
 import { notice } from "../../util/notification.tsx";
 import NewStorageLocModal from './components/NewStorageLocModal.tsx';
 import StorageLocTable from "./components/StorageLocTable.tsx";
-import type {InsertRepositorySchema, UpdateRepositorySchema} from "@backstream/shared";
+import type {InsertRepositorySchema, StorageCreateSchema, UpdateRepositorySchema} from "@backstream/shared";
 import {useDisclosure} from "@mantine/hooks";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {client} from "../../api";
@@ -29,17 +29,9 @@ export default function StorageLocPage() {
 
     // --- 3. CREATE/UPDATE MUTATION ---
     const submitMutation = useMutation({
-        mutationFn: async ({ item, exist, fromRepoId }: {item: InsertRepositorySchema | UpdateRepositorySchema, exist: boolean, fromRepoId?: number}) => {
-            if ('id' in item && item.id) {
-                return ensureSuccess(
-                    client.api.storage[':id'].$patch({
-                        param: {id: item.id.toString()},
-                        json: item
-                    })
-                )
-            }
+        mutationFn: async ({ item }: {item: StorageCreateSchema}) => {
             return ensureSuccess(
-                client.api.storage.$post({json: {repo: item, exist: exist, fromRepoId: fromRepoId}})
+                client.api.storage.$post({json: item})
             )
         },
         onSuccess: async () => {

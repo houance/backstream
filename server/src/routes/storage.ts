@@ -14,7 +14,10 @@ import {
     commandType,
     type OnGoingProcess,
     updateExecutionSchema,
-    type UpdateRepositorySchema
+    type UpdateRepositorySchema,
+    storageCreateSchema,
+    type StorageCreateSchema,
+    type InsertRepoScheduleSchema, jobSchedules
 } from '@backstream/shared';
 import {zValidator} from "@hono/zod-validator";
 import {RepositoryClient} from '../service/restic';
@@ -171,43 +174,39 @@ const storageRoute = new Hono<Env>()
     )
     // create repo
     .post('/',
-        zValidator('json', z.object({
-            repo: insertRepositorySchema,
-            exist: z.boolean(),
-            fromRepoId: z.number().optional(),
-        })),
+        zValidator('json', storageCreateSchema),
         async (c) => {
             const validated = c.req.valid('json');
-            // 校验重复 repo
-            const values = validated.repo;
-            const [dbResult] = await c.var.db.select()
+            // validate duplicate repo
+            const repoMeta = validated.meta;
+            const dbResult = await c.var.db.select()
                 .from(repository)
                 .where(and(
-                    eq(repository.path, values.path),
-                    eq(repository.repositoryType, values.repositoryType)
+                    eq(repository.path, repoMeta.path),
+                    eq(repository.repositoryType, repoMeta.repositoryType)
                 ));
-            if (dbResult !== undefined) {
-                return c.json({ error: `duplicate path` }, 400);
+            if (dbResult.length > 0) {
+                return c.json({ error: `duplicate path` }, 409);
             }
-            // 初始化 checkStatus and pruneStatus
-            if (values.checkSchedule !== 'manual') values.checkStatus = scheduleStatus.ACTIVE;
-            if (values.pruneSchedule !== 'manual') values.pruneStatus = scheduleStatus.ACTIVE;
-            // 查找 fromRepo 记录
+            // get fromRepo if provide
             let fromRepo: UpdateRepositorySchema | undefined;
-            if (validated.fromRepoId) {
+            if (validated.mode === 'create' && validated.fromRepoId) {
                 const [fromRepoDb] = await c.var.db.select().from(repository)
                     .where(eq(repository.id, validated.fromRepoId));
                 if (!fromRepoDb) return c.json({ error: `From repo not found` }, 404);
                 fromRepo = updateRepositorySchema.parse(fromRepoDb);
             }
-            // 数据库新增记录
-            const [newRepo] = await c.var.db.insert(repository)
-                .values({ ...values, linkStatus: 'DOWN', healthStatus: 'INITIALIZING', adminStatus: 'ACTIVE' })
-                .returning();
+            // add new repo and schedule
+            let newRepo: UpdateRepositorySchema;
+            try {
+                newRepo = createRepoAndSchedule(c.var.db, validated);
+            } catch (error) {
+                return c.json({ error: `create new repo db fail. error: ${error}` }, 500);
+            }
             // scheduler 创建仓库并开始调度
             const createError = await c.var.scheduler.addResticService(
-                updateRepositorySchema.parse(newRepo),
-                validated.exist,
+                newRepo,
+                validated.mode === 'connect',
                 fromRepo
             );
             if (createError !== undefined) {
@@ -317,6 +316,46 @@ async function getRepoLastMaintTime(db: Env['Variables']['db'], repoId: number) 
     return { checkTime: checkExec?.finishedAt, pruneTime: pruneExec?.finishedAt };
 }
 
+function createRepoAndSchedule(db: Env['Variables']['db'], data: StorageCreateSchema) {
+    return db.transaction(tx => {
+        // create repo
+        const repo = tx.insert(repository)
+            .values({ ...data.meta, linkStatus: 'DOWN', healthStatus: 'INITIALIZING', adminStatus: 'ACTIVE' })
+            .returning()
+            .get();
+        // create all schedule
+        const schedules: InsertRepoScheduleSchema[] = [];
+        schedules.push({ ...data.checkSchedule, repositoryId: repo.id })
+        schedules.push({ ...data.pruneSchedule, repositoryId: repo.id })
+        schedules.push({
+            category: 'repository',
+            type: 'heartbeat',
+            repositoryId: repo.id,
+            cron: randomizedCron(5, 'minute'),
+            jobStatus: 'ACTIVE'
+        })
+        schedules.push({
+            category: 'repository',
+            type: 'stat',
+            repositoryId: repo.id,
+            cron: randomizedCron(12, 'hour'),
+            jobStatus: 'ACTIVE'
+        })
+        schedules.push({
+            category: 'repository',
+            type: 'snapshots',
+            repositoryId: repo.id,
+            cron: randomizedCron(1, 'hour'),
+            jobStatus: 'ACTIVE'
+        })
+        tx.insert(jobSchedules)
+            .values(schedules)
+            .returning()
+            .all();
+        return updateRepositorySchema.parse(repo);
+    })
+}
+
 function getTimeRange(filter: FilterQuery) {
     const start = Math.max(0, filter.startTime ?? 0);
     let end = Date.now();
@@ -346,6 +385,62 @@ async function getLogs(stdout: string, stderr: string): Promise<string[]> {
     } catch (error) {
         return [`Failed to combine logs: ${(error as Error).message}`];
     }
+}
+
+/**
+ * Generates a randomized cron string (6 fields: s m h d M dw)
+ * @param interval The frequency (e.g., every 5 units)
+ * @param unit The time unit to apply the interval to
+ */
+function randomizedCron(
+    interval: number, unit: 'sec' | 'minute' | 'hour' | 'day' | 'month' | 'year'
+) {
+    const rnd = (max: number) => Math.floor(Math.random() * max);
+    // Default values (0 for small units, * for large units)
+    let s: string = "0";
+    let m: string = "0";
+    let h: string = "0";
+    let d: string = "*";
+    let M: string = "*";
+    const dw: string = "*";
+    switch (unit) {
+        case 'sec':
+            s = `*/${interval}`;
+            m = "*";
+            h = "*";
+            break;
+        case 'minute':
+            s = `${rnd(60)}`; // Randomize second
+            m = `*/${interval}`;
+            h = "*";
+            break;
+        case 'hour':
+            s = `${rnd(60)}`; // Randomize second
+            m = `${rnd(60)}`; // Randomize minute
+            h = `*/${interval}`;
+            break;
+        case 'day':
+            s = `${rnd(60)}`;
+            m = `${rnd(60)}`;
+            h = `${rnd(24)}`; // Randomize hour
+            d = `*/${interval}`;
+            break;
+        case 'month':
+            s = `${rnd(60)}`;
+            m = `${rnd(60)}`;
+            h = `${rnd(24)}`;
+            d = `${1 + rnd(28)}`; // Randomize day (1-28 to be safe)
+            M = `*/${interval}`;
+            break;
+        case 'year':
+            s = `${rnd(60)}`;
+            m = `${rnd(60)}`;
+            h = `${rnd(24)}`;
+            d = `${1 + rnd(28)}`;
+            M = `${1 + rnd(12)}`; // Randomize month (1-12)
+            break;
+    }
+    return `${s} ${m} ${h} ${d} ${M} ${dw}`;
 }
 
 export default storageRoute;
