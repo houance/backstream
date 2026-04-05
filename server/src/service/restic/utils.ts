@@ -28,7 +28,6 @@ export function createTempDir(): string {
 export function executeStream(
     command: string,
     logFile: string,
-    errorFile: string,
     signal: AbortSignal,
     options: Options,
     commandPath?: string,
@@ -42,7 +41,7 @@ export function executeStream(
     return execa(args[0], args.slice(1), {
         ...options,
         stdout: [{ file: logFile, append: true}, 'pipe'],
-        stderr: [{ file: errorFile, append: true }, 'pipe'],
+        stderr: [{ file: logFile, append: true }, 'pipe'],
         cancelSignal: signal,
         reject: false,
         buffer: false,

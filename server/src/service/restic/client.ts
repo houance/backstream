@@ -55,7 +55,6 @@ export class RepositoryClient {
         targetClient: RepositoryClient,
         snapshotIds: string[],
         logFie:string,
-        errorFile: string,
         uuid: string,
         signal: AbortSignal,
     ): Task<ResticResult<boolean>> {
@@ -67,7 +66,6 @@ export class RepositoryClient {
         const process = executeStream(
             command,
             logFie,
-            errorFile,
             signal,
             {
                 env: {
@@ -81,7 +79,7 @@ export class RepositoryClient {
             }
         )
         // 更新 progress
-        const progress: Progress = { percentDone: -1 };
+        const progress = null;
         // 2. Process the stream in the background (Immediate Execution)
         (async () => {
             try {
@@ -120,7 +118,6 @@ export class RepositoryClient {
             uuid:  uuid,
             command: command,
             logFile: logFie,
-            errorFile: errorFile,
             result: result,
             getProgress: () => progress,
         }
@@ -129,14 +126,12 @@ export class RepositoryClient {
     public backup(
         path: string,
         logFile: string,
-        errorFile: string,
         uuid: string,
         signal: AbortSignal
     ): Task<ResticResult<SnapshotSummary>> {
         const process = executeStream(
             `restic backup . --skip-if-unchanged --json`,
             logFile,
-            errorFile,
             signal,
             { cwd: path, env: this._env }
         );
@@ -187,7 +182,6 @@ export class RepositoryClient {
             uuid:  uuid,
             command: `restic backup ${path}(set as cwd) --skip-if-unchanged --json`,
             logFile: logFile,
-            errorFile: errorFile,
             result: result,
             getProgress: () => progress,
         }
@@ -199,7 +193,6 @@ export class RepositoryClient {
         node: { name: string, path: string },
         resultPath: string,
         logFile: string,
-        errorFile: string,
         uuid: string,
         signal: AbortSignal
     ): Task<ResticResult<string>> {
@@ -207,7 +200,6 @@ export class RepositoryClient {
         const process = executeStream(
             command,
             logFile,
-            errorFile,
             signal,
             { env: this._env }
         );
@@ -223,7 +215,6 @@ export class RepositoryClient {
             uuid:  uuid,
             command: command,
             logFile: logFile,
-            errorFile: errorFile,
             result: result,
             getProgress: () => progress,
         }
@@ -234,7 +225,6 @@ export class RepositoryClient {
         node: { name: string, path: string },
         dir: string,
         logFile: string,
-        errorFile: string,
         uuid: string,
         signal: AbortSignal
     ): Task<ResticResult<string>> {
@@ -243,7 +233,6 @@ export class RepositoryClient {
         const process = executeStream(
             command,
             logFile,
-            errorFile,
             signal,
             { env: this._env }
         );
@@ -285,7 +274,6 @@ export class RepositoryClient {
             uuid:  uuid,
             command: command,
             logFile: logFile,
-            errorFile: errorFile,
             result: result,
             getProgress: () => progress,
         }
@@ -293,7 +281,6 @@ export class RepositoryClient {
 
     public prune(
         logFile: string,
-        errorFile: string,
         uuid: string,
         signal: AbortSignal
     ): Task<ResticResult<boolean>> {
@@ -303,12 +290,11 @@ export class RepositoryClient {
         const process = executeStream(
             command,
             logFile,
-            errorFile,
             signal,
             { env: this._env }
         );
         // 更新 progress
-        const progress: Progress = { percentDone: -1 };
+        const progress = null;
         // 2. Process the stream in the background (Immediate Execution)
         (async () => {
             try {
@@ -330,7 +316,6 @@ export class RepositoryClient {
             uuid:  uuid,
             command: command,
             logFile: logFile,
-            errorFile: errorFile,
             result: result,
             getProgress: () => progress,
         }
@@ -338,7 +323,6 @@ export class RepositoryClient {
 
     public check(
         logFile: string,
-        errorFile: string,
         percentage:number = 0,
         uuid: string,
         signal: AbortSignal
@@ -349,7 +333,6 @@ export class RepositoryClient {
         const process = executeStream(
             command,
             logFile,
-            errorFile,
             signal,
             { env: this._env }
         );
@@ -384,7 +367,6 @@ export class RepositoryClient {
             uuid:  uuid,
             command: command,
             logFile: logFile,
-            errorFile: errorFile,
             result: result,
             getProgress: () => progress,
         }

@@ -23,6 +23,7 @@ import {zValidator} from "@hono/zod-validator";
 import {RepositoryClient} from '../service/restic';
 import { z } from 'zod';
 import {readFile} from "node:fs/promises";
+import {getLogs, getTimeRange} from "./utils";
 
 
 const storageRoute = new Hono<Env>()
@@ -76,16 +77,16 @@ const storageRoute = new Hono<Env>()
                 // 获取 progress
                 const progress = runningJob.getProgress()
                 // 获取 logs
-                const logs = await getLogs(runningJob.logFile, runningJob.errorFile);
+                const logs = await getLogs(runningJob.logFile);
                 result.push({
                     executionId: exec.id,
                     uuid: exec.uuid,
                     status: 'running',
                     createdAtTimestamp: exec.startedAt || exec.scheduledAt,
                     progress: {
-                        percent: progress.percentDone,
-                        bytesDone: progress.bytesDone,
-                        totalBytes: progress.totalBytes,
+                        percent: progress?.percentDone,
+                        bytesDone: progress?.bytesDone,
+                        totalBytes: progress?.totalBytes,
                         logs: logs
                     },
                     repoName: repo.name,
@@ -151,7 +152,7 @@ const storageRoute = new Hono<Env>()
             .where(eq(execution.id, executionId));
         if (!exec) return c.json({ message: 'Not found' }, 404);
         return c.json({
-            logs: await getLogs(exec.logFile!, exec.errorFile!)
+            logs: await getLogs(exec.logFile)
         })
     })
     // test conn
@@ -380,37 +381,6 @@ function createRepoAndSchedule(db: Env['Variables']['db'], data: StorageCreateSc
             .all();
         return updateRepositorySchema.parse(repo);
     })
-}
-
-function getTimeRange(filter: FilterQuery) {
-    const start = Math.max(0, filter.startTime ?? 0);
-    let end = Date.now();
-    if (filter.endTime !== undefined && filter.endTime !== 0) {
-        end = filter.endTime;
-    }
-    return { start, end };
-}
-
-async function getLogs(stdout: string, stderr: string): Promise<string[]> {
-    try {
-        // Read both files concurrently to save time
-        const [stdoutRaw, stderrRaw] = await Promise.all([
-            readFile(stdout, 'utf-8'),
-            readFile(stderr, 'utf-8')
-        ]);
-
-        // Split by newline (handles \n and \r\n)
-        const stdoutLines = stdoutRaw.split(/\r?\n/);
-        const stderrLines = stderrRaw.split(/\r?\n/);
-
-        // Remove the trailing empty line often left by loggers at the end of a file
-        const cleanStdout = stdoutLines.filter((line, i) => line !== "" || i !== stdoutLines.length - 1);
-        const cleanStderr = stderrLines.filter((line, i) => line !== "" || i !== stderrLines.length - 1);
-
-        return [...cleanStdout, ...cleanStderr];
-    } catch (error) {
-        return [`Failed to combine logs: ${(error as Error).message}`];
-    }
 }
 
 /**

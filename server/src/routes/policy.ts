@@ -22,6 +22,7 @@ import {and, count, desc, eq, gte, inArray, lte} from "drizzle-orm";
 import * as os from 'os';
 import {readFile} from "node:fs/promises";
 import z from 'zod';
+import {getLogs, getTimeRange} from "./utils";
 
 const policyRoute = new Hono<Env>()
     .get('/all-policy', async (c) => {
@@ -65,16 +66,16 @@ const policyRoute = new Hono<Env>()
                 // 获取 progress
                 const progress = runningJob.getProgress()
                 // 获取 logs
-                const logs = await getLogs(runningJob.logFile, runningJob.errorFile);
+                const logs = await getLogs(runningJob.logFile);
                 result.push({
                     executionId: exec.id,
                     uuid: exec.uuid,
                     status: 'running',
                     createdAtTimestamp: exec.startedAt || exec.scheduledAt,
                     progress: {
-                        percent: progress.percentDone,
-                        bytesDone: progress.bytesDone,
-                        totalBytes: progress.totalBytes,
+                        percent: progress?.percentDone,
+                        bytesDone: progress?.bytesDone,
+                        totalBytes: progress?.totalBytes,
                         logs: logs
                     },
                     repoName: repo.name,
@@ -133,16 +134,6 @@ const policyRoute = new Hono<Env>()
                     count: totalCount[0].count,
                 });
             }
-    })
-    // get fail log by execution id
-    .get('/fail-history-log/:id', async (c) => {
-        const executionId = Number(c.req.param('id'));
-        const [exec] = await c.var.db.select().from(execution)
-            .where(eq(execution.id, executionId));
-        if (!exec) return c.json({ message: 'Not found' }, 404);
-        return c.json({
-            logs: await getLogs(exec.logFile!, exec.errorFile!)
-        })
     })
     // create policy
     .post('/',
@@ -322,37 +313,6 @@ function randomizedCron(interval: number, unit: 'sec' | 'minute' | 'hour' | 'day
     };
 
     return patterns[unit].join(' ');
-}
-
-async function getLogs(stdout: string, stderr: string): Promise<string[]> {
-    try {
-        // Read both files concurrently to save time
-        const [stdoutRaw, stderrRaw] = await Promise.all([
-            readFile(stdout, 'utf-8'),
-            readFile(stderr, 'utf-8')
-        ]);
-
-        // Split by newline (handles \n and \r\n)
-        const stdoutLines = stdoutRaw.split(/\r?\n/);
-        const stderrLines = stderrRaw.split(/\r?\n/);
-
-        // Remove the trailing empty line often left by loggers at the end of a file
-        const cleanStdout = stdoutLines.filter((line, i) => line !== "" || i !== stdoutLines.length - 1);
-        const cleanStderr = stderrLines.filter((line, i) => line !== "" || i !== stderrLines.length - 1);
-
-        return [...cleanStdout, ...cleanStderr];
-    } catch (error) {
-        return [`Failed to combine logs: ${(error as Error).message}`];
-    }
-}
-
-function getTimeRange(filter: FilterQuery) {
-    const start = Math.max(0, filter.startTime ?? 0);
-    let end = Date.now();
-    if (filter.endTime !== undefined && filter.endTime !== 0) {
-        end = filter.endTime;
-    }
-    return { start, end };
 }
 
 export default policyRoute;

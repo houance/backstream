@@ -14,6 +14,7 @@ import path from "node:path";
 import { stream } from 'hono/streaming'
 import {open, readFile} from "node:fs/promises";
 import {FileManager} from "../service/backup-manager/file-manager";
+import {getLogs, getTimeRange} from "./utils";
 
 const restoreRoute = new Hono<Env>()
     .post('/all-restores',
@@ -70,10 +71,10 @@ const restoreRoute = new Hono<Env>()
     .get('/restore-log/:id', async (c) => {
         const restoreId = Number(c.req.param('id'))
         const restoreData = await getRestoreData(c.var.db, restoreId);
-        if (!restoreData || !restoreData.executions || restoreData.executions.length === 0) return c.json({ message: 'Not found'}, 404);
+        if (!restoreData?.executions?.length) return c.json({ message: 'Not found'}, 404);
         if (restoreData.executions[0].executeStatus === 'pending') return c.json([]);
         const exec = restoreData.executions[0];
-        const logs = await getLogs(exec.logFile!, exec.errorFile!);
+        const logs = await getLogs(exec.logFile);
         return c.json(logs);
     })
     .on(['GET', 'HEAD'], '/download-restore-file', async (c) => {
@@ -181,37 +182,6 @@ async function getRestoreData(db: Env['Variables']['db'], id: number) {
         }
     })
     return result ?? null;
-}
-
-async function getLogs(stdout: string, stderr: string): Promise<string[]> {
-    try {
-        // Read both files concurrently to save time
-        const [stdoutRaw, stderrRaw] = await Promise.all([
-            readFile(stdout, 'utf-8'),
-            readFile(stderr, 'utf-8')
-        ]);
-
-        // Split by newline (handles \n and \r\n)
-        const stdoutLines = stdoutRaw.split(/\r?\n/);
-        const stderrLines = stderrRaw.split(/\r?\n/);
-
-        // Remove the trailing empty line often left by loggers at the end of a file
-        const cleanStdout = stdoutLines.filter((line, i) => line !== "" || i !== stdoutLines.length - 1);
-        const cleanStderr = stderrLines.filter((line, i) => line !== "" || i !== stderrLines.length - 1);
-
-        return [...cleanStdout, ...cleanStderr];
-    } catch (error) {
-        return [`Failed to combine logs: ${(error as Error).message}`];
-    }
-}
-
-function getTimeRange(filter: FilterQuery) {
-    const start = Math.max(0, filter.startTime ?? 0);
-    let end = Date.now();
-    if (filter.endTime !== undefined && filter.endTime !== 0) {
-        end = filter.endTime;
-    }
-    return { start, end };
 }
 
 export default restoreRoute;

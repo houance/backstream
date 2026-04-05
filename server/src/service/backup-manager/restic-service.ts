@@ -22,7 +22,7 @@ import {
     RepositoryClient,
     ResticError,
     type ResticResult, type Snapshot,
-    type Task
+    type Task, type Node
 } from "../restic";
 import PQueue from "p-queue";
 import {db} from "../db";
@@ -241,7 +241,7 @@ export class ResticService {
         }
     }
 
-    public async getSnapshotFiles(snapshot: UpdateSnapshotsMetadataSchema) {
+    public async getSnapshotFiles(snapshot: UpdateSnapshotsMetadataSchema): Promise<ExecResult<Node[]>> {
         if (this.repo.healthStatus !== 'HEALTH') return systemFail(new Error(`repo is ${this.repo.healthStatus}`));
         return await this.retryOnLock(
             () => this.repoClient.getSnapshotFilesByPath(snapshot.snapshotId),
@@ -266,13 +266,12 @@ export class ResticService {
                 serverPath = fileFullPath;
                 restoreResult = await this.startJob(
                     newExecution,
-                    (log, err, signal) =>
+                    (log, signal) =>
                         this.repoClient.restoreFolder(
                             file.snapshotId,
                             {name: file.name, path: file.path},
                             fileFullPath,
                             log,
-                            err,
                             newExecution.uuid,
                             signal
                         ),
@@ -283,13 +282,12 @@ export class ResticService {
                 serverPath = path.join(dir, file.name);
                 restoreResult = await this.startJob(
                     newExecution,
-                    (log, err, signal) =>
+                    (log, signal) =>
                         this.repoClient.restoreFile(
                             file.snapshotId,
                             {name: file.name, path: file.path},
                             dir,
                             log,
-                            err,
                             newExecution.uuid,
                             signal
                         ),
@@ -333,12 +331,11 @@ export class ResticService {
         // run copy
         const copyResult = await this.startJob(
             execution,
-            (log, err, signal) =>
+            (log, signal) =>
                 this.repoClient.copyTo(
                     targetService.repoClient,
                     keepSnapshotIds,
                     log,
-                    err,
                     execution.uuid,
                     signal
                 )
@@ -367,8 +364,8 @@ export class ResticService {
         // add to queue
         const backupResult = await this.startJob(
             execution,
-            (log, err, signal) =>
-                this.repoClient.backup(path, log, err, execution.uuid, signal),
+            (log, signal) =>
+                this.repoClient.backup(path, log, execution.uuid, signal),
             false
         )
         if (backupResult.status !== 'success') return backupResult;
@@ -492,8 +489,8 @@ export class ResticService {
         // add to queue
         const execResult = await this.startJob(
             execution,
-            (log, err, signal) =>
-                this.repoClient.check(log, err, percentage *  100, execution.uuid, signal),
+            (log, signal) =>
+                this.repoClient.check(log, percentage *  100, execution.uuid, signal),
         )
         if (execResult.status === 'system_error') return execResult;
         if (execResult.status === 'restic_error') {
@@ -527,8 +524,8 @@ export class ResticService {
         // add to queue
         const execResult = await this.startJob(
             execution,
-            (log, err, signal) =>
-                this.repoClient.prune(log, err, execution.uuid, signal)
+            (log, signal) =>
+                this.repoClient.prune(log, execution.uuid, signal)
         )
         if (execResult.status !== 'success') return execResult;
         logger.debug(`prune repo ${this.repo.name} success`)
@@ -536,7 +533,7 @@ export class ResticService {
 
     private async startJob<T> (
         newExecution: UpdateExecutionSchema,
-        job: (log: string, err: string, signal: AbortSignal) => Task<ResticResult<T>>,
+        job: (log: string, signal: AbortSignal) => Task<ResticResult<T>>,
         isExclusive: boolean = true,
         lockRemote?: () => Promise<() => void>,
     ): Promise<ExecResult<T>> {
@@ -551,8 +548,8 @@ export class ResticService {
                 const r2 = lockRemote ? await lockRemote() : undefined;
                 try {
                     // create log file and start
-                    const { logFile, errorFile } = await FileManager.createLogFile();
-                    const task = job(logFile, errorFile, signal)
+                    const logFile = await FileManager.createLogFile();
+                    const task = job(logFile, signal)
                     this.taskMap.set(newExecution.id, {
                         status: 'running',
                         controller: controller,
@@ -646,7 +643,6 @@ export class ResticService {
     private async runningExecution(exec: UpdateExecutionSchema, task: Task<any>) {
         await db.update(execution).set({
             logFile: task.logFile,
-            errorFile: task.errorFile,
             fullCommand: task.command,
             startedAt: Date.now(),
             executeStatus: execStatus.RUNNING,
@@ -717,14 +713,14 @@ export type ExecResult<T> = {
         | { status: 'restic_error', error: ResticError, message: string, errorOutput?: T } // flat result list
     );
 
-function success<T>(result: T, rawResult: Result, attempts?: number): ExecResult<T> {
-    return { attempts, status: 'success', data: result, rawResult };
+function success<T>(data: T, rawResult: Result, attempts?: number): ExecResult<T> {
+    return { status: 'success', data: data, rawResult, attempts };
 }
 
 function systemFail<T>(error: Error, attempts?: number): ExecResult<T> {
-    return { attempts, status: 'system_error', error: error, message: error.message };
+    return { status: 'system_error', error: error, message: error.message, attempts };
 }
 
 function resticFail<T>(resticError: ResticError, errorOutput?: T, attempts?: number): ExecResult<T> {
-    return { attempts, status: 'restic_error', error: resticError, message: resticError.toString(), errorOutput };
+    return { status: 'restic_error', error: resticError, message: resticError.toString(), errorOutput, attempts };
 }

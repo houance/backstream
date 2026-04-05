@@ -13,6 +13,7 @@ import {
 import {zValidator} from "@hono/zod-validator";
 import {and, eq, gte, lte, count} from "drizzle-orm";
 import { z } from "zod";
+import {getTimeRange} from "./utils";
 
 
 const snapshotsRoute = new Hono<Env>()
@@ -84,12 +85,12 @@ const snapshotsRoute = new Hono<Env>()
             // 查询 restic
             const clientRecord = await c.var.scheduler.getResticService(updateRepositorySchema.parse(repo));
             if (clientRecord.status !== 'active') return c.json({ error: `repo ${repo.name} is not active`}, 500);
-            const result = await clientRecord.client.getSnapshotFiles(
+            const execResult = await clientRecord.client.getSnapshotFiles(
                 updateSnapshotsMetadataSchema.parse(snapshot)
             );
-            if (result.status !== 'success') return c.json({ error: result.message }, 500);
-            if (result.data.length === 0) return c.json([]);
-            return c.json(result.data.map(node => snapshotFile.parse({
+            if (execResult.status !== 'success') return c.json({ error: execResult.message }, 500);
+            if (execResult.data?.length) return c.json([]);
+            return c.json(execResult.data.map(node => snapshotFile.parse({
                 snapshotId: snapshot.snapshotId,
                 repoId: repo.id,
                 name: node.name,
@@ -119,15 +120,6 @@ async function getPolicyByTargetId(db: Env['Variables']['db'], targetId: number)
             },
         },
     });
-}
-
-function getTimeRange(filter: FilterQuery) {
-    const start = Math.max(0, filter.startTime ?? 0);
-    let end = Date.now();
-    if (filter.endTime !== undefined && filter.endTime !== 0) {
-        end = filter.endTime;
-    }
-    return { start, end };
 }
 
 export default snapshotsRoute;

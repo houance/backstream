@@ -1,11 +1,12 @@
 import { Hono } from 'hono';
-import {type Activity, repository, sameDriveRepoRequest, updateRepositorySchema} from "@backstream/shared";
+import {type Activity, execution, repository, sameDriveRepoRequest, updateRepositorySchema} from "@backstream/shared";
 import {type Env} from '../index'
 import path from "node:path";
 import { promises as fs } from 'fs'
 import {FileManager} from "../service/backup-manager/file-manager";
 import {zValidator} from "@hono/zod-validator";
-import {inArray} from "drizzle-orm";
+import {eq, inArray} from "drizzle-orm";
+import {getLogs} from "./utils";
 
 const infoRoute = new Hono<Env>()
     .get('/health', (c) => c.json({ message:'OK'}))
@@ -105,6 +106,16 @@ const infoRoute = new Hono<Env>()
                 if (await FileManager.isSameDrive(validated.dataSource, repoValid.path)) result.push(repo.id)
             }
             return c.json(result);
+    })
+    // get fail log by execution id
+    .get('/fail-history-log/:id', async (c) => {
+        const executionId = Number(c.req.param('id'));
+        const [exec] = await c.var.db.select().from(execution)
+            .where(eq(execution.id, executionId));
+        if (!exec) return c.json({ message: 'Not found' }, 404);
+        return c.json({
+            logs: await getLogs(exec.logFile)
+        })
     })
 
 async function getExecutionsData(db: Env['Variables']['db']) {

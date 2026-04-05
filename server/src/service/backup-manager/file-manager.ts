@@ -26,14 +26,9 @@ export class FileManager {
         const logFolder = await FileManager.createTmpFolder();
         // 3. Create Files
         const logFile = path.join(logFolder, `stdout.log`);
-        const errorFile = path.join(logFolder, `stderr.log`);
         await writeFile(logFile, '');
-        await writeFile(errorFile, '');
 
-        return {
-            logFile,
-            errorFile,
-        };
+        return logFile
     }
 
     // join zip path from tmp folder, no create

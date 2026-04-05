@@ -137,9 +137,8 @@ export interface Task<T> {
     uuid: string;
     command: string;
     logFile: string;
-    errorFile: string;
     result: Promise<T>;
-    getProgress: () => Progress;
+    getProgress: () => Progress | null;
 }
 
 export interface ForgetGroup {

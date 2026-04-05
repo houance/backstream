@@ -100,7 +100,6 @@ export const execution = sqliteTable("execution_table", {
     id: integer("execution_id").primaryKey({ autoIncrement: true }),
     uuid: text("uuid").notNull(),
     logFile: text("log_file"),
-    errorFile: text("error_file"),
     commandType: text("command_type").notNull(),
     fullCommand: text("full_command"),
     exitCode: integer("exit_code"),
