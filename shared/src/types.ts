@@ -321,7 +321,7 @@ export const insertRepoScheduleSchema = baseInsertJobScheduleSchema.safeExtend({
         checkPercentage: z.number()
             .min(0, "number between 0 ~ 1")
             .max(1, "number between 0 ~ 1"),
-    }).optional(),
+    }).nullish(),
 })
 export type InsertRepoScheduleSchema = z.infer<typeof insertRepoScheduleSchema>;
 export const updateRepoScheduleSchema = insertRepoScheduleSchema.safeExtend({
@@ -336,7 +336,7 @@ export const insertTargetScheduleSchema = baseInsertJobScheduleSchema.safeExtend
     backupTargetId: z.number().positive(),
     extraConfig: z.object({
         srcRepoId: z.number().positive(), // for copy job to look up source repository
-    }).optional(),
+    }).nullish(),
 })
 export type InsertTargetScheduleSchema = z.infer<typeof insertTargetScheduleSchema>;
 export const updateTargetScheduleSchema = insertTargetScheduleSchema.safeExtend({

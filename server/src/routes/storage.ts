@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import {and, count, desc, eq, getTableColumns, gte, lte, sql} from 'drizzle-orm';
+import {and, count, desc, eq, getTableColumns, gte, lte, sql, or} from 'drizzle-orm';
 import {type Env} from '../index'
 import {
     updateRepositorySchema,
@@ -17,7 +17,7 @@ import {
     type UpdateRepositorySchema,
     storageCreateSchema,
     type StorageCreateSchema,
-    type InsertRepoScheduleSchema, jobSchedules
+    type InsertRepoScheduleSchema, jobSchedules, type UpdateRepoScheduleSchema, updateRepoScheduleSchema
 } from '@backstream/shared';
 import {zValidator} from "@hono/zod-validator";
 import {RepositoryClient} from '../service/restic';
@@ -36,15 +36,20 @@ const storageRoute = new Hono<Env>()
     })
     .get('/storage-detail/:id', async (c) => {
         const storageId = Number(c.req.param('id'));
-        const [repoData] = await getRepoData(c.var.db, storageId);
-        if (!repoData) return c.json({ message: 'Not found'}, 404);
-        const { checkTime, pruneTime } = await getRepoLastMaintTime(c.var.db, storageId);
+        const [[repoWithSnapStat], schedules, lastMaintTime] = await Promise.all([
+            getRepoWithSnapStat(c.var.db, storageId),
+            getRepoSchedule(c.var.db, storageId),
+            getRepoLastMaintTime(c.var.db, storageId)
+        ]);
+        if (!repoWithSnapStat || !schedules) return c.json({ error: 'Not found' }, 404);
         return c.json({
-            repo: updateRepositorySchema.parse(repoData),
-            snapshotCount: repoData.snapshotCount,
-            snapshotSize: repoData.snapshotSize,
-            lastCheckTimestamp: checkTime,
-            lastPruneTimestamp: pruneTime
+            repo: updateRepositorySchema.parse(repoWithSnapStat),
+            snapshotCount: repoWithSnapStat.snapshotCount,
+            snapshotSize: repoWithSnapStat.snapshotSize,
+            checkJob: schedules.checkJob,
+            pruneJob: schedules.pruneJob,
+            lastCheckTimestamp: lastMaintTime.checkTime,
+            lastPruneTimestamp: lastMaintTime.pruneTime
         });
     })
     .get('/process/:id', async (c) => {
@@ -276,7 +281,7 @@ async function getRepoProcess(db: Env['Variables']['db'], repoId: number) {
     return null;
 }
 
-async function getRepoData(db: Env['Variables']['db'], repoId: number) {
+async function getRepoWithSnapStat(db: Env['Variables']['db'], repoId: number) {
     return db
         .select({
             // Spreads all columns from the repository table automatically
@@ -292,6 +297,27 @@ async function getRepoData(db: Env['Variables']['db'], repoId: number) {
         )
         .where(eq(repository.id, repoId))
         .groupBy(repository.id);
+}
+
+async function getRepoSchedule(db: Env['Variables']['db'], repoId: number) {
+    const result = await db.select().from(jobSchedules)
+        .where(and(
+            eq(jobSchedules.repositoryId, repoId),
+            eq(jobSchedules.category, 'repository'),
+            or(
+                eq(jobSchedules.type, 'check'),
+                eq(jobSchedules.type, 'prune')
+            )
+        ));
+    if (!result?.length) return null;
+    const validated = updateRepoScheduleSchema.array().parse(result);
+    const checkJob = validated.find(j => j.type === 'check');
+    const pruneJob = validated.find(j => j.type === 'prune');
+    // Using a "guard" to ensure both exist and satisfy the return type
+    if (checkJob?.type === 'check' && pruneJob?.type === 'prune') {
+        return { checkJob, pruneJob };
+    }
+    return null;
 }
 
 async function getRepoLastMaintTime(db: Env['Variables']['db'], repoId: number) {
@@ -392,55 +418,24 @@ async function getLogs(stdout: string, stderr: string): Promise<string[]> {
  * @param interval The frequency (e.g., every 5 units)
  * @param unit The time unit to apply the interval to
  */
-function randomizedCron(
-    interval: number, unit: 'sec' | 'minute' | 'hour' | 'day' | 'month' | 'year'
-) {
+function randomizedCron(interval: number, unit: 'sec' | 'minute' | 'hour' | 'day' | 'month' | 'year') {
     const rnd = (max: number) => Math.floor(Math.random() * max);
-    // Default values (0 for small units, * for large units)
-    let s: string = "0";
-    let m: string = "0";
-    let h: string = "0";
-    let d: string = "*";
-    let M: string = "*";
-    const dw: string = "*";
-    switch (unit) {
-        case 'sec':
-            s = `*/${interval}`;
-            m = "*";
-            h = "*";
-            break;
-        case 'minute':
-            s = `${rnd(60)}`; // Randomize second
-            m = `*/${interval}`;
-            h = "*";
-            break;
-        case 'hour':
-            s = `${rnd(60)}`; // Randomize second
-            m = `${rnd(60)}`; // Randomize minute
-            h = `*/${interval}`;
-            break;
-        case 'day':
-            s = `${rnd(60)}`;
-            m = `${rnd(60)}`;
-            h = `${rnd(24)}`; // Randomize hour
-            d = `*/${interval}`;
-            break;
-        case 'month':
-            s = `${rnd(60)}`;
-            m = `${rnd(60)}`;
-            h = `${rnd(24)}`;
-            d = `${1 + rnd(28)}`; // Randomize day (1-28 to be safe)
-            M = `*/${interval}`;
-            break;
-        case 'year':
-            s = `${rnd(60)}`;
-            m = `${rnd(60)}`;
-            h = `${rnd(24)}`;
-            d = `${1 + rnd(28)}`;
-            M = `${1 + rnd(12)}`; // Randomize month (1-12)
-            break;
-    }
-    return `${s} ${m} ${h} ${d} ${M} ${dw}`;
+
+    // Define randomized static values
+    const [s, m, h, d, M] = [rnd(60), rnd(60), rnd(24), 1 + rnd(28), 1 + rnd(12)];
+
+    // Map each unit to its 6-field pattern [s, m, h, d, M, dw]
+    const patterns: Record<typeof unit, string[]> = {
+        sec:    [`*/${interval}`, '*', '*', '*', '*', '*'],
+        minute: [`${s}`, `*/${interval}`, '*', '*', '*', '*'],
+        hour:   [`${s}`, `${m}`, `*/${interval}`, '*', '*', '*'],
+        day:    [`${s}`, `${m}`, `${h}`, `*/${interval}`, '*', '*'],
+        month:  [`${s}`, `${m}`, `${h}`, `${d}`, `*/${interval}`, '*'],
+        year:   [`${s}`, `${m}`, `${h}`, `${d}`, `${M}`, '*'] // Runs once per year
+    };
+
+    return patterns[unit].join(' ');
 }
+
 
 export default storageRoute;
