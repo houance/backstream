@@ -3,7 +3,7 @@ import {Grid, Container, Stack, Center, Loader, Group, TextInput, Title} from '@
 import { useNavigate } from 'react-router-dom';
 import {keepPreviousData, useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 
-import { BackupPolicyCard } from "./components/BackupPolicyCard.tsx";
+import { PolicyCard } from "./components/PolicyCard.tsx";
 import { StatsCardGroup } from "./components/StatsCardGroup.tsx";
 import { RecentActivityCard } from "./components/RecentActivityCard.tsx";
 import type { UpdateBackupPolicySchema } from '@backstream/shared';
@@ -112,7 +112,7 @@ export function OverviewPage()  {
                                 {/* 6. Map through filteredPolicies instead of policy */}
                                 {filteredPolicies.map((policy: UpdateBackupPolicySchema) => (
                                     <Grid.Col key={policy.strategy.id} span={{ sm: 4 }}>
-                                        <BackupPolicyCard
+                                        <PolicyCard
                                             policy={policy}
                                             onDetail={() => navigate(`/policy/${policy.strategy.id}`)}
                                             onDelete={(p) => mutate.mutate(p)}

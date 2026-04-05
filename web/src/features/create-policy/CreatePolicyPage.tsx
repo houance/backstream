@@ -18,7 +18,7 @@ import {
 } from '@mantine/core';
 import { STRATEGY_MAP } from './strategy-map.tsx'
 import {
-    EMPTY_BACKUP_POLICY_SCHEMA,
+    EMPTY_POLICY_CREATE_SCHEMA,
     insertBackupPolicySchema,
     type InsertBackupPolicySchema,
     type StrategyType,
@@ -43,7 +43,7 @@ import PathSuggestion from "../../component/PathSuggestion.tsx";
 
 export function CreatePolicyPage() {
     const form = useForm<InsertBackupPolicySchema>({
-        initialValues: EMPTY_BACKUP_POLICY_SCHEMA,
+        initialValues: EMPTY_POLICY_CREATE_SCHEMA,
         validate: zod4Resolver(insertBackupPolicySchema)
     });
     const [active, setActive] = useState(0);
@@ -240,7 +240,7 @@ export function CreatePolicyPage() {
                                                         <IconServer size={16} color="var(--mantine-color-blue-filled)" />
                                                         <div>
                                                             <Text size="xs" c="dimmed" fw={700}>REPOSITORY NAME</Text>
-                                                            <Text fw={600}>{getRepoNameById(target.repositoryId)}</Text>
+                                                            <Text fw={600}>{getRepoNameById(target.meta.repositoryId)}</Text>
                                                         </div>
                                                     </Group>
                                                 </Grid.Col>
@@ -251,7 +251,7 @@ export function CreatePolicyPage() {
                                                         <IconShieldCheck size={16} color="var(--mantine-color-green-filled)" />
                                                         <div>
                                                             <Text size="xs" c="dimmed" fw={700}>RETENTION</Text>
-                                                            <Text size="sm">Keep {target.retentionPolicy.countValue} ({target.retentionPolicy.type})</Text>
+                                                            <Text size="sm">Keep {target.meta.retentionPolicy.countValue} ({target.meta.retentionPolicy.type})</Text>
                                                         </div>
                                                     </Group>
                                                 </Grid.Col>
@@ -262,7 +262,7 @@ export function CreatePolicyPage() {
                                                         <IconClock size={16} color="var(--mantine-color-orange-filled)" />
                                                         <div>
                                                             <Text size="xs" c="dimmed" fw={700}>SCHEDULE</Text>
-                                                            <Text size="sm">  {target.schedulePolicy} </Text>
+                                                            <Text size="sm">  {target.schedule.cron} </Text>
                                                         </div>
                                                     </Group>
                                                 </Grid.Col>

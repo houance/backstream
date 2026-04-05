@@ -1,6 +1,6 @@
 import {Badge, Group, Paper, SimpleGrid, Stack, Text} from "@mantine/core";
 import type {ReactNode} from "react";
-import type {UpdateRepositorySchema} from "@backstream/shared";
+import type {UpdateRepoScheduleSchema, UpdateRepositorySchema} from "@backstream/shared";
 import {calPercentage, formatBytes, formatTimestamp} from "../../../util/format.ts";
 
 export function OverviewTab({ storage }: {
@@ -8,6 +8,8 @@ export function OverviewTab({ storage }: {
         repo: UpdateRepositorySchema,
         snapshotCount: number,
         snapshotSize: number,
+        checkJob: UpdateRepoScheduleSchema,
+        pruneJob: UpdateRepoScheduleSchema,
         lastCheckTimestamp: number | null,
         lastPruneTimestamp: number | null,
     }
@@ -15,10 +17,14 @@ export function OverviewTab({ storage }: {
 
     const repo = storage.repo;
 
-    const statusColor =
-        repo.repositoryStatus === 'Active' ? 'green' :
-            repo.repositoryStatus === 'Disconnected' ? 'yellow' :
-                repo.repositoryStatus === 'Corrupt' ? 'red' : 'gray';
+    // Map status to specific Mantine colors
+    const getStatusUI = () => {
+        if (repo.linkStatus === 'UP' && repo.healthStatus === 'HEALTH') return { label: 'HEALTH', color: 'green' };
+        if (repo.linkStatus === 'UP' && repo.healthStatus === 'INITIALIZING') return { label: 'INITIALIZING', color: 'yellow' };
+        const label = repo.linkStatus === 'DOWN' ? 'DOWN' : repo.healthStatus;
+        return { label: label, color: 'red' };
+    }
+    const status = getStatusUI();
 
     return (
         <Stack pt="md" gap="xl">
@@ -28,8 +34,8 @@ export function OverviewTab({ storage }: {
                     <DetailRow
                         label="Status"
                         value={
-                        <Badge variant="dot" color={statusColor} size="sm">
-                            {repo.repositoryStatus}
+                        <Badge variant="dot" color={status.color} size="sm">
+                            {status.label}
                         </Badge>
                     }
                     />
@@ -65,9 +71,9 @@ export function OverviewTab({ storage }: {
                 <Paper withBorder p="md" radius="md">
                     <Badge variant="light" color="indigo" mb="sm">Maintenance</Badge>
                     <Stack gap="xs">
-                        <DetailRow label="Check Schedule" value={repo.checkSchedule} />
+                        <DetailRow label="Check Schedule" value={storage.checkJob.cron} />
                         <DetailRow label="Last Check" value={formatTimestamp(storage.lastCheckTimestamp)} />
-                        <DetailRow label="Prune Schedule" value={repo.pruneSchedule} />
+                        <DetailRow label="Prune Schedule" value={storage.pruneJob.cron} />
                         <DetailRow label="Last Prune" value={formatTimestamp(storage.lastPruneTimestamp)} />
                     </Stack>
                 </Paper>

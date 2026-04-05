@@ -2,16 +2,24 @@ import { Hono } from 'hono';
 import {type Env} from '../index'
 import {
     backupTarget,
-    execution, failHistory, type FilterQuery, filterQuery,
-    insertBackupPolicySchema, type OnGoingProcess,
+    execution,
+    failHistory,
+    type FilterQuery,
+    filterQuery,
+    type InsertBackupPolicySchema,
+    insertBackupPolicySchema, type InsertStrategyScheduleSchema, insertStrategyScheduleSchema,
+    jobSchedules,
+    type OnGoingProcess, scheduleStatus,
     strategy,
-    updateBackupPolicySchema, updateExecutionSchema, updateRepositorySchema
+    updateBackupPolicySchema,
+    updateBackupStrategySchema,
+    type UpdateBackupStrategySchema,
+    updateExecutionSchema,
+    updateRepositorySchema, updateStrategyScheduleSchema
 } from "@backstream/shared";
 import {zValidator} from "@hono/zod-validator";
 import {and, count, desc, eq, gte, inArray, lte} from "drizzle-orm";
 import * as os from 'os';
-import {Cron} from "croner";
-import {ExitCode, type ResticResult, type Task} from "../service/restic";
 import {readFile} from "node:fs/promises";
 import z from 'zod';
 
@@ -22,7 +30,7 @@ const policyRoute = new Hono<Env>()
         const validated = updateBackupPolicySchema.array().parse(dbResult);
         return c.json(validated);
     })
-    // get policy by id
+    // get policy detail by id
     .get('/:id', async (c) => {
         const id = Number(c.req.param('id'));
         const dbResult = await getStrategyDataById(c.var.db, id);
@@ -142,24 +150,17 @@ const policyRoute = new Hono<Env>()
         async (c) => {
             const validated = c.req.valid('json');
             const strategyValid = validated.strategy;
-            const targetsValid = validated.targets;
             // 校验 datasource 重复
             const [dbResult] = await c.var.db.select().from(strategy)
                 .where(eq(strategy.dataSource, strategyValid.dataSource))
             if (dbResult !== undefined) return c.json({error: 'duplicate datasource'}, 400);
-            // 插入 policy
-            strategyValid.hostname = os.hostname();
-            strategyValid.dataSourceSize = 0;
-            const [newStrategy] = await c.var.db.insert(strategy)
-                .values(strategyValid)
-                .returning();
-            if (!newStrategy) return c.json({error: 'db error'}, 500);
-            // 插入 targets
-            targetsValid.forEach(target => {
-                target.backupStrategyId = newStrategy.id;
-                target.nextBackupAt = new Cron(target.schedulePolicy).nextRun()!.getTime();
-            })
-            await c.var.db.insert(backupTarget).values(targetsValid).returning();
+            // create new policy
+            let newStrategy: UpdateBackupStrategySchema;
+            try {
+                newStrategy = createStrategyAndTarget(c.var.db, validated);
+            } catch (error) {
+                return c.json({ error: `create new policy db fail. error: ${error}` }, 500);
+            }
             // scheduler 开始调度
             void c.var.scheduler.addPolicySchedule(newStrategy.id);
             return c.json({ message: `success create policy ${newStrategy.name }`}, 200);
@@ -175,6 +176,35 @@ const policyRoute = new Hono<Env>()
         return c.json({ message: `success delete policy ${id}`}, 200);
     })
 
+function createStrategyAndTarget(db: Env['Variables']['db'], data: InsertBackupPolicySchema) {
+    return db.transaction(tx => {
+        const newStrategy = tx.insert(strategy)
+            .values({ ...data.strategy, hostname: os.hostname(), dataSourceSize: 0})
+            .returning()
+            .get();
+        for (let target of data.targets) {
+            const newTarget = tx.insert(backupTarget)
+                .values({ ...target.meta, backupStrategyId: newStrategy.id })
+                .returning()
+                .get();
+            // add backup/copy schedule
+            const newSchedule = tx.insert(jobSchedules)
+                .values({ ...target.schedule, backupStrategyId: newStrategy.id, backupTargetId: newTarget.id })
+                .returning()
+                .get();
+        }
+        // add strategy datasize schedule
+        const strategySchedule: InsertStrategyScheduleSchema = {
+            cron: randomizedCron(5, 'minute'),
+            jobStatus: 'ACTIVE',
+            category: 'strategy',
+            type: 'datasize',
+            backupStrategyId: newStrategy.id
+        }
+        tx.insert(jobSchedules).values(strategySchedule).returning().get();
+        return updateBackupStrategySchema.parse(newStrategy);
+    })
+}
 
 async function getStrategyOnGoingProcess(db: Env['Variables']['db'], id: number) {
     const result = await db.query.strategy.findFirst({
@@ -204,6 +234,7 @@ async function getStrategyDataById(db: Env['Variables']['db'], id: number) {
         with: {
             targets: {
                 with: {
+                    job: true,
                     repository: true,
                     // Fetch only the single latest backup execution
                     executions: {
@@ -240,6 +271,7 @@ async function getStrategyData(db: Env['Variables']['db']) {
         with: {
             targets: {
                 with: {
+                    job: true,
                     repository: true,
                     // Fetch only the single latest backup execution
                     executions: {
@@ -266,6 +298,30 @@ async function getStrategyData(db: Env['Variables']['db']) {
             lastBackupAt: executions[0]?.startedAt ?? null,
         })),
     }));
+}
+
+/**
+ * Generates a randomized cron string (6 fields: s m h d M dw)
+ * @param interval The frequency (e.g., every 5 units)
+ * @param unit The time unit to apply the interval to
+ */
+function randomizedCron(interval: number, unit: 'sec' | 'minute' | 'hour' | 'day' | 'month' | 'year') {
+    const rnd = (max: number) => Math.floor(Math.random() * max);
+
+    // Define randomized static values
+    const [s, m, h, d, M] = [rnd(60), rnd(60), rnd(24), 1 + rnd(28), 1 + rnd(12)];
+
+    // Map each unit to its 6-field pattern [s, m, h, d, M, dw]
+    const patterns: Record<typeof unit, string[]> = {
+        sec:    [`*/${interval}`, '*', '*', '*', '*', '*'],
+        minute: [`${s}`, `*/${interval}`, '*', '*', '*', '*'],
+        hour:   [`${s}`, `${m}`, `*/${interval}`, '*', '*', '*'],
+        day:    [`${s}`, `${m}`, `${h}`, `*/${interval}`, '*', '*'],
+        month:  [`${s}`, `${m}`, `${h}`, `${d}`, `*/${interval}`, '*'],
+        year:   [`${s}`, `${m}`, `${h}`, `${d}`, `${M}`, '*'] // Runs once per year
+    };
+
+    return patterns[unit].join(' ');
 }
 
 async function getLogs(stdout: string, stderr: string): Promise<string[]> {
@@ -297,10 +353,6 @@ function getTimeRange(filter: FilterQuery) {
         end = filter.endTime;
     }
     return { start, end };
-}
-
-export function getExitCodeName(code: number | null | undefined): string {
-    return Object.entries(ExitCode).find(([_, v]) => v === code)?.[0] ?? "UNKNOWN";
 }
 
 export default policyRoute;

@@ -1,8 +1,15 @@
 import {
-    insertBackupStrategySchema, insertBackupTargetSchema, insertRepoScheduleSchema,
-    insertRepositorySchema, insertTargetScheduleSchema, InsertTargetScheduleSchema, repoType,
-    scheduleStatus,
-    StrategyType, updateBackupStrategySchema, updateBackupTargetSchema, updateRepositorySchema
+    insertBackupStrategySchema,
+    insertBackupTargetSchema,
+    insertRepoScheduleSchema,
+    insertRepositorySchema,
+    insertTargetScheduleSchema,
+    repoType,
+    StrategyType,
+    updateBackupStrategySchema,
+    updateBackupTargetSchema,
+    updateRepositorySchema,
+    updateTargetScheduleSchema
 } from "./types";
 import {z} from "zod";
 
@@ -18,7 +25,7 @@ export const storageCreateSchema = z.object({
     }).omit({ repositoryId: true }),
     pruneSchedule: insertRepoScheduleSchema.omit({ repositoryId: true }),
     mode: z.enum(['create', 'connect']),
-    fromRepoId: z.coerce.number().min(1).optional()
+    fromRepoId: z.coerce.number().min(1).nullish(),
 })
 export type StorageCreateSchema = z.infer<typeof storageCreateSchema>;
 // empty schema for react
@@ -36,7 +43,7 @@ export const EMPTY_STORAGE_CREATE_SCHEMA: StorageCreateSchema = {
     checkSchedule: {
         type: "check",
         category: "repository",
-        cron: "",
+        cron: "manual",
         jobStatus: "ACTIVE",
         extraConfig: {
             checkPercentage: 0
@@ -45,19 +52,21 @@ export const EMPTY_STORAGE_CREATE_SCHEMA: StorageCreateSchema = {
     pruneSchedule: {
         type: "prune",
         category: "repository",
-        cron: "",
+        cron: "manual",
         jobStatus: "ACTIVE"
     },
     mode: 'create',
-    fromRepoId: 0
+    fromRepoId: null
 }
 // policy create schema
+export const targetCreateSchema = z.object({
+    meta: insertBackupTargetSchema.omit({ backupStrategyId: true }),
+    schedule: insertTargetScheduleSchema.omit({ backupStrategyId: true, backupTargetId: true }),
+})
+export type TargetCreateSchema = z.infer<typeof targetCreateSchema>;
 export const insertBackupPolicySchema = z.object({
     strategy: insertBackupStrategySchema,
-    targets: z.array(z.object({
-        meta: insertBackupTargetSchema.omit({ backupStrategyId: true }),
-        schedule: insertTargetScheduleSchema.omit({ backupStrategyId: true, backupTargetId: true }),
-    }))
+    targets: z.array(targetCreateSchema),
 })
 export type InsertBackupPolicySchema = z.infer<typeof insertBackupPolicySchema>;
 // empty schema for react
@@ -83,7 +92,7 @@ export const EMPTY_POLICY_CREATE_SCHEMA: InsertBackupPolicySchema = {
             type: "backup",
             category: "target",
             repositoryId: 0,
-            cron: "",
+            cron: "custom",
             jobStatus: "ACTIVE"
         }
     }]
@@ -92,6 +101,7 @@ export const EMPTY_POLICY_CREATE_SCHEMA: InsertBackupPolicySchema = {
 export const updateBackupPolicySchema = z.object({
     strategy: updateBackupStrategySchema,
     targets: z.array(updateBackupTargetSchema.safeExtend({
+        job: updateTargetScheduleSchema,
         repository: updateRepositorySchema,
         lastBackupAt: z.number().min(0).nullable()
     }))

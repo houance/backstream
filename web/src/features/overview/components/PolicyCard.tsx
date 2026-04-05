@@ -3,14 +3,22 @@ import { IconAlertTriangle, IconCloud, IconDeviceSdCard, IconTrash } from '@tabl
 import { formatTimestamp, getRepositoryStats } from "../../../util/format.ts";
 import { type UpdateBackupPolicySchema } from '@backstream/shared'
 
-export function BackupPolicyCard({ policy, onDetail, onDelete, isDeleting }: {
+export function PolicyCard({ policy, onDetail, onDelete, isDeleting }: {
     policy: UpdateBackupPolicySchema,
     onDetail: () => void,
     onDelete: (policy: UpdateBackupPolicySchema) => void,
     isDeleting: boolean
 }) {
     const MAX_VISIBLE_TARGETS = 3;
-    const isCritical = policy.targets.some(t => (t.repository.size || 0 / (t.repository.capacity || Infinity)) > 0.8);
+    const isCritical = policy.targets.some(t => {
+        const size = t.repository?.size ?? 0;
+        const capacity = t.repository?.capacity;
+
+        // Avoid division by zero or undefined capacity
+        if (!capacity) return false;
+
+        return (size / capacity) > 0.8;
+    });
 
     // Slice targets for display
     const visibleTargets = policy.targets.slice(0, MAX_VISIBLE_TARGETS);

@@ -3,11 +3,10 @@ import { useForm } from '@mantine/form';
 import { zod4Resolver } from 'mantine-form-zod-resolver';
 import {
     repoType,
-    insertRepositorySchema,
     type InsertRepositorySchema,
     type UpdateRepositorySchema,
     type RepoType,
-    type StorageCreateSchema, EMPTY_STORAGE_CREATE_SCHEMA,
+    type StorageCreateSchema, EMPTY_STORAGE_CREATE_SCHEMA, storageCreateSchema,
 } from '@backstream/shared'
 import {PROVIDER_MAP} from "../provider-map.tsx";
 import MaintainPolicyConfig from "./MaintainPolicyConfig.tsx";
@@ -37,7 +36,7 @@ export default function NewStorageLocModal({
 }: ModalProps) {
     const form = useForm<StorageCreateSchema>({
         initialValues: EMPTY_STORAGE_CREATE_SCHEMA,
-        validate: zod4Resolver(insertRepositorySchema),
+        validate: zod4Resolver(storageCreateSchema),
     });
 
     const handleTypeChange = (newType: string | null) => {
@@ -59,17 +58,18 @@ export default function NewStorageLocModal({
                     <Text size="sm" fw={500}>Mode</Text>
                     <SegmentedControl
                         fullWidth
-                        value={form.values.mode}
+                        {...form.getInputProps('mode')}
                         data={[
-                            { label: 'Create New', value: 'create' },
-                            { label: 'Connect Existing', value: 'connect' },
+                            {label: 'Create New', value: 'create'},
+                            {label: 'Connect Existing', value: 'connect'},
                         ]}
                     />
                 </Stack>
 
-                <form onSubmit={form.onSubmit((values) =>
-                    onSubmit({ item: values }))}
-                >
+                <form onSubmit={form.onSubmit(
+                    (values) => onSubmit({item: values}),
+                    (validationErrors) => console.log('Validation failed:', validationErrors)
+                )}>
                     <Stack>
                         {/* [NEW] Conditional Select for "Create" mode */}
                         {form.values.mode === 'create' && (
@@ -82,8 +82,11 @@ export default function NewStorageLocModal({
                                 }))}
                                 // Convert form number to string for the UI
                                 value={form.values.fromRepoId ? String(form.values.fromRepoId) : null}
-                                // Convert UI string/null back to number/undefined for the form state
-                                onChange={(val) => form.setFieldValue('fromRepoId', val ? Number(val) : undefined)}
+                                onChange={(val) => {
+                                    // Simple direct mapping; nullish() handles the null if cleared
+                                    form.setFieldValue('fromRepoId', val ? Number(val) : null);
+                                }}
+                                error={form.errors.fromRepoId}
                             />
                         )}
 
@@ -99,30 +102,40 @@ export default function NewStorageLocModal({
                         <TextInput
                             label="Location Name"
                             placeholder="e.g. My Offsite Backup"
-                            {...form.getInputProps('name')}
+                            {...form.getInputProps('meta.name')}
                             withAsterisk
                         />
 
                         <PasswordInput
                             label="Password"
                             placeholder="Enter restic password"
-                            {...form.getInputProps('password')}
+                            {...form.getInputProps('meta.password')}
                             withAsterisk
                             description="Required to encrypt/decrypt your backups"
                             autoComplete="new-password"
                         />
 
-                        <MaintainPolicyConfig form={form} />
+                        <MaintainPolicyConfig form={form}/>
 
-                        <Divider label="Authentication Details" labelPosition="center" />
-                        {providerMeta.component !== null && <providerMeta.component form={form} />}
+                        <Divider label="Authentication Details" labelPosition="center"/>
+                        {providerMeta.component !== null && <providerMeta.component form={form}/>}
 
                         <Group justify="flex-end" mt="xl">
                             <Button variant="subtle" color="gray" onClick={onClose}>Cancel</Button>
                             <Button
                                 variant="outline"
                                 loading={isConnecting}
-                                onClick={() => onConnect({ item: form.values.meta, exist: form.values.mode === 'connect' })}
+                                onClick={() => {
+                                    // 1. Run validation manually
+                                    const validation = form.validate();
+                                    // 2. Only proceed if there are no errors
+                                    if (!validation.hasErrors) {
+                                        onConnect({
+                                            item: form.values.meta,
+                                            exist: form.values.mode === 'connect'
+                                        });
+                                    }
+                                }}
                             >
                                 Test
                             </Button>
