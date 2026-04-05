@@ -166,7 +166,7 @@ export class Scheduler {
     private readonly clientMap: Map<number, ClientRecord>;
     private readonly cronJobMap: Map<number, { cron: Cron, job: UpdateJobScheduleSchema }>; // only job's category, type and ids is reliable
     private readonly globalQueue: PQueue;
-    private readonly neverDate: string = "0 0 0 1 1 2099";
+    private readonly neverDate: string = "0 0 0 30 2 *";
 
     private constructor(globalQueue: PQueue) {
         this.clientMap = new Map();
@@ -468,7 +468,8 @@ export class Scheduler {
         // add strategy datasource size update
         const strategyJobResult = await getStrategyJob(strategyId);
         if (!strategyJobResult) return;
-        void this.startPolicyDatasizeCron(strategyJobResult.job);
+        // get data size immediately
+        await this.startPolicyDatasizeCron(strategyJobResult.job).trigger();
     }
 
     private async scheduleVersioningBackup(job: UpdateTargetScheduleSchema) {

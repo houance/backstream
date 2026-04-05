@@ -1,8 +1,7 @@
-import { IconDatabase, IconCloudUpload } from '@tabler/icons-react';
+import { IconDatabase, IconCloudUpload, type Icon } from '@tabler/icons-react';
 import {
     type InsertBackupPolicySchema,
-    type InsertBackupTargetSchema,
-    type StrategyType,
+    type StrategyType, type TargetCreateSchema,
     type UpdateRepositorySchema
 } from '@backstream/shared'
 import React from "react";
@@ -14,12 +13,12 @@ import Strategy321Form from "./components/Strategy321Form.tsx";
 interface StrategyMeta {
     label: string,
     description: string,
-    icon: React.ForwardRefExoticComponent<any>,
+    icon: Icon,
     component: React.FC<{
         form: UseFormReturnType<InsertBackupPolicySchema>,
         repoList: UpdateRepositorySchema[]
     }>,
-    initSubForm: InsertBackupTargetSchema[]
+    initSubForm: TargetCreateSchema[]
 }
 
 export const STRATEGY_MAP: Record<StrategyType, StrategyMeta> = {
@@ -29,15 +28,22 @@ export const STRATEGY_MAP: Record<StrategyType, StrategyMeta> = {
         icon: IconDatabase,
         component: MultiVersionBackupForm,
         initSubForm: [{
-            backupStrategyId: 0,
-            repositoryId: 0,
-            retentionPolicy: {
-                type: "count",
-                windowType: "last",
-                countValue: ""
+            meta: {
+                repositoryId: 0,
+                retentionPolicy: {
+                    type: "count",
+                    windowType: "last",
+                    countValue: "1"
+                },
+                index: 1,
             },
-            schedulePolicy: "* * * * * *",
-            index: 1,
+            schedule: {
+                type: 'backup',
+                repositoryId: 0,
+                category: 'target',
+                cron: '* * * * * *',
+                jobStatus: 'ACTIVE'
+            }
         }]
     },
     STRATEGY_321: {
@@ -47,26 +53,40 @@ export const STRATEGY_MAP: Record<StrategyType, StrategyMeta> = {
         component: Strategy321Form,
         initSubForm: [
             {
-                backupStrategyId: 0,
-                repositoryId: 0,
-                retentionPolicy: {
-                    type: "count",
-                    windowType: "last",
-                    countValue: ""
+                meta: {
+                    repositoryId: 0,
+                    retentionPolicy: {
+                        type: "count",
+                        windowType: "last",
+                        countValue: "1"
+                    },
+                    index: 1,
                 },
-                schedulePolicy: "* * * * * *",
-                index: 1,
+                schedule: {
+                    type: 'backup',
+                    repositoryId: 0,
+                    category: 'target',
+                    cron: '* * * * * *',
+                    jobStatus: 'ACTIVE'
+                }
             },
             {
-                backupStrategyId: 0,
-                repositoryId: 0,
-                retentionPolicy: {
-                    type: "count",
-                    windowType: "last",
-                    countValue: ""
+                meta: {
+                    repositoryId: 0,
+                    retentionPolicy: {
+                        type: "count",
+                        windowType: "last",
+                        countValue: "1"
+                    },
+                    index: 2,
                 },
-                schedulePolicy: "* * * * * *",
-                index: 2,
+                schedule: {
+                    type: 'copy',
+                    repositoryId: 0,
+                    category: 'target',
+                    cron: '* * * * * *',
+                    jobStatus: 'ACTIVE'
+                }
             }
         ]
     }

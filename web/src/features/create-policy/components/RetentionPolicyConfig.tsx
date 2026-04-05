@@ -12,8 +12,8 @@ export function RetentionPolicyConfig({form, tagList, index}: {
     tagList: string[],
     index: number;
 }) {
-    const policy = form.values.targets[index].retentionPolicy
-    const fieldPath = `targets.${index}.retentionPolicy`;
+    const retentionPolicy = form.values.targets[index].meta.retentionPolicy
+    const fieldPath = `targets.${index}.meta.retentionPolicy`;
 
     const handleRetentionPolicyChange = (val: string | null) => {
         const type = val as RetentionType
@@ -46,13 +46,13 @@ export function RetentionPolicyConfig({form, tagList, index}: {
                         label: item,
                         value: item
                     }))}
-                    value={form.values.targets[index].retentionPolicy.type}
+                    value={form.values.targets[index].meta.retentionPolicy.type}
                     onChange={handleRetentionPolicyChange}
                 />
             </Grid.Col>
 
             {/* 2. Dynamic Window Selection (Hidden for Tags) */}
-            {policy.type !== RetentionVal.tag && (
+            {retentionPolicy.type !== RetentionVal.tag && (
                 <Grid.Col span={{ base: 12, md: 4 }}>
                     <Select
                         label="Time Window"
@@ -66,8 +66,8 @@ export function RetentionPolicyConfig({form, tagList, index}: {
             )}
 
             {/* 3. Value Input - Changes based on Type */}
-            <Grid.Col span={{ base: 12, md: policy.type === RetentionVal.tag ? 8 : 4 }}>
-                {policy.type === 'count' && (
+            <Grid.Col span={{ base: 12, md: retentionPolicy.type === RetentionVal.tag ? 8 : 4 }}>
+                {retentionPolicy.type === 'count' && (
                     <TextInput
                         label="How many to keep?"
                         placeholder="number or unlimited"
@@ -76,7 +76,7 @@ export function RetentionPolicyConfig({form, tagList, index}: {
                     />
                 )}
 
-                {policy.type === RetentionVal.duration && (
+                {retentionPolicy.type === RetentionVal.duration && (
                     <TextInput
                         label="Duration"
                         placeholder="Use y, m, d, h. e.g. 2y5m"
@@ -85,7 +85,7 @@ export function RetentionPolicyConfig({form, tagList, index}: {
                     />
                 )}
 
-                {policy.type === RetentionVal.tag && (
+                {retentionPolicy.type === RetentionVal.tag && (
                     <TagsInput
                         label="Tags to Keep"
                         placeholder="Type tag and press Enter"

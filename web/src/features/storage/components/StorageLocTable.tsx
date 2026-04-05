@@ -14,10 +14,13 @@ export default function StorageLocTable(
     const rows = data.map((item) => {
         const { usedStr, totalStr, percentage } = getRepositoryStats(item.size, item.capacity);
         // Map status to specific Mantine colors
-        const statusColor =
-            item.repositoryStatus === 'Active' ? 'green' :
-                item.repositoryStatus === 'Disconnected' ? 'yellow' :
-                    item.repositoryStatus === 'Corrupt' ? 'red' : 'gray';
+        const getStatusUI = () => {
+            if (item.linkStatus === 'UP' && item.healthStatus === 'HEALTH') return { label: 'HEALTH', color: 'green' };
+            if (item.linkStatus === 'UP' && item.healthStatus === 'INITIALIZING') return { label: 'INITIALIZING', color: 'yellow' };
+            const label = item.linkStatus === 'DOWN' ? 'DOWN' : item.healthStatus;
+            return { label: label, color: 'red' };
+        }
+        const status = getStatusUI();
 
         return (
             <Table.Tr
@@ -25,8 +28,8 @@ export default function StorageLocTable(
             >
                 <Table.Td><b>{item.name}</b></Table.Td>
                 <Table.Td>
-                    <Tooltip label={item.repositoryStatus} position='top-start' withArrow openDelay={300}>
-                        <Badge variant="dot" color={statusColor} size="sm">{item.repositoryType}</Badge>
+                    <Tooltip label={status.label} position='top-start' withArrow openDelay={300}>
+                        <Badge variant="dot" color={status.color} size="sm">{item.repositoryType}</Badge>
                     </Tooltip>
                 </Table.Td>
                 <Table.Td>

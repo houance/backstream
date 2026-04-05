@@ -97,11 +97,12 @@ export class ResticService {
         exist: boolean,
         fromRs?: ResticService):
         Promise<{ success: true } | { success: false, reason: string }> {
+        let initResult: ResticResult<boolean>;
         // check if repo exist
         if (exist) {
-            const repoExistResult = await this.repoClient.isRepoExist();
+            initResult = await this.repoClient.isRepoExist();
             // network fail
-            if (!repoExistResult.success) {
+            if (!initResult.success) {
                 repo.linkStatus = 'DOWN';
                 repo.healthStatus = 'INITIALIZE_FAIL';
                 const [dbResult] = await db.update(repository)
@@ -109,10 +110,10 @@ export class ResticService {
                     .where(eq(repository.id, this.repo.id))
                     .returning()
                 this.repo = updateRepositorySchema.parse(dbResult);
-                return { success: false, reason: 'repo not connected.' + repoExistResult.error.toString() };
+                return { success: false, reason: 'repo not connected.' + initResult.error.toString() };
             }
             // 检查成功但是 repo 不存在
-            if (!repoExistResult.result) {
+            if (!initResult.result) {
                 repo.linkStatus = 'UP';
                 repo.healthStatus = 'CORRUPT';
                 const [dbResult] = await db.update(repository)
@@ -122,21 +123,21 @@ export class ResticService {
                 this.repo = updateRepositorySchema.parse(dbResult);
                 return { success: false, reason: 'repo does not exist' };
             }
-        }
-        let createRepoResult: ResticResult<boolean>;
-        if (fromRs) {
-            createRepoResult = await this.repoClient.createRepoWithSameChunker(fromRs.repoClient);
         } else {
-            createRepoResult = await this.repoClient.createRepo();
-        }
-        if (!createRepoResult.success) {
-            repo.healthStatus = 'INITIALIZE_FAIL';
-            const [dbResult] = await db.update(repository)
-                .set(repo)
-                .where(eq(repository.id, this.repo.id))
-                .returning()
-            this.repo = updateRepositorySchema.parse(dbResult);
-            return { success: false, reason: 'create repo fail. ' + createRepoResult.error.toString() };
+            if (fromRs) {
+                initResult = await this.repoClient.createRepoWithSameChunker(fromRs.repoClient);
+            } else {
+                initResult = await this.repoClient.createRepo();
+            }
+            if (!initResult.success) {
+                repo.healthStatus = 'INITIALIZE_FAIL';
+                const [dbResult] = await db.update(repository)
+                    .set(repo)
+                    .where(eq(repository.id, this.repo.id))
+                    .returning()
+                this.repo = updateRepositorySchema.parse(dbResult);
+                return { success: false, reason: 'create repo fail. ' + initResult.error.toString() };
+            }
         }
         repo.linkStatus = 'UP';
         repo.healthStatus = 'HEALTH';

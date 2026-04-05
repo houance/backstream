@@ -10,7 +10,6 @@ export function RepoSelector({form, repoList, index}: {
     repoList: UpdateRepositorySchema[],
     index: number;
 }) {
-    const fieldPath = `targets.${index}.repositoryId`;
     const dataSource = form.values.strategy.dataSource;
 
     // 1. Fetch a map of which repos are "unsafe" (same drive)
@@ -33,10 +32,18 @@ export function RepoSelector({form, repoList, index}: {
             placeholder="Select a repository"
             data={repoList.map(repo => ({
                 label: repo.name,
-                value: String(repo.id)
+                value: String(repo.id),
             }))}
             searchable
-            {...form.getInputProps(fieldPath)}
+            value={form.values.targets[index].schedule.repositoryId ? String(form.values.targets[index].schedule.repositoryId) : null}            // 2. Update both fields at once
+            onChange={(_value) => {
+                // Update primary field
+                form.setFieldValue(`targets.${index}.schedule.repositoryId`, Number(_value));
+                // Update secondary field
+                form.setFieldValue(`targets.${index}.meta.repositoryId`, Number(_value));
+            }}
+            // 3. Manually pass the error (since we aren't using getInputProps)
+            error={form.errors[`targets[${index}].meta.repositoryId`]}
             // 2. Custom rendering for options in the dropdown
             renderOption={({ option }) => {
                 const isUnsafe = driveWarnings.includes(Number(option.value));

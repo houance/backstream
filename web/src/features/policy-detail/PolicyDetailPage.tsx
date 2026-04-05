@@ -6,7 +6,7 @@ import { client } from "../../api";
 
 // Re-using your existing subcomponents
 import SnapshotExplorer from './component/SnapshotsExplorer.tsx';
-import PolicySummary from "./component/PolicySummary.tsx";
+import OverviewTab from "./component/OverviewTab.tsx";
 import PolicyActionCenter from "./component/PolicyActionCenter.tsx";
 import OnGoingProcessFooter from "../../component/OnGoingProcessFooter.tsx";
 import FailHistory from "./component/FailHistory.tsx";
@@ -56,14 +56,14 @@ export default function PolicyDetailPage() {
                     <Paper withBorder p="md" radius="md">
                         <Tabs defaultValue="summary" variant="outline">
                             <Tabs.List>
-                                <Tabs.Tab value="summary">Summary</Tabs.Tab>
+                                <Tabs.Tab value="summary">Overview</Tabs.Tab>
                                 <Tabs.Tab value="snapshots">Snapshots</Tabs.Tab>
                                 <Tabs.Tab value="fail-history">Fail history</Tabs.Tab>
                                 <Tabs.Tab value="actions">Actions</Tabs.Tab>
                             </Tabs.List>
 
                             <Tabs.Panel value="summary" pt="md">
-                                <PolicySummary policy={policy} />
+                                <OverviewTab policy={policy} />
                             </Tabs.Panel>
                             <Tabs.Panel value="snapshots" pt="md">
                                 <SnapshotExplorer policy={policy} />
