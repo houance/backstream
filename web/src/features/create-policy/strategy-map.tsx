@@ -85,7 +85,10 @@ export const STRATEGY_MAP: Record<StrategyType, StrategyMeta> = {
                     repositoryId: 0,
                     category: 'target',
                     cron: '* * * * * *',
-                    jobStatus: 'ACTIVE'
+                    jobStatus: 'ACTIVE',
+                    extraConfig: {
+                        srcRepoId: 0
+                    }
                 }
             }
         ]

@@ -30,7 +30,7 @@ const snapshotsRoute = new Hono<Env>()
             const targetId = validated.targetId;
             // get policy
             const policy = await getPolicyByTargetId(c.var.db, targetId);
-            if (policy === undefined || policy.targets.length === 0) return c.json({ message: 'Not found'}, 404);
+            if (!policy?.targets?.length) return c.json({ message: 'Not found'}, 404);
             const target = updateBackupTargetSchema.parse(policy.targets[0]);
             const result: {
                 finishedSnapshot: FinishedSnapshotsMetaSchema[],
@@ -89,7 +89,7 @@ const snapshotsRoute = new Hono<Env>()
                 updateSnapshotsMetadataSchema.parse(snapshot)
             );
             if (execResult.status !== 'success') return c.json({ error: execResult.message }, 500);
-            if (execResult.data?.length) return c.json([]);
+            if (!execResult.data?.length) return c.json([]);
             return c.json(execResult.data.map(node => snapshotFile.parse({
                 snapshotId: snapshot.snapshotId,
                 repoId: repo.id,

@@ -23,6 +23,7 @@ import * as os from 'os';
 import {readFile} from "node:fs/promises";
 import z from 'zod';
 import {getLogs, getTimeRange} from "./utils";
+import {Cron} from "croner";
 
 const policyRoute = new Hono<Env>()
     .get('/all-policy', async (c) => {
@@ -180,7 +181,12 @@ function createStrategyAndTarget(db: Env['Variables']['db'], data: InsertBackupP
                 .get();
             // add backup/copy schedule
             const newSchedule = tx.insert(jobSchedules)
-                .values({ ...target.schedule, backupStrategyId: newStrategy.id, backupTargetId: newTarget.id })
+                .values({
+                    ...target.schedule,
+                    backupStrategyId: newStrategy.id,
+                    backupTargetId: newTarget.id,
+                    nextRunAt: new Cron(target.schedule.cron).nextRun()?.getTime()
+                })
                 .returning()
                 .get();
         }

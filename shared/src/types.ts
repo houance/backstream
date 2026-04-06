@@ -310,7 +310,13 @@ const baseInsertJobScheduleSchema = createInsertSchema(jobSchedules, {
     cron: z.string()
         .min(1, "Cron expression is required")
         .regex(cronSecondRegex, 'Invalid cron format (requires 6 fields: s m h D M d)')
-        .or(z.literal("manual")),
+        .or(z.literal("manual"))
+        .transform((val) => {
+            if (val === "manual") {
+                return "0 0 0 30 2 *"; // convert to never date for cron job creation
+            }
+            return val;
+        }),
     jobStatus: z.enum(Object.values(scheduleStatus)),
 });
 export const insertRepoScheduleSchema = baseInsertJobScheduleSchema.safeExtend({
@@ -335,7 +341,7 @@ export const insertTargetScheduleSchema = baseInsertJobScheduleSchema.safeExtend
     backupStrategyId: z.number().positive(),
     backupTargetId: z.number().positive(),
     extraConfig: z.object({
-        srcRepoId: z.number().positive(), // for copy job to look up source repository
+        srcRepoId: z.number().positive().min(1), // for copy job to look up source repository
     }).nullish(),
 })
 export type InsertTargetScheduleSchema = z.infer<typeof insertTargetScheduleSchema>;

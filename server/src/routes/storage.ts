@@ -24,6 +24,7 @@ import {RepositoryClient} from '../service/restic';
 import { z } from 'zod';
 import {readFile} from "node:fs/promises";
 import {getLogs, getTimeRange} from "./utils";
+import {Cron} from "croner";
 
 
 const storageRoute = new Hono<Env>()
@@ -352,27 +353,41 @@ function createRepoAndSchedule(db: Env['Variables']['db'], data: StorageCreateSc
             .get();
         // create all schedule
         const schedules: InsertRepoScheduleSchema[] = [];
-        schedules.push({ ...data.checkSchedule, repositoryId: repo.id })
-        schedules.push({ ...data.pruneSchedule, repositoryId: repo.id })
+        schedules.push({
+            ...data.checkSchedule,
+            repositoryId: repo.id,
+            nextRunAt: new Cron(data.checkSchedule.cron).nextRun()?.getTime()
+        })
+        schedules.push({
+            ...data.pruneSchedule,
+            repositoryId: repo.id,
+            nextRunAt: new Cron(data.pruneSchedule.cron).nextRun()?.getTime()
+        })
+        const heartbeatCron = randomizedCron(5, 'minute');
         schedules.push({
             category: 'repository',
             type: 'heartbeat',
             repositoryId: repo.id,
-            cron: randomizedCron(5, 'minute'),
+            cron: heartbeatCron,
+            nextRunAt: new Cron(heartbeatCron).nextRun()?.getTime(),
             jobStatus: 'ACTIVE'
         })
+        const statCron = randomizedCron(12, 'hour');
         schedules.push({
             category: 'repository',
             type: 'stat',
             repositoryId: repo.id,
-            cron: randomizedCron(12, 'hour'),
+            cron: statCron,
+            nextRunAt: new Cron(statCron).nextRun()?.getTime(),
             jobStatus: 'ACTIVE'
         })
+        const snapshotsCron = randomizedCron(1, 'hour');
         schedules.push({
             category: 'repository',
             type: 'snapshots',
             repositoryId: repo.id,
-            cron: randomizedCron(1, 'hour'),
+            cron: snapshotsCron,
+            nextRunAt: new Cron(snapshotsCron).nextRun()?.getTime(),
             jobStatus: 'ACTIVE'
         })
         tx.insert(jobSchedules)

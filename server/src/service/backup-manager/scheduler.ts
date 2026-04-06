@@ -166,7 +166,6 @@ export class Scheduler {
     private readonly clientMap: Map<number, ClientRecord>;
     private readonly cronJobMap: Map<number, { cron: Cron, job: UpdateJobScheduleSchema }>; // only job's category, type and ids is reliable
     private readonly globalQueue: PQueue;
-    private readonly neverDate: string = "0 0 0 30 2 *";
 
     private constructor(globalQueue: PQueue) {
         this.clientMap = new Map();
@@ -594,9 +593,8 @@ export class Scheduler {
             // Remove it from the map to ensure a clean slate
             this.cronJobMap.delete(job.id);
         }
-        const schedule = job.cron === 'manual' ? this.neverDate : job.cron;
         // create cron
-        const cron = new Cron(schedule, { protect: true }, async (self) => {
+        const cron = new Cron(job.cron, { protect: true }, async (self) => {
             // create execution if commandType is set
             let exec = commandType ? await createExecution(
                 commandType,
@@ -609,10 +607,8 @@ export class Scheduler {
             for (let attempt = 0; attempt <= maxRetries; attempt++) {
                 try {
                     // update nextRunAt
-                    const nextRunAt = job.cron === this.neverDate ? undefined
-                        : new Cron(job.cron).nextRun()!.getTime();
                     const [dbResult] = await db.update(jobSchedules)
-                        .set({ nextRunAt: nextRunAt })
+                        .set({ nextRunAt: new Cron(job.cron).nextRun()!.getTime() })
                         .where(eq(jobSchedules.id, job.id))
                         .returning();
                     if (!dbResult) throw new Error(`update job ${job.id} nextRunAt db fail`);

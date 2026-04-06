@@ -7,7 +7,7 @@ import {
     execution,
     setting,
     repoType,
-    scheduleStatus,
+    scheduleStatus, jobSchedules,
 } from "@backstream/shared";
 
 
@@ -20,6 +20,7 @@ async function main() {
     db.run(`PRAGMA foreign_keys = OFF;`)
     await db.delete(execution);
     await db.delete(snapshotsMetadata);
+    await db.delete(jobSchedules);
     await db.delete(backupTarget);
     await db.delete(strategy);
     await db.delete(repository);
