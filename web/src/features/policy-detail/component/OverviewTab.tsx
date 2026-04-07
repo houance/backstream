@@ -1,24 +1,28 @@
-import {Badge, Group, Paper, SimpleGrid, Stack, Text} from "@mantine/core";
-import {type UpdateBackupPolicySchema, type UpdateRepositorySchema} from "@backstream/shared";
+import {Badge, Group, Paper, SimpleGrid, Stack, Text, Tooltip, ActionIcon, Divider, Box, Switch} from "@mantine/core";
+import {
+    type ScheduleStatus,
+    scheduleStatus,
+    type UpdateBackupPolicySchema,
+    type UpdateRepositorySchema
+} from "@backstream/shared";
 import {formatRetentionPolicy, formatTimestamp} from "../../../util/format.ts";
 import type {ReactNode} from "react";
+import {IconAlertCircle, IconClock, IconPlayerPlay} from "@tabler/icons-react";
 
-export function OverviewTab({ policy } : {policy: UpdateBackupPolicySchema}) {
+export function OverviewTab({ policy }: { policy: UpdateBackupPolicySchema }) {
     return (
         <Stack pt="md" gap="xl">
-            <Paper withBorder p="md" radius="md" bg="var(--mantine-color-blue-light)">
-                <Stack gap="xs">
-                    <DetailRow label="Policy Name" value={policy.strategy.name} />
-                    <DetailRow label="Data Source" value={policy.strategy.dataSource} />
-                </Stack>
-            </Paper>
+            {/* Strategy Header: Blue Background containing global info */}
+            <StrategyHeader policy={policy} />
 
-            <SimpleGrid cols={{ base: 1, md: 3 }}>
-                <TargetCard policy={policy} />
+            {/* Target Grid */}
+            <SimpleGrid cols={{ base: 1, md: 2, xl: 3 }} spacing="lg">
+                <TargetCards policy={policy} />
             </SimpleGrid>
         </Stack>
     );
 }
+
 
 function getStatusUI(repo: UpdateRepositorySchema) {
     if (repo.linkStatus === 'UP' && repo.healthStatus === 'HEALTH') return { label: 'HEALTH', color: 'green' };
@@ -27,29 +31,128 @@ function getStatusUI(repo: UpdateRepositorySchema) {
     return { label: label, color: 'red' };
 }
 
-function TargetCard({ policy } : {policy: UpdateBackupPolicySchema}) {
-    // Add "return" here so the component actually outputs the mapped array
+function StrategyHeader({ policy }: { policy: UpdateBackupPolicySchema }) {
+    return (
+        <Paper
+            withBorder
+            px="xl"
+            py="md"
+            radius="md"
+            bg="var(--mantine-color-blue-light)"
+            style={{ borderLeft: '4px solid var(--mantine-color-blue-filled)' }}
+        >
+            <Group justify="space-between" align="center">
+
+                {/* Left Section: Strategy & DataSource align flex-start */}
+                <Group gap={40} align="center">
+                    <Stack gap={2}>
+                        <Text size="xs" c="blue" fw={700} tt="uppercase" lts={1}>
+                            Strategy
+                        </Text>
+                        <Text fw={800} size="lg" style={{ lineHeight: 1 }}>
+                            {policy.strategy.name}
+                        </Text>
+                    </Stack>
+
+                    <Box style={{ borderLeft: '1px solid var(--mantine-color-blue-outline)', paddingLeft: '40px' }}>
+                        <Text size="xs" c="dimmed" fw={500}>Data Source</Text>
+                        <Text fw={700} size="sm" ta="right">{policy.strategy.dataSource}</Text>
+                    </Box>
+                </Group>
+
+                {/* Right Section: Target Numbers sits at the end */}
+                <Stack gap={0} align="flex-end">
+                    <Text size="xs" c="dimmed" fw={500}>Total Targets</Text>
+                    <Text fw={700} size="sm" ta="right">{policy.targets.length}</Text>
+                </Stack>
+
+            </Group>
+        </Paper>
+    );
+}
+
+const getJobUI = (status: ScheduleStatus) => {
+    switch (status) {
+        case scheduleStatus.ACTIVE:
+            return { label: 'Scheduler ON', color: 'blue', icon: null };
+        case scheduleStatus.ERROR:
+            return { label: 'Scheduler ERROR', color: 'red', icon: <IconAlertCircle size={14} color="red" /> };
+        case scheduleStatus.PAUSED:
+        default:
+            return { label: 'Scheduler OFF', color: 'gray', icon: null };
+    }
+};
+
+function TargetCards({ policy }: { policy: UpdateBackupPolicySchema }) {
     return policy.targets.map((target, index) => {
-        const status = getStatusUI(target.repository);
+        const repoStatus = getStatusUI(target.repository);
+        // Determine job status
+        const jobUI = getJobUI(target.job.jobStatus);
+        const isRunning = target.job.jobStatus === scheduleStatus.ACTIVE;
 
         return (
-            <Paper key={index} withBorder p="md" radius="md" mb="sm">
-                <Group justify="flex-start" mb="sm">
-                    <Badge variant="filled">Target {target.repository.name}</Badge>
-                    <Badge variant="dot" color={status.color} size="sm">
-                        {status.label}
-                    </Badge>
-                </Group>
-                <Stack gap="xs">
-                    <DetailRow label="Repo" value={target.repository.name} />
-                    <DetailRow label="Retention" value={formatRetentionPolicy(target.retentionPolicy)} />
-                    <DetailRow label="Schedule" value={target.job.cron} />
-                    <DetailRow label="Last Run" value={
-                        target.lastBackupAt ? formatTimestamp(target.lastBackupAt) : 'Never'
-                    } />
-                    <DetailRow label="Next Run" value={
-                        target.job.nextRunAt ? formatTimestamp(target.job.nextRunAt) : 'Never'
-                    } />
+            <Paper key={index} withBorder p="md" radius="md" shadow="sm">
+                <Stack gap="md">
+                    {/* Header: Name + Health + Actions */}
+                    <Group justify="space-between" wrap="nowrap" align="center">
+                        <Tooltip label={repoStatus.label} withArrow>
+                            <Badge variant="dot" color={repoStatus.color}>
+                                Target {target.repository.name}
+                            </Badge>
+                        </Tooltip>
+
+
+                        {/* Manual Trigger Quick Action */}
+                        <Tooltip label="Run Backup Now">
+                            <ActionIcon variant="light" color="blue" onClick={() => {/* trigger(target.id) */}}>
+                                <IconPlayerPlay size={16} />
+                            </ActionIcon>
+                        </Tooltip>
+                    </Group>
+
+                    <Divider />
+
+                    {/* Schedule Details */}
+                    <Stack gap="xs">
+                        <DetailRow
+                            label="Schedule"
+                            value={<Group gap={4}><IconClock size={14}/><Text size="sm" ff="monospace">{target.job.cron}</Text></Group>}
+                        />
+                        <DetailRow label="Retention" value={formatRetentionPolicy(target.retentionPolicy)} />
+
+                        <DetailRow
+                            label="Last Run"
+                            value={target.lastBackupAt ? formatTimestamp(target.lastBackupAt) : 'Never'}
+                        />
+                        <DetailRow
+                            label="Next Run"
+                            value={isRunning ? formatTimestamp(target.job.nextRunAt) : "Suspended"}
+                        />
+                    </Stack>
+
+                    {/* Quick Toggle for active status at bottom */}
+                    <Group
+                        justify="space-between"
+                        mt="sm"
+                        pt="sm"
+                        style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}
+                    >
+                        <Group gap={6}>
+                            {jobUI.icon}
+                            <Text size="xs" fw={700} c={jobUI.color} style={{ textTransform: 'uppercase' }}>
+                                {jobUI.label}
+                            </Text>
+                        </Group>
+
+                        <Switch
+                            checked={isRunning}
+                            size="xs"
+                            color="green"
+                            // Toggle logic: If currently ACTIVE, set to PAUSED.
+                            // If currently PAUSED or ERROR, set to ACTIVE.
+                            onChange={() => {/* toggleStatus(target.id, isRunning ? "PAUSED" : "ACTIVE") */}}
+                        />
+                    </Group>
                 </Stack>
             </Paper>
         );

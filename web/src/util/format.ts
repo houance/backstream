@@ -54,7 +54,7 @@ export function formatPercentage(value: number): number {
     return Number((value * 100).toFixed(2));
 }
 
-export function formatTimestamp(timestamp: number | null): string {
+export function formatTimestamp(timestamp: number | null | undefined): string {
     if (!timestamp) return "N/A"
     return dayjs(timestamp).format('YYYY-MM-DD HH:mm:ss');
 }

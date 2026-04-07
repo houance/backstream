@@ -1,6 +1,6 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import {Box, Container, Stack, Group, Button, Title, Paper, Tabs, Center, Loader} from '@mantine/core';
-import { IconArrowLeft, IconInfoCircle, IconActivity, IconPlayerPlay } from '@tabler/icons-react';
+import { IconArrowLeft, IconLayoutDashboard, IconHistoryToggle, IconPlayerPlay } from '@tabler/icons-react';
 // Import your sub-components
 import { OverviewTab } from './component/OverviewTab';
 import { FailHistoryTab } from './component/FailHistoryTab.tsx';
@@ -60,10 +60,10 @@ export default function StorageDetailPage() {
                     <Paper withBorder p="md" radius="md">
                         <Tabs defaultValue="overview" variant="outline">
                             <Tabs.List>
-                                <Tabs.Tab value="overview" leftSection={<IconInfoCircle size={14} />}>
+                                <Tabs.Tab value="overview" leftSection={<IconLayoutDashboard size={14} />}>
                                     Overview
                                 </Tabs.Tab>
-                                <Tabs.Tab value="health" leftSection={<IconActivity size={14} />}>
+                                <Tabs.Tab value="health" leftSection={<IconHistoryToggle size={14} />}>
                                     Fail History
                                 </Tabs.Tab>
                                 <Tabs.Tab value="action" leftSection={<IconPlayerPlay size={14} />}>

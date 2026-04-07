@@ -1,13 +1,12 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import {Container, Tabs, Button, Group, Title, Loader, Center, Stack, Paper, Box} from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
-import { IconArrowLeft } from '@tabler/icons-react';
+import {IconHistoryToggle, IconArrowLeft, IconLayoutDashboard, IconCamera} from '@tabler/icons-react';
 import { client } from "../../api";
 
 // Re-using your existing subcomponents
 import SnapshotExplorer from './component/SnapshotsExplorer.tsx';
 import OverviewTab from "./component/OverviewTab.tsx";
-import PolicyActionCenter from "./component/PolicyActionCenter.tsx";
 import OnGoingProcessFooter from "../../component/OnGoingProcessFooter.tsx";
 import FailHistory from "./component/FailHistory.tsx";
 
@@ -54,15 +53,20 @@ export default function PolicyDetailPage() {
                     </Group>
 
                     <Paper withBorder p="md" radius="md">
-                        <Tabs defaultValue="summary" variant="outline">
+                        <Tabs defaultValue="overview" variant="outline">
                             <Tabs.List>
-                                <Tabs.Tab value="summary">Overview</Tabs.Tab>
-                                <Tabs.Tab value="snapshots">Snapshots</Tabs.Tab>
-                                <Tabs.Tab value="fail-history">Fail history</Tabs.Tab>
-                                <Tabs.Tab value="actions">Actions</Tabs.Tab>
+                                <Tabs.Tab value="overview" leftSection={<IconLayoutDashboard size={14} />}>
+                                    Overview
+                                </Tabs.Tab>
+                                <Tabs.Tab value="snapshots" leftSection={<IconCamera size={14} />}>
+                                    Snapshots
+                                </Tabs.Tab>
+                                <Tabs.Tab value="fail-history" leftSection={<IconHistoryToggle size={14} />}>
+                                    Fail history
+                                </Tabs.Tab>
                             </Tabs.List>
 
-                            <Tabs.Panel value="summary" pt="md">
+                            <Tabs.Panel value="overview" pt="md">
                                 <OverviewTab policy={policy} />
                             </Tabs.Panel>
                             <Tabs.Panel value="snapshots" pt="md">
@@ -70,9 +74,6 @@ export default function PolicyDetailPage() {
                             </Tabs.Panel>
                             <Tabs.Panel value="fail-history" pt="md">
                                 <FailHistory policy={policy} />
-                            </Tabs.Panel>
-                            <Tabs.Panel value="actions" pt="md">
-                                <PolicyActionCenter />
                             </Tabs.Panel>
                         </Tabs>
                     </Paper>
