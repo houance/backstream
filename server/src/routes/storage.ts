@@ -46,6 +46,8 @@ const storageRoute = new Hono<Env>()
         if (!repoWithSnapStat || !schedules) return c.json({ error: 'Not found' }, 404);
         return c.json({
             repo: updateRepositorySchema.parse(repoWithSnapStat),
+            statJob: schedules.statJob,
+            snapshotsJob: schedules.snapshotsJob,
             snapshotCount: repoWithSnapStat.snapshotCount,
             snapshotSize: repoWithSnapStat.snapshotSize,
             checkJob: schedules.checkJob,
@@ -306,18 +308,19 @@ async function getRepoSchedule(db: Env['Variables']['db'], repoId: number) {
         .where(and(
             eq(jobSchedules.repositoryId, repoId),
             eq(jobSchedules.category, 'repository'),
-            or(
-                eq(jobSchedules.type, 'check'),
-                eq(jobSchedules.type, 'prune')
-            )
         ));
     if (!result?.length) return null;
     const validated = updateRepoScheduleSchema.array().parse(result);
     const checkJob = validated.find(j => j.type === 'check');
     const pruneJob = validated.find(j => j.type === 'prune');
+    const snapshotsJob = validated.find(j => j.type === 'snapshots');
+    const statJob = validated.find(j => j.type === 'stat');
     // Using a "guard" to ensure both exist and satisfy the return type
-    if (checkJob?.type === 'check' && pruneJob?.type === 'prune') {
-        return { checkJob, pruneJob };
+    if (checkJob?.type === 'check'
+        && pruneJob?.type === 'prune'
+        && snapshotsJob?.type === 'snapshots'
+        && statJob?.type === 'stat') {
+        return { checkJob, pruneJob, snapshotsJob, statJob };
     }
     return null;
 }

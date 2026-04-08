@@ -14,6 +14,7 @@ import {
 
 // cron format: sec min hour day month day-of-week
 const cronSecondRegex = /^(?:[0-9*,\/\-]+ ){5}[0-9*,\/\-]+$/;
+export const NEVER_CRON = "0 0 0 30 2 *"
 export const repoType = {
     LOCAL: "LOCAL",
     SFTP: "SFTP",
@@ -313,7 +314,7 @@ const baseInsertJobScheduleSchema = createInsertSchema(jobSchedules, {
         .or(z.literal("manual"))
         .transform((val) => {
             if (val === "manual") {
-                return "0 0 0 30 2 *"; // convert to never date for cron job creation
+                return NEVER_CRON; // convert to never date for cron job creation
             }
             return val;
         }),

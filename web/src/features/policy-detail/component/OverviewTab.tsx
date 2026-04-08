@@ -120,10 +120,7 @@ function TargetCards({ policy }: { policy: UpdateBackupPolicySchema }) {
                         />
                         <DetailRow label="Retention" value={formatRetentionPolicy(target.retentionPolicy)} />
 
-                        <DetailRow
-                            label="Last Run"
-                            value={target.lastBackupAt ? formatTimestamp(target.lastBackupAt) : 'Never'}
-                        />
+                        <DetailRow label="Last Run" value={formatTimestamp(target.lastBackupAt)} />
                         <DetailRow
                             label="Next Run"
                             value={isRunning ? formatTimestamp(target.job.nextRunAt) : "Suspended"}

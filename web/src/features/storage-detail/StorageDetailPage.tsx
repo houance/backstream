@@ -1,10 +1,9 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import {Box, Container, Stack, Group, Button, Title, Paper, Tabs, Center, Loader} from '@mantine/core';
-import { IconArrowLeft, IconLayoutDashboard, IconHistoryToggle, IconPlayerPlay } from '@tabler/icons-react';
+import { IconArrowLeft, IconLayoutDashboard, IconHistoryToggle } from '@tabler/icons-react';
 // Import your sub-components
 import { OverviewTab } from './component/OverviewTab';
 import { FailHistoryTab } from './component/FailHistoryTab.tsx';
-import ActionCenter from "./component/ActionCenter.tsx";
 import {useQuery} from "@tanstack/react-query";
 import {client} from "../../api";
 import OnGoingProcessFooter from "../../component/OnGoingProcessFooter.tsx";
@@ -66,9 +65,6 @@ export default function StorageDetailPage() {
                                 <Tabs.Tab value="health" leftSection={<IconHistoryToggle size={14} />}>
                                     Fail History
                                 </Tabs.Tab>
-                                <Tabs.Tab value="action" leftSection={<IconPlayerPlay size={14} />}>
-                                    Action Center
-                                </Tabs.Tab>
                             </Tabs.List>
 
                             <Tabs.Panel value="overview" pt="md">
@@ -77,10 +73,6 @@ export default function StorageDetailPage() {
 
                             <Tabs.Panel value="health" pt="md">
                                 <FailHistoryTab storage={storageLocDetail} />
-                            </Tabs.Panel>
-
-                            <Tabs.Panel value="action" pt="md">
-                                <ActionCenter />
                             </Tabs.Panel>
                         </Tabs>
                     </Paper>
