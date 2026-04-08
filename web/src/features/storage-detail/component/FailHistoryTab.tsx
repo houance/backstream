@@ -45,7 +45,7 @@ export function FailHistoryTab({ storage }: {
     const { data: logData, isLoading: isLogLoading } = useQuery({
         queryKey: ['storage-fail-logs', activeLogId],
         queryFn: async () => {
-            const res = await client.api.storage['fail-history-log'][':id'].$get({
+            const res = await client.api.info['fail-history-log'][':id'].$get({
                 param: { id: activeLogId!.toString() },
             });
             if (!res.ok) throw new Error('Failed to fetch repository logs')

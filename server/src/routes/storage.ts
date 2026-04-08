@@ -148,16 +148,6 @@ const storageRoute = new Hono<Env>()
                 });
             }
         })
-    // get fail log by execution id
-    .get('/fail-history-log/:id', async (c) => {
-        const executionId = Number(c.req.param('id'));
-        const [exec] = await c.var.db.select().from(execution)
-            .where(eq(execution.id, executionId));
-        if (!exec) return c.json({ message: 'Not found' }, 404);
-        return c.json({
-            logs: await getLogs(exec.logFile)
-        })
-    })
     // test conn
     .post('/test-connection',
         zValidator('json', z.object({

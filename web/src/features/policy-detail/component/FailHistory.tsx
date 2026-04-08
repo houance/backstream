@@ -43,7 +43,7 @@ export default function FailHistory({ policy }: { policy: UpdateBackupPolicySche
     const { data: logData, isLoading: isLogLoading } = useQuery({
         queryKey: ['target-fail-logs', activeLogId],
         queryFn: async () => {
-            const res = await client.api.policy['fail-history-log'][':id'].$get({
+            const res = await client.api.info['fail-history-log'][':id'].$get({
                 param: { id: activeLogId!.toString() },
             });
             if (!res.ok) throw new Error('Failed to fetch target logs');
