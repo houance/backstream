@@ -210,7 +210,7 @@ export class ResticService {
         let values: Partial<InsertRepositorySchema> = {};
         const repoStatResult = await this.retryOnLock(
             () => this.repoClient.getRepoStat(),
-            false
+            { isExclusive: false }
         );
         if (repoStatResult.status === 'success') {
             const repoStat = repoStatResult.data;
@@ -245,7 +245,7 @@ export class ResticService {
         if (this.repo.healthStatus !== 'HEALTH') return systemFail(new Error(`repo is ${this.repo.healthStatus}`));
         return await this.retryOnLock(
             () => this.repoClient.getSnapshotFilesByPath(snapshot.snapshotId),
-            false
+            { isExclusive: false }
         )
     }
 
@@ -275,7 +275,7 @@ export class ResticService {
                             newExecution.uuid,
                             signal
                         ),
-                    false
+                    { isExclusive: false}
                 )
             } else {
                 const dir = await FileManager.createTmpFolder();
@@ -291,7 +291,7 @@ export class ResticService {
                             newExecution.uuid,
                             signal
                         ),
-                    false
+                    { isExclusive: false }
                 );
             }
             if (restoreResult.status !== 'success') {
@@ -309,17 +309,15 @@ export class ResticService {
         targetService: ResticService,
         target: UpdateBackupTargetSchema,
     ) {
-        if (this.repo.adminStatus === 'PAUSED' || targetService.repo.adminStatus === 'PAUSED') {
-            return systemFail(new Error(`repo ${this.repo.name} or ${targetService.repo.name} is paused`));
-        }
-        if (this.repo.healthStatus === 'CORRUPT' || targetService.repo.healthStatus === 'CORRUPT') {
-            return systemFail(new Error(`repo ${this.repo.name} or ${targetService.repo.name} is corrupt`));
-        }
+        const msg = await this.canExecuteJob(execution);
+        if (msg !== null) return systemFail(new Error(msg));
+        const msgRemote = await targetService.canExecuteJob(execution);
+        if (msgRemote !== null) return systemFail(new Error(msgRemote));
         // run remote retention policy against local in dry run mode, get what snapshot should be copy
         let keepSnapshotIds: string[] = [];
         const retryResult = await this.retryOnLock(
             () => this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy),
-            true
+            { isExclusive: true }
         );
         if (retryResult.status !== 'success') {
             logger.warn(retryResult.error, `forget ${path} at ${this.repo.name} fail:`);
@@ -340,7 +338,7 @@ export class ResticService {
                     signal
                 )
             ,
-            false,
+            { isExclusive: false },
             async () => await targetService.readLock(),
         )
         if (copyResult.status !== 'success') return copyResult;
@@ -355,18 +353,12 @@ export class ResticService {
     }
 
     public async backup(execution: UpdateExecutionSchema, path: string, target: UpdateBackupTargetSchema) {
-        if (this.repo.adminStatus === 'PAUSED') {
-            return systemFail(new Error(`repo ${this.repo.name} is paused`));
-        }
-        if (this.repo.healthStatus === 'CORRUPT') {
-            return systemFail(new Error(`repo ${this.repo.name} is corrupt`));
-        }
         // add to queue
         const backupResult = await this.startJob(
             execution,
             (log, signal) =>
                 this.repoClient.backup(path, log, execution.uuid, signal),
-            false
+            { isExclusive: false }
         )
         if (backupResult.status !== 'success') return backupResult;
         logger.debug(`backup ${this.repo.name} success`)
@@ -380,17 +372,10 @@ export class ResticService {
         executionId: number,
         snapshotId: string | undefined | null, // handle backup skipped
     ) {
-        if (this.repo.adminStatus === 'PAUSED') {
-            return systemFail(new Error(`repo ${this.repo.name} is paused`));
-        }
-        if (this.repo.healthStatus === 'CORRUPT') {
-            return systemFail(new Error(`repo ${this.repo.name} is corrupt`));
-        }
         // forget old data
         const retryResult = await this.retryOnLock(
             () => this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy),
-            true,
-            5000
+            { isExclusive: true, initialIntervalMs: 5000 },
         );
         if (retryResult.status !== 'success') {
             logger.warn(`forget ${path} at ${this.repo.name} fail: ${retryResult.error.toString()}`);
@@ -415,15 +400,9 @@ export class ResticService {
     // todo: snapshots is deleted bypassing app, index fail to sync delete
     // todo: problem resolve through app restart
     public async indexSnapshots(path?: string) {
-        if (this.repo.adminStatus === 'PAUSED') {
-            return systemFail(new Error(`repo ${this.repo.name} is paused`));
-        }
-        if (this.repo.healthStatus === 'CORRUPT') {
-            return systemFail(new Error(`repo ${this.repo.name} is corrupt`));
-        }
         const retryResult = await this.retryOnLock(
             () => this.repoClient.getSnapshots(path),
-            false, 2500, 4
+            { initialIntervalMs: 2500, retryLimit: 4 }
         );
         if (retryResult.status !== 'success') {
             logger.warn(retryResult.error, `indexSnapshots ${path} in ${this.repo.name} fail.`);
@@ -486,44 +465,41 @@ export class ResticService {
     }
 
     public async check(execution: UpdateExecutionSchema, percentage: number) {
-        if (this.repo.adminStatus === 'PAUSED') {
-            return systemFail(new Error(`repo ${this.repo.name} is paused`));
-        }
         // add to queue
         const execResult = await this.startJob(
             execution,
             (log, signal) =>
                 this.repoClient.check(log, percentage *  100, execution.uuid, signal),
+            { checkRepoCorrupt: false }
         )
-        if (execResult.status === 'system_error') return execResult;
-        if (execResult.status === 'restic_error') {
-            if (!execResult.errorOutput) return execResult; // fail not due to repo corrupt
-            this.repo.healthStatus = 'CORRUPT';
-            const [updatedResult] = await db.update(repository)
-                .set(this.repo)
-                .where(eq(repository.id, this.repo.id))
-                .returning()
-            this.repo = updateRepositorySchema.parse(updatedResult);
-            logger.debug(`check repo ${this.repo.name} with num error > 0`)
-            return execResult;
+        switch (execResult.status) {
+            case 'success': {
+                // update repo as active
+                this.repo.healthStatus = 'HEALTH';
+                const [updatedResult] = await db.update(repository)
+                    .set(this.repo)
+                    .where(eq(repository.id, this.repo.id))
+                    .returning()
+                this.repo = updateRepositorySchema.parse(updatedResult);
+                logger.debug(`check repo ${this.repo.name} with num error = 0`);
+                return;
+            }
+            case 'system_error': return execResult;
+            case 'restic_error': {
+                if (!execResult.errorOutput) return execResult; // fail not due to repo corrupt
+                this.repo.healthStatus = 'CORRUPT';
+                const [updatedResult] = await db.update(repository)
+                    .set(this.repo)
+                    .where(eq(repository.id, this.repo.id))
+                    .returning()
+                this.repo = updateRepositorySchema.parse(updatedResult);
+                logger.debug(`check repo ${this.repo.name} with num error > 0`)
+                return execResult;
+            }
         }
-        // update repo as active
-        this.repo.healthStatus = 'HEALTH';
-        const [updatedResult] = await db.update(repository)
-            .set(this.repo)
-            .where(eq(repository.id, this.repo.id))
-            .returning()
-        this.repo = updateRepositorySchema.parse(updatedResult);
-        logger.debug(`check repo ${this.repo.name} with num error = 0`)
     }
 
     public async prune(execution: UpdateExecutionSchema,) {
-        if (this.repo.adminStatus === 'PAUSED') {
-            return systemFail(new Error(`repo ${this.repo.name} is paused`));
-        }
-        if (this.repo.healthStatus === 'CORRUPT') {
-            return systemFail(new Error(`repo ${this.repo.name} is corrupt`));
-        }
         // add to queue
         const execResult = await this.startJob(
             execution,
@@ -537,9 +513,13 @@ export class ResticService {
     private async startJob<T> (
         newExecution: UpdateExecutionSchema,
         job: (log: string, signal: AbortSignal) => Task<ResticResult<T>>,
-        isExclusive: boolean = true,
+        { isExclusive = true, checkRepoCorrupt = true, } = {},
         lockRemote?: () => Promise<() => void>,
     ): Promise<ExecResult<T>> {
+        // check if repo allow executed
+        const msg = await this.canExecuteJob(newExecution, checkRepoCorrupt);
+        if (msg !== null) return systemFail(new Error(msg));
+        // create abort signal
         const controller = new AbortController();
         const { signal } = controller;
         this.taskMap.set(newExecution.id, { status: 'waiting', controller: controller });
@@ -596,14 +576,15 @@ export class ResticService {
     // design to be systemFail fast, used for short living restic command: forget, snapshots, ls ......
     private async retryOnLock<T>(
         func: () => Promise<ResticResult<T>>,
-        isExclusive: boolean = false,
-        initialIntervalMs: number = 1000,
-        retryLimit: number = 3,
+        { isExclusive = false, initialIntervalMs = 1000, retryLimit = 3 } = {},
     ): Promise<ExecResult<T>> {
         let lastError: ResticError | any;
         for (let attempt = 0; attempt <= retryLimit; attempt++) {
             try {
                 const delay = initialIntervalMs * (attempt + 1);
+                if (this.repo.adminStatus === 'PAUSED' || this.repo.healthStatus === 'HEALTH') {
+                    throw new Error(`repo ${this.repo.name} status ${this.repo.adminStatus}/${this.repo.healthStatus} not allow`)
+                }
                 const result = await withTimeout(this.resticSem, delay)
                     .runExclusive(async () => await func(), isExclusive ? this.MAX_SEM_WEIGHT : 1);
                 // 3. Check for success
@@ -701,6 +682,19 @@ export class ResticService {
     public async readLock() {
         const [, releaseFunc] = await this.resticSem.acquire(1);
         return releaseFunc;
+    }
+
+    private async canExecuteJob(exec: UpdateExecutionSchema, checkRepoCorrupt: boolean = true): Promise<string | null> {
+        // check if repo allow executed
+        if (this.repo.adminStatus === 'PAUSED'
+            || (checkRepoCorrupt && this.repo.healthStatus === 'CORRUPT')) {
+            const msg = `repo ${this.repo.name} status ${this.repo.adminStatus}/${this.repo.healthStatus} is not allow`;
+            await db.update(execution)
+                .set({ errorMessage: msg, finishedAt: Date.now(), executeStatus: execStatus.REJECT })
+                .where(eq(execution.id, exec.id));
+            return msg;
+        }
+        return null;
     }
 }
 
