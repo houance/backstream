@@ -582,7 +582,7 @@ export class ResticService {
         for (let attempt = 0; attempt <= retryLimit; attempt++) {
             try {
                 const delay = initialIntervalMs * (attempt + 1);
-                if (this.repo.adminStatus === 'PAUSED' || this.repo.healthStatus === 'HEALTH') {
+                if (this.repo.adminStatus === 'PAUSED' || this.repo.healthStatus !== 'HEALTH') {
                     throw new Error(`repo ${this.repo.name} status ${this.repo.adminStatus}/${this.repo.healthStatus} not allow`)
                 }
                 const result = await withTimeout(this.resticSem, delay)
@@ -687,7 +687,7 @@ export class ResticService {
     private async canExecuteJob(exec: UpdateExecutionSchema, checkRepoCorrupt: boolean = true): Promise<string | null> {
         // check if repo allow executed
         if (this.repo.adminStatus === 'PAUSED'
-            || (checkRepoCorrupt && this.repo.healthStatus === 'CORRUPT')) {
+            || (checkRepoCorrupt && this.repo.healthStatus !== 'HEALTH')) {
             const msg = `repo ${this.repo.name} status ${this.repo.adminStatus}/${this.repo.healthStatus} is not allow`;
             await db.update(execution)
                 .set({ errorMessage: msg, finishedAt: Date.now(), executeStatus: execStatus.REJECT })

@@ -10,7 +10,7 @@ import {
 import {calPercentage, formatBytes, formatTimestamp} from "../../../util/format.ts";
 import {IconAlertCircle, IconPlayerPlay} from "@tabler/icons-react";
 
-export function OverviewTab({ storage }: {
+export function OverviewTab({ storage, onScheStatusChange }: {
     storage: {
         repo: UpdateRepositorySchema,
         statJob: UpdateRepoScheduleSchema,
@@ -21,7 +21,8 @@ export function OverviewTab({ storage }: {
         pruneJob: UpdateRepoScheduleSchema,
         lastCheckTimestamp: number | null,
         lastPruneTimestamp: number | null,
-    }
+    },
+    onScheStatusChange: ({ jobId, status }: { jobId: number, status: 'pause' | 'resume' | 'trigger'}) => Promise<void> | void
 }) {
     const repo = storage.repo;
     return (
@@ -30,23 +31,23 @@ export function OverviewTab({ storage }: {
 
             {/* Content Grid - Clean Monochrome Style */}
             <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md">
-                <JobCard title="Storage" job={storage.statJob} >
+                <JobCard title="Storage" job={storage.statJob} onScheStatusChange={onScheStatusChange} >
                     <DetailRow label="Disk Usage" value={formatBytes(repo.size)}/>
                     <DetailRow
                         label="Efficiency"
                         value={calPercentage(repo.size, storage.snapshotSize, true) + ` (${formatBytes(storage.snapshotSize - (repo.size ?? 0))} Saved)`} />
                 </JobCard>
 
-                <JobCard title="Index" job={storage.snapshotsJob} >
+                <JobCard title="Index" job={storage.snapshotsJob} onScheStatusChange={onScheStatusChange} >
                     <DetailRow label="Snapshots" value={storage.snapshotCount}/>
                     <DetailRow label="Total Blobs" value={repo.blobCount}/>
                 </JobCard>
 
-                <JobCard title="Check" job={storage.checkJob} >
+                <JobCard title="Check" job={storage.checkJob} onScheStatusChange={onScheStatusChange} >
                     <DetailRow label="Last Run" value={formatTimestamp(storage.lastCheckTimestamp)} />
                 </JobCard>
 
-                <JobCard title="Prune" job={storage.pruneJob} >
+                <JobCard title="Prune" job={storage.pruneJob} onScheStatusChange={onScheStatusChange} >
                     <DetailRow label="Last Run" value={formatTimestamp(storage.lastPruneTimestamp)} />
                 </JobCard>
             </SimpleGrid>
@@ -125,10 +126,11 @@ function StorageHeader({ repo }: { repo: UpdateRepositorySchema }) {
     );
 }
 
-const JobCard = ({ title, job, children }: {
+const JobCard = ({ title, job, children, onScheStatusChange }: {
     title: string;
     job: UpdateRepoScheduleSchema;
     children: ReactNode;
+    onScheStatusChange: ({ jobId, status }: { jobId: number, status: 'pause' | 'resume' | 'trigger'}) => Promise<void> | void
 }) => {
     // helper outside
     const getJobUI = (status: ScheduleStatus) => {
@@ -187,52 +189,13 @@ const JobCard = ({ title, job, children }: {
                         color="green"
                         // Toggle logic: If currently ACTIVE, set to PAUSED.
                         // If currently PAUSED or ERROR, set to ACTIVE.
-                        onChange={() => {/* toggleStatus(target.id, isRunning ? "PAUSED" : "ACTIVE") */}}
+                        onChange={() => onScheStatusChange({jobId: job.id, status: isRunning ? 'pause' : 'resume'})}
                     />
                 </Group>
             </Stack>
         </Paper>
     );
 };
-
-// 3. Main component remains clean
-export function StorageCards({ storage }: {
-    storage: {
-        repo: UpdateRepositorySchema,
-        statJob: UpdateRepoScheduleSchema,
-        snapshotsJob: UpdateRepoScheduleSchema,
-        snapshotCount: number,
-        snapshotSize: number,
-        checkJob: UpdateRepoScheduleSchema,
-        pruneJob: UpdateRepoScheduleSchema,
-        lastCheckTimestamp: number | null,
-        lastPruneTimestamp: number | null,
-    }}) {
-
-    const { repo } = storage;
-
-    return (
-        <>
-            <JobCard title="Storage" job={storage.statJob} >
-                <DetailRow label="Disk Usage" value={formatBytes(repo.size)}/>
-                <DetailRow label="Efficiency" value={calPercentage(repo.size, storage.snapshotSize, true)}/>
-            </JobCard>
-
-            <JobCard title="Index" job={storage.snapshotsJob} >
-                <DetailRow label="Snapshots" value={storage.snapshotCount}/>
-                <DetailRow label="Total Blobs" value={repo.blobCount}/>
-            </JobCard>
-
-            <JobCard title="Check" job={storage.checkJob} >
-                <DetailRow label="Last Run" value={formatTimestamp(storage.lastCheckTimestamp)} />
-            </JobCard>
-
-            <JobCard title="Prune" job={storage.pruneJob} >
-                <DetailRow label="Last Run" value={formatTimestamp(storage.lastPruneTimestamp)} />
-            </JobCard>
-        </>
-    );
-}
 
 function DetailRow({
                        label,

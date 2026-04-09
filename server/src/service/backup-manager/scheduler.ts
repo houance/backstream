@@ -324,21 +324,19 @@ export class Scheduler {
     public async pauseJob(jobScheduleId: number) {
         const jobRecord = this.cronJobMap.get(jobScheduleId);
         if (!jobRecord) return { message: 'Not found' };
-        if (!jobRecord.cron.isRunning()) return { message: 'success' };
         // stop job and update job schedule
         jobRecord.cron.pause();
         const [dbResult] = await db.update(jobSchedules)
             .set({ jobStatus: scheduleStatus.PAUSED })
             .where(eq(jobSchedules.id, jobRecord.job.id))
             .returning();
-        if (!dbResult) return { message: 'job db not found' };
+        if (!dbResult) return { message: `update job ${jobScheduleId} fail` };
         return { message: 'success' };
     }
 
     public async resumeJob(jobScheduleId: number) {
         const jobRecord = this.cronJobMap.get(jobScheduleId);
         if (!jobRecord) return { message: 'Not found' };
-        if (jobRecord.cron.isRunning()) return { message: 'success' };
         if (jobRecord.cron.isStopped()) return { message: `can't resume, job permanently stopped` };
         // resume job and update job schedule
         jobRecord.cron.resume();
@@ -346,7 +344,7 @@ export class Scheduler {
             .set({ jobStatus: scheduleStatus.ACTIVE })
             .where(eq(jobSchedules.id, jobRecord.job.id))
             .returning();
-        if (!dbResult) return { message: 'job db not found' };
+        if (!dbResult) return { message: `update job ${jobScheduleId} fail` };
         return { message: 'success' };
     }
 

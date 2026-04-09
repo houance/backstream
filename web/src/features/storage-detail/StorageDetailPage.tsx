@@ -4,9 +4,11 @@ import { IconArrowLeft, IconLayoutDashboard, IconHistoryToggle } from '@tabler/i
 // Import your sub-components
 import { OverviewTab } from './component/OverviewTab';
 import { FailHistoryTab } from './component/FailHistoryTab.tsx';
-import {useQuery} from "@tanstack/react-query";
+import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {client} from "../../api";
 import OnGoingProcessFooter from "../../component/OnGoingProcessFooter.tsx";
+import {ensureSuccess} from "../../util/api.ts";
+import {notice} from "../../util/notification.tsx";
 
 export default function StorageDetailPage() {
     const navigate = useNavigate();
@@ -34,6 +36,28 @@ export default function StorageDetailPage() {
         refetchInterval: 5000,
     });
     const hasProcesses = !isOnGoingProcessLoading && onGoingProcess && onGoingProcess.length > 0;
+
+    const queryClient = useQueryClient();
+    const changeJobStatus = useMutation({
+        mutationFn: async ( { jobId, status }: { jobId: number, status: 'pause' | 'resume' | 'trigger'} ) => {
+            switch (status) {
+                case 'pause': return ensureSuccess( client.api.info['job'][':id']['pause'].$post(
+                    { param: { id: jobId.toString() } }
+                ))
+                case 'resume': return ensureSuccess( client.api.info['job'][':id']['resume'].$post(
+                    { param: { id: jobId.toString() } }
+                ))
+                case 'trigger': return ensureSuccess( client.api.info['job'][':id']['trigger'].$post(
+                    { param: { id: jobId.toString() } }
+                ))
+            }
+        },
+        onSuccess: async () => {
+            await queryClient.invalidateQueries({ queryKey: ['storage-loc-detail']});
+            notice(true, 'Schedule successful');
+        },
+        onError: (error) => notice(false, `${String(error)}`),
+    })
 
     if (isDetailLoading) return <Center h="100vh"><Loader size="xl" /></Center>;
     if (!storageLocDetail) return <Center h="100vh">Storage not found</Center>;
@@ -68,7 +92,7 @@ export default function StorageDetailPage() {
                             </Tabs.List>
 
                             <Tabs.Panel value="overview" pt="md">
-                                <OverviewTab storage={storageLocDetail} />
+                                <OverviewTab storage={storageLocDetail} onScheStatusChange={changeJobStatus.mutate} />
                             </Tabs.Panel>
 
                             <Tabs.Panel value="health" pt="md">

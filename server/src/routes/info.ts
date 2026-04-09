@@ -117,6 +117,39 @@ const infoRoute = new Hono<Env>()
             logs: await getLogs(exec.logFile)
         })
     })
+    // pause job
+    .post('/job/:id/pause', async (c) => {
+        const jobId = Number(c.req.param('id'));
+        const result = await c.var.scheduler.pauseJob(jobId);
+        switch (result.message) {
+            case 'success': return c.json(result);
+            case 'Not found': return c.json(result, 404);
+            default: return c.json(result, 500);
+        }
+    })
+    // resume job
+    .post('/job/:id/resume', async (c) => {
+        const jobId = Number(c.req.param('id'));
+        const result = await c.var.scheduler.resumeJob(jobId);
+        switch (result.message) {
+            case 'success': return c.json(result);
+            case 'Not found': return c.json(result, 404);
+            case `can't resume, job permanently stopped`: return c.json(result, 400);
+            default: return c.json(result, 500);
+        }
+    })
+    // trigger job
+    .post('/job/:id/trigger', async (c) => {
+        const jobId = Number(c.req.param('id'));
+        const result = c.var.scheduler.triggerJob(jobId);
+        switch (result.message) {
+            case 'success': return c.json(result);
+            case 'Not found': return c.json(result, 404);
+            default: return c.json(result, 500);
+        }
+    })
+
+
 
 async function getExecutionsData(db: Env['Variables']['db']) {
     return await db.query.execution.findMany({
