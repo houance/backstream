@@ -282,11 +282,11 @@ export const failHistory = z.object({
     executionId: z.number().nonnegative(),
     uuid: z.string(),
     scheduledAt: z.number().min(0),
-    startAt: z.number().min(0).optional(),
-    finishedAt: z.number().min(0).optional(),
+    startAt: z.number().min(0).nullish(),
+    finishedAt: z.number().min(0).nullish(),
     commandType: z.string(),
     failReason: z.string(),
-    fullCommand: z.string(),
+    fullCommand: z.string().nullish(),
 })
 export type FailHistory = z.infer<typeof failHistory>;
 // restores schema

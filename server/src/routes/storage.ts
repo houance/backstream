@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import {and, count, desc, eq, getTableColumns, gte, lte, sql, or} from 'drizzle-orm';
+import {and, count, desc, eq, getTableColumns, gte, lte, sql, or, inArray} from 'drizzle-orm';
 import {type Env} from '../index'
 import {
     updateRepositorySchema,
@@ -17,7 +17,7 @@ import {
     type UpdateRepositorySchema,
     storageCreateSchema,
     type StorageCreateSchema,
-    type InsertRepoScheduleSchema, jobSchedules, type UpdateRepoScheduleSchema, updateRepoScheduleSchema
+    type InsertRepoScheduleSchema, jobSchedules, type UpdateRepoScheduleSchema, updateRepoScheduleSchema, execStatus
 } from '@backstream/shared';
 import {zValidator} from "@hono/zod-validator";
 import {RepositoryClient} from '../service/restic';
@@ -112,7 +112,7 @@ const storageRoute = new Hono<Env>()
             const [execs, totalCount] = await Promise.all([
                 c.var.db.select().from(execution)
                     .where(and(
-                        eq(execution.executeStatus, 'fail'),
+                        inArray(execution.executeStatus, [execStatus.FAIL, execStatus.REJECT, execStatus.KILL]),
                         eq(execution.repositoryId, storageId),
                         gte(execution.scheduledAt, start),
                         lte(execution.scheduledAt, end),
@@ -121,7 +121,7 @@ const storageRoute = new Hono<Env>()
                     .offset(filterQuery.page - 1 < 0 ? 0 : filterQuery.page - 1),
                 c.var.db.select({ count: count() }).from(execution)
                     .where(and(
-                        eq(execution.executeStatus, 'fail'),
+                        inArray(execution.executeStatus, [execStatus.FAIL, execStatus.REJECT, execStatus.KILL]),
                         eq(execution.repositoryId, storageId),
                         gte(execution.scheduledAt, start),
                         lte(execution.scheduledAt, end),
@@ -134,9 +134,9 @@ const storageRoute = new Hono<Env>()
                 const mappedFailHistory = execs.map(exec => ({
                     executionId: exec.id,
                     uuid: exec.uuid,
-                    scheduledAt: exec.startedAt,
+                    scheduledAt: exec.scheduledAt,
                     startAt: exec.startedAt,
-                    finishedAt: exec.scheduledAt,
+                    finishedAt: exec.finishedAt,
                     commandType: exec.commandType,
                     fullCommand: exec.fullCommand,
                     failReason: exec.errorMessage,

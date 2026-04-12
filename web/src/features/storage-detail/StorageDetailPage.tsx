@@ -23,7 +23,7 @@ export default function StorageDetailPage() {
             if (!res.ok) throw new Error('Failed to fetch storage loc.');
             return res.json()
         },
-        refetchInterval: 5000
+        refetchInterval: 20000
     })
 
     const { data: onGoingProcess, isPending: isOnGoingProcessLoading } = useQuery({
@@ -33,7 +33,7 @@ export default function StorageDetailPage() {
             if (!res.ok) throw new Error('Failed to fetch storage on going process');
             return res.json();
         },
-        refetchInterval: 5000,
+        refetchInterval: 20000,
     });
     const hasProcesses = !isOnGoingProcessLoading && onGoingProcess && onGoingProcess.length > 0;
 
@@ -53,7 +53,7 @@ export default function StorageDetailPage() {
             }
         },
         onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: ['storage-loc-detail']});
+            await queryClient.invalidateQueries({ queryKey: ['storage-loc-detail', id]});
             notice(true, 'Schedule successful');
         },
         onError: (error) => notice(false, `${String(error)}`),
@@ -92,7 +92,11 @@ export default function StorageDetailPage() {
                             </Tabs.List>
 
                             <Tabs.Panel value="overview" pt="md">
-                                <OverviewTab storage={storageLocDetail} onScheStatusChange={changeJobStatus.mutate} />
+                                <OverviewTab
+                                    storage={storageLocDetail}
+                                    onScheStatusChange={changeJobStatus.mutate}
+                                    isScheStatusPending={changeJobStatus.isPending}
+                                />
                             </Tabs.Panel>
 
                             <Tabs.Panel value="health" pt="md">

@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import {Container, Tabs, Button, Group, Title, Loader, Center, Stack, Paper, Box} from '@mantine/core';
-import { useQuery } from '@tanstack/react-query';
+import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {IconHistoryToggle, IconArrowLeft, IconLayoutDashboard, IconCamera} from '@tabler/icons-react';
 import { client } from "../../api";
 
@@ -9,6 +9,8 @@ import SnapshotExplorer from './component/SnapshotsExplorer.tsx';
 import OverviewTab from "./component/OverviewTab.tsx";
 import OnGoingProcessFooter from "../../component/OnGoingProcessFooter.tsx";
 import FailHistory from "./component/FailHistory.tsx";
+import {ensureSuccess} from "../../util/api.ts";
+import {notice} from "../../util/notification.tsx";
 
 export default function PolicyDetailPage() {
     const { id } = useParams();
@@ -21,7 +23,7 @@ export default function PolicyDetailPage() {
             if (!res.ok) throw new Error('Failed to fetch policy');
             return res.json();
         },
-        refetchInterval: 5000
+        refetchInterval: 20000
     });
 
     const { data: onGoingProcess, isPending: isOnGoingProcessLoading } = useQuery({
@@ -31,9 +33,31 @@ export default function PolicyDetailPage() {
             if (!res.ok) throw new Error('Failed to fetch policy on going process');
             return res.json();
         },
-        refetchInterval: 5000,
+        refetchInterval: 20000,
     });
     const hasProcesses = !isOnGoingProcessLoading && onGoingProcess && onGoingProcess.length > 0;
+
+    const queryClient = useQueryClient();
+    const changeJobStatus = useMutation({
+        mutationFn: async ( { jobId, status }: { jobId: number, status: 'pause' | 'resume' | 'trigger'} ) => {
+            switch (status) {
+                case 'pause': return ensureSuccess( client.api.info['job'][':id']['pause'].$post(
+                    { param: { id: jobId.toString() } }
+                ))
+                case 'resume': return ensureSuccess( client.api.info['job'][':id']['resume'].$post(
+                    { param: { id: jobId.toString() } }
+                ))
+                case 'trigger': return ensureSuccess( client.api.info['job'][':id']['trigger'].$post(
+                    { param: { id: jobId.toString() } }
+                ))
+            }
+        },
+        onSuccess: async () => {
+            await queryClient.invalidateQueries({ queryKey: ['policy', id]});
+            notice(true, 'Schedule successful');
+        },
+        onError: (error) => notice(false, `${String(error)}`),
+    })
 
     if (isLoading) return <Center h="100vh"><Loader size="xl" /></Center>;
     if (!policy) return <Center h="100vh">Policy not found</Center>;
@@ -67,7 +91,11 @@ export default function PolicyDetailPage() {
                             </Tabs.List>
 
                             <Tabs.Panel value="overview" pt="md">
-                                <OverviewTab policy={policy} />
+                                <OverviewTab
+                                    policy={policy}
+                                    onScheStatusChange={changeJobStatus.mutate}
+                                    isScheStatusPending={changeJobStatus.isPending}
+                                />
                             </Tabs.Panel>
                             <Tabs.Panel value="snapshots" pt="md">
                                 <SnapshotExplorer policy={policy} />

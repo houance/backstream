@@ -1,4 +1,17 @@
-import {ActionIcon, Badge, Box, Divider, Group, Paper, SimpleGrid, Stack, Switch, Text, Tooltip} from "@mantine/core";
+import {
+    ActionIcon,
+    Badge,
+    Box,
+    Divider,
+    Group,
+    Loader,
+    Paper,
+    SimpleGrid,
+    Stack,
+    Switch,
+    Text,
+    Tooltip
+} from "@mantine/core";
 import {type ReactNode} from "react";
 import {
     NEVER_CRON,
@@ -10,7 +23,7 @@ import {
 import {calPercentage, formatBytes, formatTimestamp} from "../../../util/format.ts";
 import {IconAlertCircle, IconPlayerPlay} from "@tabler/icons-react";
 
-export function OverviewTab({ storage, onScheStatusChange }: {
+export function OverviewTab({ storage, onScheStatusChange, isScheStatusPending = false }: {
     storage: {
         repo: UpdateRepositorySchema,
         statJob: UpdateRepoScheduleSchema,
@@ -22,32 +35,35 @@ export function OverviewTab({ storage, onScheStatusChange }: {
         lastCheckTimestamp: number | null,
         lastPruneTimestamp: number | null,
     },
-    onScheStatusChange: ({ jobId, status }: { jobId: number, status: 'pause' | 'resume' | 'trigger'}) => Promise<void> | void
+    onScheStatusChange: ({ jobId, status }: { jobId: number, status: 'pause' | 'resume' | 'trigger'}) => Promise<void> | void,
+    isScheStatusPending: boolean,
 }) {
     const repo = storage.repo;
     return (
         <Stack pt="md" gap="xl">
-            <StorageHeader repo={storage.repo}/>
+            <StorageHeader repo={storage.repo} />
 
             {/* Content Grid - Clean Monochrome Style */}
             <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md">
-                <JobCard title="Storage" job={storage.statJob} onScheStatusChange={onScheStatusChange} >
+                <JobCard title="Storage" job={storage.statJob} onScheStatusChange={onScheStatusChange} isScheStatusPending={isScheStatusPending} >
                     <DetailRow label="Disk Usage" value={formatBytes(repo.size)}/>
                     <DetailRow
                         label="Efficiency"
                         value={calPercentage(repo.size, storage.snapshotSize, true) + ` (${formatBytes(storage.snapshotSize - (repo.size ?? 0))} Saved)`} />
+                    <DetailRow label="Last Run" value={formatTimestamp(storage.statJob.lastRunAt)} />
                 </JobCard>
 
-                <JobCard title="Index" job={storage.snapshotsJob} onScheStatusChange={onScheStatusChange} >
+                <JobCard title="Index" job={storage.snapshotsJob} onScheStatusChange={onScheStatusChange} isScheStatusPending={isScheStatusPending} >
                     <DetailRow label="Snapshots" value={storage.snapshotCount}/>
                     <DetailRow label="Total Blobs" value={repo.blobCount}/>
+                    <DetailRow label="Last Run" value={formatTimestamp(storage.snapshotsJob.lastRunAt)} />
                 </JobCard>
 
-                <JobCard title="Check" job={storage.checkJob} onScheStatusChange={onScheStatusChange} >
+                <JobCard title="Check" job={storage.checkJob} onScheStatusChange={onScheStatusChange} isScheStatusPending={isScheStatusPending} >
                     <DetailRow label="Last Run" value={formatTimestamp(storage.lastCheckTimestamp)} />
                 </JobCard>
 
-                <JobCard title="Prune" job={storage.pruneJob} onScheStatusChange={onScheStatusChange} >
+                <JobCard title="Prune" job={storage.pruneJob} onScheStatusChange={onScheStatusChange} isScheStatusPending={isScheStatusPending} >
                     <DetailRow label="Last Run" value={formatTimestamp(storage.lastPruneTimestamp)} />
                 </JobCard>
             </SimpleGrid>
@@ -126,11 +142,12 @@ function StorageHeader({ repo }: { repo: UpdateRepositorySchema }) {
     );
 }
 
-const JobCard = ({ title, job, children, onScheStatusChange }: {
+const JobCard = ({ title, job, children, onScheStatusChange, isScheStatusPending }: {
     title: string;
     job: UpdateRepoScheduleSchema;
     children: ReactNode;
-    onScheStatusChange: ({ jobId, status }: { jobId: number, status: 'pause' | 'resume' | 'trigger'}) => Promise<void> | void
+    onScheStatusChange: ({ jobId, status }: { jobId: number, status: 'pause' | 'resume' | 'trigger'}) => Promise<void> | void,
+    isScheStatusPending: boolean
 }) => {
     // helper outside
     const getJobUI = (status: ScheduleStatus) => {
@@ -150,10 +167,16 @@ const JobCard = ({ title, job, children, onScheStatusChange }: {
     return (
         <Paper withBorder p="md" radius="md" shadow="sm" h="100%" style={{ display: 'flex', flexDirection: 'column' }}>
             <Stack gap='sm' style={{ height: '100%', flex: 1 }}>
+                {/* Header */}
                 <Group justify="space-between" wrap="nowrap" align='center'>
                     <Badge variant="light" color="indigo" mb="sm">{title}</Badge>
                     <Tooltip label="Run Now">
-                        <ActionIcon variant="light" color="blue" size="sm" onClick={() => {}}>
+                        <ActionIcon
+                            variant="light"
+                            color="blue"
+                            size="sm"
+                            loading={isScheStatusPending}
+                            onClick={() => onScheStatusChange({jobId: job.id, status: 'trigger'})}>
                             <IconPlayerPlay size={14} />
                         </ActionIcon>
                     </Tooltip>
@@ -185,11 +208,17 @@ const JobCard = ({ title, job, children, onScheStatusChange }: {
 
                     <Switch
                         checked={isRunning}
+                        disabled={isScheStatusPending}
                         size="xs"
                         color="green"
                         // Toggle logic: If currently ACTIVE, set to PAUSED.
                         // If currently PAUSED or ERROR, set to ACTIVE.
                         onChange={() => onScheStatusChange({jobId: job.id, status: isRunning ? 'pause' : 'resume'})}
+                        thumbIcon={
+                            isScheStatusPending ? (
+                                <Loader size={10} color="gray" /> // 2. Visual feedback inside the switch
+                            ) : undefined
+                        }
                     />
                 </Group>
             </Stack>

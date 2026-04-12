@@ -1,5 +1,12 @@
 import { Hono } from 'hono';
-import {type Activity, execution, repository, sameDriveRepoRequest, updateRepositorySchema} from "@backstream/shared";
+import {
+    type Activity,
+    execStatus,
+    execution,
+    repository,
+    sameDriveRepoRequest, updateExecutionSchema,
+    updateRepositorySchema
+} from "@backstream/shared";
 import {type Env} from '../index'
 import path from "node:path";
 import { promises as fs } from 'fs'
@@ -12,13 +19,14 @@ const infoRoute = new Hono<Env>()
     .get('/health', (c) => c.json({ message:'OK'}))
     .get('/activity', async (c) => {
         const dbResult = await getExecutionsData(c.var.db);
-        if (!dbResult) return c.json({ error: 'db error'}, 500);
+        if (dbResult === null) return c.json({ error: 'db error'}, 500);
         const result: Activity[] = dbResult.map(item => ({
             id: item.id,
             title: item.commandType,
             description: `Performed ${item.commandType} on ${item.repository ? item.repository.name : item.target?.strategy.name}(${item.executeStatus})`,
             completeAt: item.finishedAt ? item.finishedAt : 0,
-            level: item.executeStatus === "fail" ? "ALERT" : "INFO",
+            level: ([execStatus.REJECT, execStatus.KILL, execStatus.FAIL, execStatus.CANCEL] as string[])
+                .includes(item.executeStatus) ? "ALERT" : "INFO",
         }))
         return c.json(result);
     })
@@ -152,7 +160,7 @@ const infoRoute = new Hono<Env>()
 
 
 async function getExecutionsData(db: Env['Variables']['db']) {
-    return await db.query.execution.findMany({
+    const dbResult = await db.query.execution.findMany({
         orderBy: (execution, { desc }) => [desc(execution.finishedAt)],
         limit: 5,
         with: {
@@ -164,6 +172,8 @@ async function getExecutionsData(db: Env['Variables']['db']) {
             repository: true,
         },
     });
+    if (!dbResult?.length) return null;
+    return dbResult;
 }
 
 function getLevenshteinDistance(a: string, b: string): number {

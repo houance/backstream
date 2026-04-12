@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import {type Env} from '../index'
 import {
-    backupTarget,
+    backupTarget, execStatus,
     execution,
     failHistory,
     type FilterQuery,
@@ -100,7 +100,7 @@ const policyRoute = new Hono<Env>()
             const [execs, totalCount] = await Promise.all([
                 c.var.db.select().from(execution)
                     .where(and(
-                        eq(execution.executeStatus, 'fail'),
+                        inArray(execution.executeStatus, [execStatus.FAIL, execStatus.REJECT, execStatus.KILL]),
                         eq(execution.backupTargetId, targetId),
                         gte(execution.scheduledAt, start),
                         lte(execution.scheduledAt, end),
@@ -109,7 +109,7 @@ const policyRoute = new Hono<Env>()
                     .offset(filterQuery.page - 1 < 0 ? 0 : filterQuery.page - 1),
                 c.var.db.select({ count: count() }).from(execution)
                     .where(and(
-                        eq(execution.executeStatus, 'fail'),
+                        inArray(execution.executeStatus, [execStatus.FAIL, execStatus.REJECT, execStatus.KILL]),
                         eq(execution.backupTargetId, targetId),
                         gte(execution.scheduledAt, start),
                         lte(execution.scheduledAt, end),
@@ -122,9 +122,9 @@ const policyRoute = new Hono<Env>()
                 const mappedFailHistory = execs.map(exec => ({
                     executionId: exec.id,
                     uuid: exec.uuid,
-                    scheduledAt: exec.startedAt,
+                    scheduledAt: exec.scheduledAt,
                     startAt: exec.startedAt,
-                    finishedAt: exec.scheduledAt,
+                    finishedAt: exec.finishedAt,
                     commandType: exec.commandType,
                     fullCommand: exec.fullCommand,
                     failReason: exec.errorMessage,

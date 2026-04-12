@@ -5,7 +5,7 @@ import {
     execStatus,
     execution,
     type InsertExecutionSchema,
-    jobSchedules,
+    jobSchedules, NEVER_CRON,
     repository,
     type ScheduleStatus,
     scheduleStatus,
@@ -605,11 +605,15 @@ export class Scheduler {
             for (let attempt = 0; attempt <= maxRetries; attempt++) {
                 try {
                     // update nextRunAt
-                    const [dbResult] = await db.update(jobSchedules)
-                        .set({ nextRunAt: new Cron(job.cron).nextRun()!.getTime() })
-                        .where(eq(jobSchedules.id, job.id))
-                        .returning();
-                    if (!dbResult) throw new Error(`update job ${job.id} nextRunAt db fail`);
+                    const nextDate = new Cron(job.cron).nextRun();
+                    if (nextDate === null && job.cron !== NEVER_CRON) throw new Error(`get job nextRunAt failed. cron is ${job.cron}`);
+                    if (job.cron !== NEVER_CRON) {
+                        const [dbResult] = await db.update(jobSchedules)
+                            .set({ nextRunAt: new Cron(job.cron).nextRun()?.getTime() })
+                            .where(eq(jobSchedules.id, job.id))
+                            .returning();
+                        if (!dbResult) throw new Error(`update job ${job.id} nextRunAt db fail`);
+                    }
                     const execResult = await taskFn(exec);
                     // exec success then update lastRunAt return
                     if (!execResult || execResult.status === 'success') {

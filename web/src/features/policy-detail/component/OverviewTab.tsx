@@ -1,15 +1,36 @@
-import {Badge, Group, Paper, SimpleGrid, Stack, Text, Tooltip, ActionIcon, Divider, Box, Switch} from "@mantine/core";
+import {
+    Badge,
+    Group,
+    Paper,
+    SimpleGrid,
+    Stack,
+    Text,
+    Tooltip,
+    ActionIcon,
+    Divider,
+    Box,
+    Switch,
+    Loader
+} from "@mantine/core";
 import {
     type ScheduleStatus,
     scheduleStatus,
     type UpdateBackupPolicySchema,
     type UpdateRepositorySchema
 } from "@backstream/shared";
-import {formatRetentionPolicy, formatTimestamp} from "../../../util/format.ts";
+import {formatBytes, formatRetentionPolicy, formatTimestamp} from "../../../util/format.ts";
 import type {ReactNode} from "react";
 import {IconAlertCircle, IconClock, IconPlayerPlay} from "@tabler/icons-react";
 
-export function OverviewTab({ policy }: { policy: UpdateBackupPolicySchema }) {
+export function OverviewTab({
+                                policy,
+                                onScheStatusChange,
+                                isScheStatusPending = false
+}: {
+    policy: UpdateBackupPolicySchema,
+    onScheStatusChange: ({ jobId, status }: { jobId: number, status: 'pause' | 'resume' | 'trigger'}) => Promise<void> | void,
+    isScheStatusPending: boolean,
+}) {
     return (
         <Stack pt="md" gap="xl">
             {/* Strategy Header: Blue Background containing global info */}
@@ -17,7 +38,7 @@ export function OverviewTab({ policy }: { policy: UpdateBackupPolicySchema }) {
 
             {/* Target Grid */}
             <SimpleGrid cols={{ base: 1, md: 2, xl: 3 }} spacing="lg">
-                <TargetCards policy={policy} />
+                <TargetCards policy={policy} onScheStatusChange={onScheStatusChange} isScheStatusPending={isScheStatusPending} />
             </SimpleGrid>
         </Stack>
     );
@@ -45,20 +66,25 @@ function StrategyHeader({ policy }: { policy: UpdateBackupPolicySchema }) {
 
                 {/* Left Section: Strategy & DataSource align flex-start */}
                 <Group gap={40} align="center">
+                    {/* Strategy Column */}
                     <Stack gap={2}>
-                        <Text size="xs" c="blue" fw={700} tt="uppercase" lts={1}>
-                            Strategy
-                        </Text>
-                        <Text fw={800} size="lg" style={{ lineHeight: 1 }}>
-                            {policy.strategy.name}
-                        </Text>
+                        <Text size="xs" c="blue" fw={700} tt="uppercase" lts={1}>Strategy</Text>
+                        <Text fw={800} size="lg" style={{ lineHeight: 1 }}>{policy.strategy.name}</Text>
                     </Stack>
 
+                    {/* Data Source Column */}
                     <Box style={{ borderLeft: '1px solid var(--mantine-color-blue-outline)', paddingLeft: '40px' }}>
                         <Text size="xs" c="dimmed" fw={500}>Data Source</Text>
                         <Text fw={700} size="sm" ta="right">{policy.strategy.dataSource}</Text>
                     </Box>
+
+                    {/* Data Size Column */}
+                    <Box>
+                        <Text size="xs" c="dimmed" fw={500}>Data Size</Text>
+                        <Text fw={700} size="sm" ta="right">{formatBytes(policy.strategy.dataSourceSize)}</Text>
+                    </Box>
                 </Group>
+
 
                 {/* Right Section: Target Numbers sits at the end */}
                 <Stack gap={0} align="flex-end">
@@ -83,7 +109,15 @@ const getJobUI = (status: ScheduleStatus) => {
     }
 };
 
-function TargetCards({ policy }: { policy: UpdateBackupPolicySchema }) {
+function TargetCards({
+                         policy,
+                         onScheStatusChange,
+                         isScheStatusPending = false
+                     }: {
+    policy: UpdateBackupPolicySchema,
+    onScheStatusChange: ({ jobId, status }: { jobId: number, status: 'pause' | 'resume' | 'trigger'}) => Promise<void> | void,
+    isScheStatusPending: boolean,
+})  {
     return policy.targets.map((target, index) => {
         const repoStatus = getStatusUI(target.repository);
         // Determine job status
@@ -104,7 +138,11 @@ function TargetCards({ policy }: { policy: UpdateBackupPolicySchema }) {
 
                         {/* Manual Trigger Quick Action */}
                         <Tooltip label="Run Backup Now">
-                            <ActionIcon variant="light" color="blue" onClick={() => {/* trigger(target.id) */}}>
+                            <ActionIcon
+                                variant="light"
+                                color="blue"
+                                loading={isScheStatusPending}
+                                onClick={() => onScheStatusChange({jobId: target.job.id, status: 'trigger'})}>
                                 <IconPlayerPlay size={16} />
                             </ActionIcon>
                         </Tooltip>
@@ -143,11 +181,17 @@ function TargetCards({ policy }: { policy: UpdateBackupPolicySchema }) {
 
                         <Switch
                             checked={isRunning}
+                            disabled={isScheStatusPending}
                             size="xs"
                             color="green"
                             // Toggle logic: If currently ACTIVE, set to PAUSED.
                             // If currently PAUSED or ERROR, set to ACTIVE.
-                            onChange={() => {/* toggleStatus(target.id, isRunning ? "PAUSED" : "ACTIVE") */}}
+                            onChange={() => onScheStatusChange({jobId: target.job.id, status: isRunning ? 'pause' : 'resume'})}
+                            thumbIcon={
+                                isScheStatusPending ? (
+                                    <Loader size={10} color="gray" /> // 2. Visual feedback inside the switch
+                                ) : undefined
+                            }
                         />
                     </Group>
                 </Stack>
