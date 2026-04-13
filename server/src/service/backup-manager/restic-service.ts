@@ -369,10 +369,18 @@ export class ResticService {
                 this.repoClient.backup(path, log, execution.uuid, signal),
             { isExclusive: false }
         )
-        if (backupResult.status !== 'success') return backupResult;
-        logger.debug(`backup ${this.repo.name} success`)
-        // run post backup
-        void this.postBackupOperation(path, target, execution.id, backupResult.data.snapshotId);
+        switch (backupResult.status) {
+            case 'success':{
+                logger.debug(`backup ${this.repo.name} for path:${path} success`)
+                // run post backup
+                void this.postBackupOperation(path, target, execution.id, backupResult.data.snapshotId);
+            } break;
+            case 'system_error': return backupResult;
+            case 'restic_error': {
+                logger.warn(backupResult.error, `backup ${this.repo.name} for path:${path} partial.`)
+                void this.postBackupOperation(path, target, execution.id, backupResult.errorOutput?.snapshotId, true);
+            } break;
+        }
     }
 
     public async postBackupOperation(
@@ -380,6 +388,7 @@ export class ResticService {
         target: UpdateBackupTargetSchema,
         executionId: number,
         snapshotId: string | undefined | null, // handle backup skipped
+        partialSnapshot: boolean = false,
     ) {
         // forget old data
         const retryResult = await this.retryOnLock(
@@ -394,12 +403,23 @@ export class ResticService {
         await this.indexSnapshots(path);
         if (snapshotId === undefined || snapshotId === null) return;
         const [snapshotInDb] = await db.select().from(snapshotsMetadata)
-            .where(eq(snapshotsMetadata.snapshotId, snapshotId))
+            .where(and(
+                eq(snapshotsMetadata.repositoryId, this.repo.id),
+                eq(snapshotsMetadata.snapshotId, snapshotId),
+            ))
         if (snapshotInDb) {
             // set execution's snapshot id
             await db.update(execution)
                 .set({snapshotsMetadataId: snapshotInDb.id})
                 .where(eq(execution.id, executionId))
+            if (partialSnapshot) {
+                await db.update(snapshotsMetadata)
+                    .set({ snapshotStatus: 'partial' })
+                    .where(and(
+                        eq(snapshotsMetadata.repositoryId, this.repo.id),
+                        eq(snapshotsMetadata.snapshotId, snapshotId),
+                    ))
+            }
         } else {
             logger.warn(`not found snapshot:${snapshotId} after index ${this.repo.name}`)
         }
@@ -499,7 +519,7 @@ export class ResticService {
                     .where(eq(repository.id, this.repo.id))
                     .returning()
                 this.repo = updateRepositorySchema.parse(updatedResult);
-                logger.debug(`check repo ${this.repo.name} with num error > 0`)
+                logger.warn(`check repo ${this.repo.name} with num error > 0`)
                 return execResult;
             }
         }

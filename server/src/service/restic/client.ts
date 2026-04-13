@@ -139,9 +139,10 @@ export class RepositoryClient {
             const exitCode = mapResticCode(result.exitCode);
             switch (exitCode) {
                 case ExitCode.Success:
-                    // todo: return partial backup result
-                case ExitCode.BackupReadError: {
                     return success(this.parse(summary, "{}"), result);
+                case ExitCode.BackupReadError: {
+                    // return partial backup result
+                    return failWithOutput(this.parse(summary, "{}"), result);
                 }
                 default: return fail(result);
             }
@@ -310,7 +311,7 @@ export class RepositoryClient {
             { env: this._env }
         );
         // 不支持 progress
-        const progress: Progress = { percentDone: -1 };
+        const progress = null;
         // 处理结果
         const result = (async (): Promise<ResticResult<CheckSummary>> => {
             let summaryLine:string = "";
