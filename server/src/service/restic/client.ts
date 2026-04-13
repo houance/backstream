@@ -1,4 +1,4 @@
-import {execute, executeStream, getParentPathFromNode, mapResticCode} from "./utils";
+import {execute, executeStream, getParentPathFromNode, mapResticCode, splitByCR} from "./utils";
 import {
     type CheckSummary,
     ExitCode, fail, type ForgetGroup,
@@ -58,10 +58,6 @@ export class RepositoryClient {
         uuid: string,
         signal: AbortSignal,
     ): Task<ResticResult<boolean>> {
-        // todo: move to upper class
-        if (this.repoType !== repoType.LOCAL && this.repoType === targetClient.repoType) {
-            throw new Error('copy between same type of repositories is not supported');
-        }
         const command = `restic copy ${snapshotIds.join(' ')} -v`;
         const process = executeStream(
             command,
@@ -78,36 +74,8 @@ export class RepositoryClient {
                 }
             }
         )
-        // 更新 progress
+        // 不支持 progress
         const progress = null;
-        // 2. Process the stream in the background (Immediate Execution)
-        (async () => {
-            try {
-                // Execa v9+ yields lines automatically from the subprocess
-                for await (const line of process) {
-                    // todo: regex from stdout, get process and snapshot id
-                    // example:
-                    // nopepsi-dev@nopepsi:~/fullstack-project/backstream/server/src/test$ RESTIC_REPOSITORY=./second-repo/ RESTIC_PASSWORD=0608 restic copy 3f5 0334 --from-repo ./local-repo/ -v
-                    // enter password for source repository:
-                    // repository 75a8e710 opened (version 2, compression level auto)
-                    // repository 6c7d16f9 opened (version 2, compression level auto)
-                    // [0:00] 100.00%  3 / 3 index files loaded
-                    // [0:00] 100.00%  3 / 3 index files loaded
-                    //
-                    // snapshot 3f5d05b9 of [/home/nopepsi-dev/rclone-v1.70.3-linux-amd64] at 2026-03-21 20:46:00.040559172 +0800 CST by nopepsi-dev@nopepsi
-                    //   copy started, this may take a while...
-                    // [0:00]          0 packs copied
-                    // snapshot 7073c861 saved
-                    //
-                    // snapshot 03342d45 of [/home/nopepsi-dev/.vscode-server] at 2026-03-22 22:17:30.038772859 +0800 CST by nopepsi-dev@nopepsi
-                    //   copy started, this may take a while...
-                    // [0:02] 100.00%  11 / 11 packs copied
-                    // snapshot 3b3919bc saved
-                }
-            } catch (err) {
-                logger.warn(err, "Stream processing error:");
-            }
-        })();
         // 处理结果
         const result = (async (): Promise<ResticResult<boolean>> => {
             const result:Result = await process;
@@ -294,13 +262,16 @@ export class RepositoryClient {
             { env: this._env }
         );
         // 更新 progress
-        const progress = null;
+        const progress: Progress = { percentDone: 0 };
         // 2. Process the stream in the background (Immediate Execution)
         (async () => {
             try {
+                if (!process.stdout) return;
                 // Execa v9+ yields lines automatically from the subprocess
-                for await (const line of process) {
-                    // todo: regex from stdout
+                for await (const line of splitByCR(process.stdout)) {
+                    const percentMatch = line.match(/\[\d+:\d+\]\s+(\d{1,3}\.\d{2})%.*\sfiles\sdeleted/);
+                    if (percentMatch) progress.percentDone = Number(percentMatch[1]);
+                    console.log(progress.percentDone);
                 }
             } catch (err) {
                 logger.warn(err, "Stream processing error:");
@@ -310,6 +281,8 @@ export class RepositoryClient {
         const result = (async (): Promise<ResticResult<boolean>> => {
             const result:Result = await process;
             if (result.failed) return fail(result);
+            // set progress to 100
+            progress.percentDone = 100;
             return success(true, result);
         })();
         return {

@@ -50,7 +50,7 @@ export function executeStream(
         timeout: Math.max(options.timeout ?? 7200000, 7200000), // timout 2 hours
         env: {
             ...options.env,
-            RESTIC_PROGRESS_FPS: '0.2', // 5 second report rate
+            RESTIC_PROGRESS_FPS: '1', // 5 second report rate
             GOMAXPROCS: '2',
         },
     });
@@ -81,4 +81,17 @@ export async function execute(
             RESTIC_PROGRESS_FPS: '0.5'
         }
     });
+}
+
+export async function* splitByCR(stream: NodeJS.ReadableStream) {
+    let buffer = '';
+    for await (const chunk of stream) {
+        buffer += chunk.toString();
+        // Split by both Carriage Return (\r) and Newline (\n)
+        const parts = buffer.split(/[\r\n]+/);
+        buffer = parts.pop() || '';
+        for (const part of parts) {
+            if (part.trim()) yield part;
+        }
+    }
 }

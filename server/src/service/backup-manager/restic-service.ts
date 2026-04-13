@@ -304,15 +304,24 @@ export class ResticService {
     }
 
     public async copyTo(
-        execution: UpdateExecutionSchema,
+        exec: UpdateExecutionSchema,
         path: string,
         targetService: ResticService,
         target: UpdateBackupTargetSchema,
     ) {
-        const msg = await this.canExecuteJob(execution);
+        // check if repo health
+        const msg = await this.canExecuteJob(exec);
         if (msg !== null) return systemFail(new Error(msg));
-        const msgRemote = await targetService.canExecuteJob(execution);
+        const msgRemote = await targetService.canExecuteJob(exec);
         if (msgRemote !== null) return systemFail(new Error(msgRemote));
+        // check if two repo same type
+        if (this.repo.repositoryType !== repoType.LOCAL && this.repo.repositoryType === targetService.repo.repositoryType) {
+            const msg = 'copy between same type of repositories is not supported';
+            await db.update(execution)
+                .set({ errorMessage: msg, finishedAt: Date.now(), executeStatus: execStatus.REJECT })
+                .where(eq(execution.id, exec.id));
+            return systemFail(new Error(msg));
+        }
         // run remote retention policy against local in dry run mode, get what snapshot should be copy
         let keepSnapshotIds: string[] = [];
         const retryResult = await this.retryOnLock(
@@ -328,13 +337,13 @@ export class ResticService {
         keepSnapshotIds = keepSnapshots.map(s => s.id);
         // run copy
         const copyResult = await this.startJob(
-            execution,
+            exec,
             (log, signal) =>
                 this.repoClient.copyTo(
                     targetService.repoClient,
                     keepSnapshotIds,
                     log,
-                    execution.uuid,
+                    exec.uuid,
                     signal
                 )
             ,
@@ -347,7 +356,7 @@ export class ResticService {
         void targetService.postBackupOperation(
             path,
             target,
-            execution.id,
+            exec.id,
             null
         )
     }
