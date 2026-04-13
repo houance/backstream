@@ -81,14 +81,11 @@ export const STRATEGY_MAP: Record<StrategyType, StrategyMeta> = {
                     index: 2,
                 },
                 schedule: {
-                    type: 'copy',
+                    type: 'backup',
                     repositoryId: 0,
                     category: 'target',
                     cron: '* * * * * *',
                     jobStatus: 'ACTIVE',
-                    extraConfig: {
-                        srcRepoId: 0
-                    }
                 }
             }
         ]
