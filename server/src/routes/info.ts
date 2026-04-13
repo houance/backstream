@@ -19,7 +19,7 @@ const infoRoute = new Hono<Env>()
     .get('/health', (c) => c.json({ message:'OK'}))
     .get('/activity', async (c) => {
         const dbResult = await getExecutionsData(c.var.db);
-        if (dbResult === null) return c.json({ error: 'db error'}, 500);
+        if (dbResult === null) return c.json([]);
         const result: Activity[] = dbResult.map(item => ({
             id: item.id,
             title: item.commandType,

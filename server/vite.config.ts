@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from 'vite';
 import devServer from '@hono/vite-dev-server';
 import tsconfigPaths from 'vite-tsconfig-paths';
+import path from 'node:path';
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, import.meta.dirname, '');
@@ -8,7 +9,7 @@ export default defineConfig(({ mode }) => {
     return {
         plugins: [
             tsconfigPaths(),
-            devServer({ entry: 'src/index.ts' })
+            devServer({ entry: path.join(import.meta.dirname, 'src', 'index.ts') })
         ],
         server: {
             port: 3000,
@@ -16,7 +17,7 @@ export default defineConfig(({ mode }) => {
         build: {
             outDir: 'dist',
             rollupOptions: {
-                input: 'src/index.ts',
+                input: path.join(import.meta.dirname, 'src', 'index.ts'),
                 output: {
                     entryFileNames: 'index.js', // Bundles into one file
                 },

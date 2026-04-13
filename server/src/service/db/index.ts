@@ -1,7 +1,7 @@
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { db } from './client';
 import { logger } from '../log/logger'
-import { env } from '../../config/env'
+import { env } from '../../env/env'
 
 // This logic executes the SQL files in /drizzle folder
 // It ensures tables exist before the app starts handling requests

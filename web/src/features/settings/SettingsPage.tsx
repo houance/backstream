@@ -23,8 +23,7 @@ export function SettingsPage() {
     const submitMutation = useMutation({
         mutationFn: async (item: UpdateSystemSettingSchema) => {
             return ensureSuccess(
-                client.api.setting[':id'].$patch({
-                    param: { id: item.id.toString() },
+                client.api.setting.$post({
                     json: item
                 })
             )
@@ -50,7 +49,7 @@ export function SettingsPage() {
             <SettingsDualPane
                 initialData={data!}
                 onSubmit={(item) => submitMutation.mutate(item)}
-                isLoading={isLoading} />
+                isSubmitting={submitMutation.isPending} />
         </Container>
     )
 }

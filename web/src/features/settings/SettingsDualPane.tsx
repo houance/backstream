@@ -5,23 +5,26 @@ import {
 } from '@mantine/core';
 import { zod4Resolver } from "mantine-form-zod-resolver";
 import { useForm } from '@mantine/form';
-import {updateSettingSchema, type UpdateSystemSettingSchema} from '@backstream/shared';
+import {updateSystemSettingSchema, type UpdateSystemSettingSchema} from '@backstream/shared';
 
 interface SystemSettingsProps {
     initialData: UpdateSystemSettingSchema;
     onSubmit: (values: UpdateSystemSettingSchema) => Promise<void> | void;
-    isLoading: boolean;
+    isSubmitting: boolean;
 }
 
-export function SettingsDualPane({ initialData, onSubmit, isLoading }: SystemSettingsProps) {
+export function SettingsDualPane({ initialData, onSubmit, isSubmitting }: SystemSettingsProps) {
     const form = useForm<UpdateSystemSettingSchema>({
         initialValues: initialData,
         // 3. Link Zod to Mantine Form
-        validate: zod4Resolver(updateSettingSchema),
+        validate: zod4Resolver(updateSystemSettingSchema),
     });
 
     return (
-        <form onSubmit={form.onSubmit((values) => onSubmit(values))}>
+        <form onSubmit={form.onSubmit((values) => {
+            onSubmit(values);
+            form.resetDirty();
+        })}>
             <Stack gap="xl">
                 <Grid gutter="xl">
                     {/* Left Column: Alerts & Maintenance */}
@@ -64,21 +67,20 @@ export function SettingsDualPane({ initialData, onSubmit, isLoading }: SystemSet
                                         {...form.getInputProps('ioPriority')}
                                     />
                                 </Box>
-                                <Box>
-                                    <NumberInput
-                                        label="Minimal Disk Space"
-                                        description="pause backup when disk space low"
-                                        suffix=" GB"
-                                        {...form.getInputProps('minDiskSpaceGB')}
-                                    />
-                                </Box>
                             </Stack>
                         </Card>
                     </Grid.Col>
                 </Grid>
 
                 <Group justify="flex-end">
-                    <Button type="submit" loading={isLoading}>Save All Settings</Button>
+                    <Button
+                        type="submit"
+                        loading={isSubmitting}
+                        // Button is disabled if nothing changed OR if currently saving
+                        disabled={!form.isDirty() || isSubmitting}
+                    >
+                        Save All Settings
+                    </Button>
                 </Group>
             </Stack>
         </form>

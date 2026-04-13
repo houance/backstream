@@ -124,7 +124,6 @@ export const execution = sqliteTable("execution_table", {
 export const setting = sqliteTable("system_setting", {
     id: integer("setting_id").primaryKey({ autoIncrement: true }),
     ioPriority: text("io_priority").notNull(),
-    minDiskSpaceGB: integer("min_disk_space_gb").notNull(),
     email: text("email").notNull(),
     logRetentionDays: integer("log_retention_days").notNull(),
 })

@@ -39,6 +39,7 @@ import {Cron} from "croner";
 import {RcloneClient} from "../rclone";
 import {FileManager} from "./file-manager";
 import {logger} from '../log/logger'
+import {client} from "../setting/client";
 
 async function createExecution(commandType: CommandType, targetId?: number | null, repoId?: number | null) {
     let value: InsertExecutionSchema = {
@@ -547,10 +548,7 @@ export class Scheduler {
         return this.startCron(
             job,
             async () => {
-                const [systemSettings] = await db.select().from(setting)
-                    .orderBy(desc(setting.id))
-                    .limit(1);
-                if (!systemSettings) throw new Error(`get system setting failed.`);
+                const systemSettings = client.get();
                 const errors = await FileManager.clearTmpFolder(systemSettings.logRetentionDays);
                 if (errors.length > 0) {
                     throw new Error(`clean tmp folder fail.\n` + errors.join('\n'));

@@ -1,32 +1,27 @@
 import { Hono } from 'hono';
 import { eq } from 'drizzle-orm';
 import {type Env} from '../index'
-import {setting, updateSettingSchema} from '@backstream/shared';
+import {setting, updateSystemSettingSchema} from '@backstream/shared';
 import {zValidator} from "@hono/zod-validator";
 
 
 const settingRoute = new Hono<Env>()
     // GET system setting
     .get('/system-setting', async (c) => {
-        const settings = await c.var.db.select().from(setting);
+        const settings = c.var.provider.get();
         if (!settings) return c.json({ error: 'not found' }, 404);
-        const validated = updateSettingSchema.array().parse(settings);
-        return c.json(validated[0]);
+        return c.json(settings);
     })
     // update system setting
-    .patch('/:id',
-        zValidator('json', updateSettingSchema.partial()),
+    .post('/',
+        zValidator('json', updateSystemSettingSchema),
         async (c) => {
-            const id = Number(c.req.param('id'));
             const values = c.req.valid('json');
+            const settings = c.var.provider.get();
+            if (!settings || settings.id !== values.id) return c.json({ error: 'not found' }, 404);
 
-            const [updateSetting] = await c.var.db.update(setting)
-                .set(values)
-                .where(eq(setting.id, id))
-                .returning();
-
-            if (!updateSetting) return c.json({ error: 'Not found' }, 404);
-            return c.json(updateSetting);
+            const newSettings = await c.var.provider.update(values);
+            return c.json(newSettings);
         });
 
 export default settingRoute;

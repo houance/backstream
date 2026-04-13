@@ -1,7 +1,7 @@
 import {existsSync, constants} from "node:fs";
 import {mkdtemp, writeFile, readdir, stat, rm, mkdir, realpath, access, unlink} from "node:fs/promises";
 import path from "node:path";
-import { env } from '../../config/env'
+import { env } from '../../env/env'
 import {logger} from "../log/logger";
 
 export class FileManager {

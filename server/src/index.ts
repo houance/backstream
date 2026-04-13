@@ -15,7 +15,8 @@ import {RepositoryClient} from "./service/restic";
 import {RcloneClient} from "./service/rclone";
 import { pinoLogger } from 'hono-pino'
 import { logger } from './service/log/logger'
-import { env } from './config/env'
+import { env } from './env/env'
+import { client } from "./service/setting/client";
 
 // check restic installation
 logger.info(await RepositoryClient.checkIfResticInstall())
@@ -27,6 +28,7 @@ export type Env = {
     db: typeof db;
     scheduler: Scheduler;
     logger: typeof logger;
+    provider: typeof client;
   };
 };
 // init scheduler once
@@ -38,6 +40,7 @@ app.use('*', pinoLogger({ pino: logger }))
 app.use('*', async (c, next) => {
   c.set('db', db);
   c.set('scheduler', scheduler);
+  c.set('provider', client);
   await next();
 });
 

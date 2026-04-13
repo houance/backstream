@@ -2,7 +2,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import type {Logger} from 'drizzle-orm/logger';
 import Database from 'better-sqlite3';
 import {schema} from '@backstream/shared';
-import { env } from '../../config/env'
+import { env } from '../../env/env'
 import path from "node:path";
 import { logger } from '../log/logger';
 

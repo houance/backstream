@@ -1,6 +1,6 @@
 import pino from 'pino'
 import path from 'path'
-import { env } from '../../config/env'
+import { env } from '../../env/env'
 
 const logFile = path.resolve(env.LOG_FOLDER, 'app.log');
 

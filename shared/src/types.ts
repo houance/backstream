@@ -74,13 +74,12 @@ export const updateRepositorySchema = insertRepositorySchema.safeExtend({
 })
 export type UpdateRepositorySchema = z.infer<typeof updateRepositorySchema>
 // system settings schema, only update schema since it always have only on record in db
-export const updateSettingSchema = createUpdateSchema(setting, {
+export const updateSystemSettingSchema = createUpdateSchema(setting, {
     ioPriority: z.enum(['low', 'normal']),
-    minDiskSpaceGB: z.number().min(1, 'Minimum 1GB required').max(500),
     email: z.email('Invalid email format').or(z.literal('')),
     logRetentionDays: z.number().min(1, 'Keep at least 1 day').max(365, 'Max 1 year'),
 }).safeExtend({ id: z.number() });
-export type UpdateSystemSettingSchema = z.infer<typeof updateSettingSchema>;
+export type UpdateSystemSettingSchema = z.infer<typeof updateSystemSettingSchema>;
 // strategy type
 export const StrategyType = {
     STRATEGY_321: "STRATEGY_321",
