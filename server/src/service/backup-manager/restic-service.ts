@@ -396,9 +396,6 @@ export class ResticService {
         }
     }
 
-    // todo: newly create policy, backup success, index not showing newly create backup
-    // todo: snapshots is deleted bypassing app, index fail to sync delete
-    // todo: problem resolve through app restart
     public async indexSnapshots(path?: string) {
         const retryResult = await this.retryOnLock(
             () => this.repoClient.getSnapshots(path),

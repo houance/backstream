@@ -413,7 +413,7 @@ export class RepositoryClient {
     }
 
     public async getSnapshots(path?: string): Promise<ResticResult<Snapshot[]>> {
-        const command = path ? `restic snapshots ${path} --json` : `restic snapshots --json`;
+        const command = path ? `restic snapshots --path=${path} --json` : `restic snapshots --json`;
         const result = await execute(command, { env: this._env });
         if (result.failed) return fail(result);
         try {
