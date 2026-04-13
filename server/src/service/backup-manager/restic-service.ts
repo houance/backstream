@@ -400,7 +400,7 @@ export class ResticService {
             return retryResult;
         }
         // only index just backup + forget snapshot
-        await this.indexSnapshots(path);
+        await this.indexSnapshots(path, partialSnapshot ? snapshotId : undefined);
         if (snapshotId === undefined || snapshotId === null) return;
         const [snapshotInDb] = await db.select().from(snapshotsMetadata)
             .where(and(
@@ -412,20 +412,12 @@ export class ResticService {
             await db.update(execution)
                 .set({snapshotsMetadataId: snapshotInDb.id})
                 .where(eq(execution.id, executionId))
-            if (partialSnapshot) {
-                await db.update(snapshotsMetadata)
-                    .set({ snapshotStatus: 'partial' })
-                    .where(and(
-                        eq(snapshotsMetadata.repositoryId, this.repo.id),
-                        eq(snapshotsMetadata.snapshotId, snapshotId),
-                    ))
-            }
         } else {
             logger.warn(`not found snapshot:${snapshotId} after index ${this.repo.name}`)
         }
     }
 
-    public async indexSnapshots(path?: string) {
+    public async indexSnapshots(path?: string, partialSnapId?: string | undefined | null) {
         const retryResult = await this.retryOnLock(
             () => this.repoClient.getSnapshots(path),
             { initialIntervalMs: 2500, retryLimit: 4 }
@@ -463,7 +455,7 @@ export class ResticService {
                     tags: s.tags,
                     programVersion: s.programVersion,
                     time: s.time,
-                    snapshotStatus: 'success',
+                    snapshotStatus: s.id === partialSnapId ? 'partial' : 'success',
                     snapshotSummary: s.summary,
                     size: s.summary?.totalBytesProcessed ?? 0
                 }));
