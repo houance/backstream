@@ -16,9 +16,8 @@ import {
     type ScheduleStatus,
     scheduleStatus,
     type UpdateBackupPolicySchema,
-    type UpdateRepositorySchema
 } from "@backstream/shared";
-import {formatBytes, formatRetentionPolicy, formatTimestamp} from "../../../util/format.ts";
+import {formatBytes, formatRepoStatus, formatRetentionPolicy, formatTimestamp} from "../../../util/format.ts";
 import type {ReactNode} from "react";
 import {IconAlertCircle, IconClock, IconPlayerPlay} from "@tabler/icons-react";
 
@@ -42,14 +41,6 @@ export function OverviewTab({
             </SimpleGrid>
         </Stack>
     );
-}
-
-
-function getStatusUI(repo: UpdateRepositorySchema) {
-    if (repo.linkStatus === 'UP' && repo.healthStatus === 'HEALTH') return { label: 'HEALTH', color: 'green' };
-    if (repo.linkStatus === 'UP' && repo.healthStatus === 'INITIALIZING') return { label: 'INITIALIZING', color: 'yellow' };
-    const label = repo.linkStatus === 'DOWN' ? 'DOWN' : repo.healthStatus;
-    return { label: label, color: 'red' };
 }
 
 function StrategyHeader({ policy }: { policy: UpdateBackupPolicySchema }) {
@@ -119,7 +110,7 @@ function TargetCards({
     isScheStatusPending: boolean,
 })  {
     return policy.targets.map((target, index) => {
-        const repoStatus = getStatusUI(target.repository);
+        const repoStatus = formatRepoStatus(target.repository);
         // Determine job status
         const jobUI = getJobUI(target.job.jobStatus);
         const isRunning = target.job.jobStatus === scheduleStatus.ACTIVE;

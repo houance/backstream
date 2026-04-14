@@ -20,7 +20,7 @@ import {
     type UpdateRepoScheduleSchema,
     type UpdateRepositorySchema
 } from "@backstream/shared";
-import {calPercentage, formatBytes, formatTimestamp} from "../../../util/format.ts";
+import {calPercentage, formatBytes, formatRepoStatus, formatTimestamp} from "../../../util/format.ts";
 import {IconAlertCircle, IconPlayerPlay} from "@tabler/icons-react";
 
 export function OverviewTab({ storage, onScheStatusChange, isScheStatusPending = false }: {
@@ -72,12 +72,7 @@ export function OverviewTab({ storage, onScheStatusChange, isScheStatusPending =
 }
 
 function StorageHeader({ repo }: { repo: UpdateRepositorySchema }) {
-    const getStatusUI = () => {
-        if (repo.linkStatus === 'UP' && repo.healthStatus === 'HEALTH') return { label: 'HEALTH', color: 'green' };
-        if (repo.linkStatus === 'UP' && repo.healthStatus === 'INITIALIZING') return { label: 'INITIALIZING', color: 'yellow' };
-        return { label: repo.linkStatus === 'DOWN' ? 'DOWN' : repo.healthStatus, color: 'red' };
-    }
-    const status = getStatusUI();
+    const status = formatRepoStatus(repo);
 
     return (
         <Paper

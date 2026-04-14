@@ -59,9 +59,8 @@ async function createExecution(commandType: CommandType, targetId?: number | nul
 
 async function getJobWithRepo(jobScheduleId: number) {
     const dbResult = await db.query.jobSchedules.findFirst({
-        where: (jobSchedules, { and, eq, ne }) => and(
+        where: (jobSchedules, { and, eq }) => and(
             eq(jobSchedules.id, jobScheduleId),
-            ne(jobSchedules.jobStatus, scheduleStatus.PAUSED)
         ),
         with: {
             repository: true,
@@ -76,10 +75,8 @@ async function getJobWithRepo(jobScheduleId: number) {
 
 async function getJobWithTarget(jobScheduleId: number) {
     const dbResult = await db.query.jobSchedules.findFirst({
-        where: (jobSchedules, { and, eq, ne }) => and(
+        where: (jobSchedules, { eq }) =>
             eq(jobSchedules.id, jobScheduleId),
-            ne(jobSchedules.jobStatus, scheduleStatus.PAUSED)
-        ),
         with: {
             repository: true,
             target: true,
@@ -612,6 +609,7 @@ export class Scheduler {
                             .returning();
                         if (!dbResult) throw new Error(`update job ${job.id} nextRunAt db fail`);
                     }
+                    // execution
                     const execResult = await taskFn(exec);
                     // exec success then update lastRunAt return
                     if (!execResult || execResult.status === 'success') {

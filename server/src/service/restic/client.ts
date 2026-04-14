@@ -92,24 +92,16 @@ export class RepositoryClient {
     }
 
     public async backupDryRun(path: string): Promise<ResticResult<SnapshotSummary>> {
-        const result = await execute(`restic backup . --skip-if-unchanged --json`, { cwd: path, env: this._env });
+        const result = await execute(
+            `restic backup . --skip-if-unchanged --json --dry-run`,
+            { cwd: path, env: this._env }
+        );
         if (result.failed) return fail(result);
         try {
-            // Execa v9+ yields lines automatically from the subprocess
-            for await (const line of result.stdout as string) {
-                try {
-                    const data:{ message_type: string } = JSON.parse(line.toString());
-                    if (data.message_type === 'summary') {
-                        return success(this.parse(line, "{}"), result);
-                    }
-                } catch {
-                    /* Ignore non-JSON lines or partial chunks */
-                }
-            }
+            return success(this.parse(result.stdout as string, ""), result);
         } catch (err) {
             return fail(result, err);
         }
-        return fail(result, new Error(`no backup summary found`));
     }
 
     public backup(
@@ -522,7 +514,7 @@ export class RepositoryClient {
 
     /**
      * Parses stdout or a fallback string into JSON, then camelCases the keys.
-     * Throws an error if the resulting string is not valid JSON.
+     * Throws an error if the resulting string is not valid JSON or fallBackJson is ""
      */
     private parse<T>(stdout: string, fallbackJson: string): T {
         // Use stdout if it exists, otherwise use the fallback string

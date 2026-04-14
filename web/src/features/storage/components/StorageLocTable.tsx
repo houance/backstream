@@ -1,7 +1,8 @@
 import {Table, Badge, ActionIcon, Group, Card, Box, Text, Progress, Tooltip} from '@mantine/core';
 import {IconAlertTriangle, IconEye, IconTrash} from '@tabler/icons-react';
-import {formatPath, getRepositoryStats} from "../../../util/format.ts";
+import {formatPath, formatRepoStatus, getRepositoryStats} from "../../../util/format.ts";
 import { type UpdateRepositorySchema } from '@backstream/shared'
+
 
 export default function StorageLocTable(
     {data, onDetail, onDelete} :
@@ -13,14 +14,7 @@ export default function StorageLocTable(
 
     const rows = data.map((item) => {
         const { usedStr, totalStr, percentage } = getRepositoryStats(item.size, item.capacity);
-        // Map status to specific Mantine colors
-        const getStatusUI = () => {
-            if (item.linkStatus === 'UP' && item.healthStatus === 'HEALTH') return { label: 'HEALTH', color: 'green' };
-            if (item.linkStatus === 'UP' && item.healthStatus === 'INITIALIZING') return { label: 'INITIALIZING', color: 'yellow' };
-            const label = item.linkStatus === 'DOWN' ? 'DOWN' : item.healthStatus;
-            return { label: label, color: 'red' };
-        }
-        const status = getStatusUI();
+        const status = formatRepoStatus(item);
 
         return (
             <Table.Tr

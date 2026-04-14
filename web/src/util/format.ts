@@ -1,4 +1,4 @@
-import type {RetentionPolicy} from "@backstream/shared";
+import type {RetentionPolicy, UpdateRepositorySchema} from "@backstream/shared";
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -67,18 +67,19 @@ export function formatTimeString(timeString: string | null): number {
     return timeString ? dayjs(timeString).valueOf() : 0;
 }
 
-export function calculateCountdown(scheduledTimestamp: number): string {
-    const now = Date.now();
-    const diff = scheduledTimestamp - now;
-    // If the time has already passed or is happening now
-    if (diff <= 0) return 'Starting...';
-    const totalMinutes = Math.floor(diff / (1000 * 60));
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    if (hours > 0) {
-        return `${hours}h ${minutes}m`;
+export function formatRepoStatus(repo: UpdateRepositorySchema) {
+    if (repo.linkStatus === 'DOWN') return { label: 'NETWORK DOWN', color: 'red' };
+    if (repo.healthStatus === 'INITIALIZING') return { label: 'INITIALIZING', color: 'yellow' };
+    if (repo.adminStatus === 'PAUSED') return { label: 'PAUSED', color: 'yellow' };
+    if (repo.adminStatus === 'QUOTA_EXCEEDED') return { label: 'QUOTA_EXCEEDED', color: 'yellow' };
+    if (repo.healthStatus === 'HEALTH') return { label: 'HEALTH', color: 'green' };
+    let label: string;
+    if (repo.healthStatus === 'CORRUPT' || repo.healthStatus === 'INITIALIZE_FAIL') {
+        label = repo.healthStatus;
+    } else {
+        label = repo.adminStatus;
     }
-    return `${minutes}m`;
+    return { label: label, color: 'red' };
 }
 
 export function formatRetentionPolicy(policy: RetentionPolicy): string {
