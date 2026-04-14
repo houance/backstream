@@ -72,7 +72,6 @@ async function main() {
     await db.insert(setting).values([
         {
             ioPriority: "normal",
-            minDiskSpaceGB: 10,
             email: "admin@example.com",
             logRetentionDays: 7,
         },

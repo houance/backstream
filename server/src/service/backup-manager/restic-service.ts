@@ -158,6 +158,15 @@ export class ResticService {
         return updateRepositorySchema.parse(updatedRepo);
     }
 
+    public async updateStorageLimit(limit: number) {
+        this.repo.storageLimit = limit >= 0 ? limit : null;
+        this.repo = updateRepositorySchema.parse(await db.update(repository)
+            .set(this.repo)
+            .where(eq(repository.id, this.repo.id))
+            .returning()
+        );
+    }
+
     public getRunningJob(execution: UpdateExecutionSchema): Task<ResticResult<any>> | null {
         const job = this.taskMap.get(execution.id);
         if (!job || job.status === 'waiting') return null;

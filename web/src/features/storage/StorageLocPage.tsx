@@ -24,7 +24,7 @@ export default function StorageLocPage() {
             if (!res.ok) throw new Error('Failed to fetch storage locations');
             return res.json();
         },
-        refetchInterval: 5000,
+        refetchInterval: 20000,
     });
 
     // --- 3. CREATE/UPDATE MUTATION ---

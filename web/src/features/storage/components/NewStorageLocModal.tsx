@@ -10,6 +10,7 @@ import {
 } from '@backstream/shared'
 import {PROVIDER_MAP} from "../provider-map.tsx";
 import MaintainPolicyConfig from "./MaintainPolicyConfig.tsx";
+import LimitSlider from "./LimitSlider.tsx";
 
 interface ModalProps {
     repoList: UpdateRepositorySchema[];
@@ -114,9 +115,11 @@ export default function NewStorageLocModal({
                             description="Required to encrypt/decrypt your backups"
                             autoComplete="new-password"
                         />
-
+                        {/* check * prune cron config */}
                         <MaintainPolicyConfig form={form}/>
-
+                        {/* storage limit */}
+                        <LimitSlider form={form} />
+                        {/* Auth Detail */}
                         <Divider label="Authentication Details" labelPosition="center"/>
                         {providerMeta.component !== null && <providerMeta.component form={form}/>}
 
