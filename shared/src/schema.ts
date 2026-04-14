@@ -13,6 +13,7 @@ export const repository = sqliteTable("repository_table", {
     uncompressedSize: integer("uncompressed_size"),
     blobCount: integer("blob_count"),
     capacity: integer("capacity"), // null for infinity or not retrievable
+    storageLimit: integer("storage_limit"), // null for not limit
     certification: text("certification", { mode: "json" }),
     linkStatus: text('link_status').notNull(), // network
     healthStatus: text("health_status").notNull(), // check result

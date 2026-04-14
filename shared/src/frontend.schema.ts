@@ -36,6 +36,7 @@ export const EMPTY_STORAGE_CREATE_SCHEMA: StorageCreateSchema = {
         password: "",
         repositoryType: repoType.LOCAL,
         certification: {},
+        storageLimit: -1,
         linkStatus: "DOWN",
         healthStatus: "INITIALIZING",
         adminStatus: "ACTIVE"

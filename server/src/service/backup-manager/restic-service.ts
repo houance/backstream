@@ -314,13 +314,15 @@ export class ResticService {
         if (msg !== null) return systemFail(new Error(msg));
         const msgRemote = await targetService.canExecuteJob(exec);
         if (msgRemote !== null) return systemFail(new Error(msgRemote));
-        // check if two repo same type
+        // check if two repo same type, as fall back
         if (this.repo.repositoryType !== repoType.LOCAL && this.repo.repositoryType === targetService.repo.repositoryType) {
             const msg = 'copy between same type of repositories is not supported';
-            await db.update(execution)
-                .set({ errorMessage: msg, finishedAt: Date.now(), executeStatus: execStatus.REJECT })
-                .where(eq(execution.id, exec.id));
-            return systemFail(new Error(msg));
+            return this.rejectExecution(exec, msg);
+        }
+        // check if repo limit reach
+        if (targetService.repo.adminStatus === 'QUOTA_EXCEEDED') {
+            const msg = `backup ${path} to ${this.repo.name} fail. quota exceeded`;
+            return targetService.rejectExecution(exec, msg);
         }
         // run remote retention policy against local in dry run mode, get what snapshot should be copy
         let keepSnapshotIds: string[] = [];
@@ -330,11 +332,23 @@ export class ResticService {
         );
         if (retryResult.status !== 'success') {
             logger.warn(retryResult.error, `forget ${path} at ${this.repo.name} fail:`);
-            return retryResult;
+            return this.preFailExecution(exec, retryResult);
         }
         const forgetGroups = retryResult.data;
         const keepSnapshots: Snapshot[] = forgetGroups.flatMap(group => group.keep || []);
         keepSnapshotIds = keepSnapshots.map(s => s.id);
+        // check if copy exceed limit, upper bound estimate
+        if (targetService.repo.storageLimit !== null && targetService.repo.size) {
+            const totalAdded = keepSnapshots.reduce((sum, s) => sum + (s.summary?.dataAddedPacked ?? 0), 0);
+            if (totalAdded + targetService.repo.size >= targetService.repo.storageLimit) {
+                const msg = `reach repo ${targetService.repo.name} limit ${targetService.repo.storageLimit}`;
+                logger.warn(msg);
+                this.repo = updateRepositorySchema.parse(await db.update(repository).set({
+                    adminStatus: 'QUOTA_EXCEEDED',
+                }).where(eq(repository.id, targetService.repo.id)).returning())
+                return targetService.rejectExecution(exec, msg);
+            }
+        }
         // run copy
         const copyResult = await this.startJob(
             exec,
@@ -353,7 +367,7 @@ export class ResticService {
         if (copyResult.status !== 'success') return copyResult;
         logger.debug(`copyTo ${path} snapshots from ${this.repo.name} to ${targetService.repo.name} success`)
         // post backup
-        void targetService.postBackupOperation(
+        return  targetService.postBackupOperation(
             path,
             target,
             exec.id,
@@ -361,25 +375,53 @@ export class ResticService {
         )
     }
 
-    public async backup(execution: UpdateExecutionSchema, path: string, target: UpdateBackupTargetSchema) {
+    public async backup(exec: UpdateExecutionSchema, path: string, target: UpdateBackupTargetSchema) {
+        // check if repo full
+        if (this.repo.adminStatus === 'QUOTA_EXCEEDED') {
+            const msg = `backup ${path} to ${this.repo.name} fail. quota exceeded`;
+            await db.update(execution).set({
+                errorMessage: msg,
+                finishedAt: Date.now(),
+                executeStatus: execStatus.REJECT
+            }).where(eq(execution.id, exec.id));
+            return systemFail(new Error(msg))
+        }
+        // dry run get new added size
+        if (this.repo.storageLimit !== null && this.repo.size) {
+            const dryRunResult = await this.retryOnLock(
+                () => this.repoClient.backupDryRun(path),
+            );
+            if (dryRunResult.status !== 'success') {
+                logger.warn(dryRunResult.error, `backup ${path} to ${this.repo.name} dry run failed.`);
+                return this.preFailExecution(exec, dryRunResult);
+            }
+            if (dryRunResult.data.dataAddedPacked + this.repo.size >= this.repo.storageLimit) {
+                const msg = `reach repo ${this.repo.name} limit ${this.repo.storageLimit}`;
+                logger.warn(msg);
+                this.repo = updateRepositorySchema.parse(await db.update(repository).set({
+                    adminStatus: 'QUOTA_EXCEEDED',
+                }).where(eq(repository.id, this.repo.id)).returning())
+                return this.rejectExecution(exec, msg);
+            }
+        }
         // add to queue
         const backupResult = await this.startJob(
-            execution,
+            exec,
             (log, signal) =>
-                this.repoClient.backup(path, log, execution.uuid, signal),
+                this.repoClient.backup(path, log, exec.uuid, signal),
             { isExclusive: false }
         )
         switch (backupResult.status) {
             case 'success':{
                 logger.debug(`backup ${this.repo.name} for path:${path} success`)
                 // run post backup
-                void this.postBackupOperation(path, target, execution.id, backupResult.data.snapshotId);
-            } break;
+                return this.postBackupOperation(path, target, exec.id, backupResult.data.snapshotId);
+            }
             case 'system_error': return backupResult;
             case 'restic_error': {
                 logger.warn(backupResult.error, `backup ${this.repo.name} for path:${path} partial.`)
-                void this.postBackupOperation(path, target, execution.id, backupResult.errorOutput?.snapshotId, true);
-            } break;
+                return this.postBackupOperation(path, target, exec.id, backupResult.errorOutput?.snapshotId, true);
+            }
         }
     }
 
@@ -415,6 +457,8 @@ export class ResticService {
         } else {
             logger.warn(`not found snapshot:${snapshotId} after index ${this.repo.name}`)
         }
+        // update stat to get new repo size
+        return this.updateRepoStat();
     }
 
     public async indexSnapshots(path?: string, partialSnapId?: string | undefined | null) {
@@ -649,6 +693,37 @@ export class ResticService {
             startedAt: Date.now(),
             executeStatus: execStatus.RUNNING,
         }).where(eq(execution.id, exec.id));
+    }
+
+    private async preFailExecution(exec: UpdateExecutionSchema, execResult: ExecResult<any>) {
+        switch (execResult.status) {
+            case 'restic_error': {
+                await db.update(execution).set({
+                    exitCode: execResult.error.exitCode,
+                    errorMessage: execResult.message,
+                    finishedAt: Date.now(),
+                    executeStatus: execStatus.FAIL,
+                }).where(eq(execution.id, exec.id));
+                return resticFail(execResult.error);
+            }
+            case 'system_error': {
+                await db.update(execution).set({
+                    errorMessage: execResult.message,
+                    finishedAt: Date.now(),
+                    executeStatus: execStatus.REJECT,
+                }).where(eq(execution.id, exec.id));
+                return systemFail(execResult.error);
+            }
+        }
+    }
+
+    private async rejectExecution(exec: UpdateExecutionSchema, msg: string) {
+        await db.update(execution).set({
+            errorMessage: msg,
+            finishedAt: Date.now(),
+            executeStatus: execStatus.REJECT
+        }).where(eq(execution.id, exec.id));
+        return systemFail(new Error(msg));
     }
 
     private async finalizeExecution(exec: UpdateExecutionSchema, result: ResticResult<any>) {

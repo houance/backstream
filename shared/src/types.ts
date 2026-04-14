@@ -61,10 +61,16 @@ export const insertRepositorySchema = createInsertSchema(repository, {
     path: z.string().min(1, 'Path is required'),
     password: z.string().min(4, 'Password must be at least 4 characters'),
     repositoryType: z.enum(Object.values(repoType)),
+    storageLimit: z.preprocess(
+        (val) => (val === -1 || val === undefined ? null : val), // -1 stand for no limit
+        z.number()
+            .min(1, 'Limit should be more than 0')
+            .nullable() // Explicitly allow null for "No Limit"
+    ),
     certification: certificateSchema,
     linkStatus: z.enum(['UP', 'DOWN']).default('DOWN'),
     healthStatus: z.enum(['HEALTH', 'CORRUPT', 'INITIALIZING', 'INITIALIZE_FAIL']).default('INITIALIZING'),
-    adminStatus: z.enum(['ACTIVE', 'PAUSED']).default('ACTIVE')
+    adminStatus: z.enum(['ACTIVE', 'PAUSED', 'QUOTA_EXCEEDED']).default('ACTIVE')
 }).omit({ id: true });
 // Insert Repository
 export type InsertRepositorySchema = z.infer<typeof insertRepositorySchema>

@@ -91,6 +91,27 @@ export class RepositoryClient {
         }
     }
 
+    public async backupDryRun(path: string): Promise<ResticResult<SnapshotSummary>> {
+        const result = await execute(`restic backup . --skip-if-unchanged --json`, { cwd: path, env: this._env });
+        if (result.failed) return fail(result);
+        try {
+            // Execa v9+ yields lines automatically from the subprocess
+            for await (const line of result.stdout as string) {
+                try {
+                    const data:{ message_type: string } = JSON.parse(line.toString());
+                    if (data.message_type === 'summary') {
+                        return success(this.parse(line, "{}"), result);
+                    }
+                } catch {
+                    /* Ignore non-JSON lines or partial chunks */
+                }
+            }
+        } catch (err) {
+            return fail(result, err);
+        }
+        return fail(result, new Error(`no backup summary found`));
+    }
+
     public backup(
         path: string,
         logFile: string,
