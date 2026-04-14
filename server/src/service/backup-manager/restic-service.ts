@@ -327,7 +327,7 @@ export class ResticService {
         // run remote retention policy against local in dry run mode, get what snapshot should be copy
         let keepSnapshotIds: string[] = [];
         const retryResult = await this.retryOnLock(
-            () => this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy),
+            () => this.repoClient.forgetByPathWithPolicy(path, target.retentionPolicy, true),
             { isExclusive: true }
         );
         if (retryResult.status !== 'success') {
@@ -400,7 +400,7 @@ export class ResticService {
                 logger.warn(msg);
                 this.repo = updateRepositorySchema.parse(await db.update(repository).set({
                     adminStatus: 'QUOTA_EXCEEDED',
-                }).where(eq(repository.id, this.repo.id)).returning())
+                }).where(eq(repository.id, this.repo.id)).returning());
                 return this.rejectExecution(exec, msg);
             }
         }
