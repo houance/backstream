@@ -20,7 +20,7 @@ export function FailHistoryTab({ storage }: {
     const today = dayjs();
     const [activeLogId, setActiveLogId] = useState<number | null>(null);
     const [filter, setFilter] = useState<FilterQuery>({
-        page: 0,
+        page: 1,
         pageSize: 15,
         startTime: 0,
         endTime: 0
@@ -144,7 +144,7 @@ export function FailHistoryTab({ storage }: {
                         />
                         <Pagination
                             size="sm"
-                            value={filter.page + 1}
+                            value={filter.page}
                             total={Math.ceil((listData?.count || 0) / filter.pageSize)}
                             onChange={(page) => setFilter(prev => ({ ...prev, page }))}
                         />

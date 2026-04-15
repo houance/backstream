@@ -27,7 +27,7 @@ export default function FailHistory({ policy }: { policy: UpdateBackupPolicySche
     const [selectedTargetId, setSelectedTargetId] = useState<string>(targets[0]?.id.toString());
     const [activeLogId, setActiveLogId] = useState<number | null>(null);
     const [filter, setFilter] = useState<FilterQuery>({
-        page: 0,
+        page: 1,
         pageSize: 15,
         startTime: 0,
         endTime: 0
@@ -47,7 +47,7 @@ export default function FailHistory({ policy }: { policy: UpdateBackupPolicySche
             return res.json();
         },
         enabled: !!selectedTargetId,
-        refetchInterval: 5000,
+        refetchInterval: 20000,
         placeholderData: keepPreviousData, // Replaces v4's keepPreviousData: true
     });
 
@@ -179,7 +179,7 @@ export default function FailHistory({ policy }: { policy: UpdateBackupPolicySche
                         />
                         <Pagination
                             size="sm"
-                            value={filter.page + 1}
+                            value={filter.page}
                             total={Math.ceil((listData?.count ?? 0) / filter.pageSize)}
                             onChange={(p) => setFilter(prev => ({ ...prev, page: p }))}
                             withEdges

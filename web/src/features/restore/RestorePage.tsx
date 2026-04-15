@@ -10,7 +10,7 @@ import { Center, Container, Group, Loader, Pagination, Select, Text} from "@mant
 export default function RestorePage() {
     // filter query state
     const [filter, setFilter] = useState<FilterQuery>({
-        page: 0,
+        page: 1,
         pageSize: 15,
         startTime: 0,
         endTime: 0
@@ -122,7 +122,7 @@ export default function RestorePage() {
                 />
                 <Pagination
                     size="md" // Smaller height
-                    value={filter.page + 1}
+                    value={filter.page}
                     onChange={(p) => setFilter((prev) => ({ ...prev, page: p - 1 }))}
                     total={Math.ceil((allRestores?.totalCount ?? 0) / filter.pageSize)}
                     withEdges

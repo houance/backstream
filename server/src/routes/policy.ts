@@ -107,7 +107,7 @@ const policyRoute = new Hono<Env>()
                     ))
                     .orderBy(desc(execution.id))
                     .limit(filterQuery.pageSize)
-                    .offset(filterQuery.page - 1 < 0 ? 0 : filterQuery.page - 1),
+                    .offset(Math.max(0, filterQuery.page - 1) * filterQuery.pageSize),
                 c.var.db.select({ count: count() }).from(execution)
                     .where(and(
                         inArray(execution.executeStatus, [execStatus.FAIL, execStatus.REJECT, execStatus.KILL]),

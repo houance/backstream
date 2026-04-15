@@ -31,7 +31,7 @@ export default function SnapshotsExplorer({ policy }: { policy: UpdateBackupPoli
     const today = dayjs();
     // filter query state
     const [filter, setFilter] = useState<FilterQuery>({
-        page: 0,
+        page: 1,
         pageSize: 15,
         startTime: 0,
         endTime: 0
@@ -237,7 +237,7 @@ export default function SnapshotsExplorer({ policy }: { policy: UpdateBackupPoli
                         />
                         <Pagination
                             size="sm" // Smaller height
-                            value={filter.page + 1}
+                            value={filter.page}
                             onChange={(p) => setFilter((prev) => ({ ...prev, page: p - 1 }))}
                             total={Math.ceil((allSnapshots?.totalFinishedCount ?? 0) / filter.pageSize)}
                             withEdges
