@@ -1,6 +1,18 @@
 import { useState } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { Stack, Paper, SegmentedControl, Center, Text, LoadingOverlay, Accordion, Group, Select, Pagination } from '@mantine/core';
+import {
+    Stack,
+    Paper,
+    SegmentedControl,
+    Center,
+    Text,
+    LoadingOverlay,
+    Accordion,
+    Group,
+    Select,
+    Pagination,
+    Loader
+} from '@mantine/core';
 import { IconCloud, IconDatabase } from '@tabler/icons-react';
 import type {FilterQuery, UpdateBackupPolicySchema} from "@backstream/shared";
 import { FailHistoryRow } from '../../../component/FailHistoryRow.tsx';
@@ -52,6 +64,8 @@ export default function FailHistory({ policy }: { policy: UpdateBackupPolicySche
         enabled: !!activeLogId, // Only fetch when an execution is opened
         staleTime: Infinity,    // Keep logs cached once loaded
     });
+
+    if (isListLoading) return <Center h="100vh"><Loader size="xl" /></Center>;
 
     return (
         <Stack pt="md" gap="lg">
@@ -165,7 +179,7 @@ export default function FailHistory({ policy }: { policy: UpdateBackupPolicySche
                         />
                         <Pagination
                             size="sm"
-                            value={filter.page}
+                            value={filter.page + 1}
                             total={Math.ceil((listData?.count ?? 0) / filter.pageSize)}
                             onChange={(p) => setFilter(prev => ({ ...prev, page: p }))}
                             withEdges

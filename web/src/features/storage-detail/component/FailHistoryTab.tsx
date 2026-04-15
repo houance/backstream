@@ -144,7 +144,7 @@ export function FailHistoryTab({ storage }: {
                         />
                         <Pagination
                             size="sm"
-                            value={filter.page}
+                            value={filter.page + 1}
                             total={Math.ceil((listData?.count || 0) / filter.pageSize)}
                             onChange={(page) => setFilter(prev => ({ ...prev, page }))}
                         />
