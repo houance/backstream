@@ -105,6 +105,7 @@ const policyRoute = new Hono<Env>()
                         gte(execution.scheduledAt, start),
                         lte(execution.scheduledAt, end),
                     ))
+                    .orderBy(desc(execution.id))
                     .limit(filterQuery.pageSize)
                     .offset(filterQuery.page - 1 < 0 ? 0 : filterQuery.page - 1),
                 c.var.db.select({ count: count() }).from(execution)
