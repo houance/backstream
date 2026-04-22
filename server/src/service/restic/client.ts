@@ -512,6 +512,12 @@ export class RepositoryClient {
         return mapResticCode(result.exitCode) === ExitCode.Success ? success(true, result) : fail(result);
     }
 
+    public async cacheCleanUp(): Promise<ResticResult<boolean>> {
+        const command = `restic cache --cleanup`;
+        const result = await execute(command, { env: this._env });
+        return mapResticCode(result.exitCode) === ExitCode.Success ? success(true, result) : fail(result);
+    }
+
     /**
      * Parses stdout or a fallback string into JSON, then camelCases the keys.
      * Throws an error if the resulting string is not valid JSON or fallBackJson is ""

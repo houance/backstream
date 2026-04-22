@@ -167,6 +167,10 @@ export class ResticService {
         );
     }
 
+    public async cleanCache() {
+        return await this.repoClient.cacheCleanUp();
+    }
+
     public getRunningJob(execution: UpdateExecutionSchema): Task<ResticResult<any>> | null {
         const job = this.taskMap.get(execution.id);
         if (!job || job.status === 'waiting') return null;
@@ -466,6 +470,8 @@ export class ResticService {
         } else {
             logger.warn(`not found snapshot:${snapshotId} after index ${this.repo.name}`)
         }
+        // clean cache
+        void this.cleanCache();
         // update stat to get new repo size
         return this.updateRepoStat();
     }
