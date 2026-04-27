@@ -125,9 +125,17 @@ export const execution = sqliteTable("execution_table", {
 export const setting = sqliteTable("system_setting", {
     id: integer("setting_id").primaryKey({ autoIncrement: true }),
     ioPriority: text("io_priority").notNull(),
-    email: text("email").notNull(),
     logRetentionDays: integer("log_retention_days").notNull(),
 })
+
+// Notification Channel Table
+export const notificationChannels = sqliteTable("notification_channels", {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    category: text("category").notNull(), // 'slack', 'telegram', etc.
+    notificationStatus: text("is_enabled").notNull(),
+    // Store the validated JSON as a string
+    config: text("config", { mode: 'json' }).notNull(),
+});
 
 // strategy => many targets
 export const strategyRelations = relations(strategy, ({ many }) => ({

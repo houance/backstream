@@ -1,5 +1,5 @@
 import {
-    Text, Card, Grid, Stack, TextInput,
+    Text, Card, Grid, Stack,
     NumberInput, Button, Group, Box, SegmentedControl,
     Title
 } from '@mantine/core';
@@ -30,17 +30,6 @@ export function SettingsDualPane({ initialData, onSubmit, isSubmitting }: System
                     {/* Left Column: Alerts & Maintenance */}
                     <Grid.Col span={{base: 12, lg: 6}}>
                         <Stack gap="md">
-                            <Card withBorder radius="md" p="lg">
-                                <Title order={5} mb="md">Health & Alerts</Title>
-                                <Stack gap="sm">
-                                    <TextInput
-                                        label="Admin Email"
-                                        placeholder="admin@example.com"
-                                        {...form.getInputProps('email')}
-                                    />
-                                </Stack>
-                            </Card>
-
                             <Card withBorder radius="md" p="lg">
                                 <Title order={5} mb="md">Log Retention & Updates</Title>
                                 <Stack gap="sm">

@@ -3,7 +3,7 @@ import {createInsertSchema, createUpdateSchema} from 'drizzle-zod';
 import {
     backupTarget,
     execution,
-    jobSchedules,
+    jobSchedules, notificationChannels,
     repository,
     restores,
     setting,
@@ -388,3 +388,75 @@ export const updateJobScheduleSchema = z.discriminatedUnion('category', [
     updateSystemScheduleSchema
 ]);
 export type UpdateJobScheduleSchema = z.infer<typeof updateJobScheduleSchema>;
+// notification channel
+const baseNotificationChannel = createInsertSchema(notificationChannels, {
+    notificationStatus: z.enum(['Active', 'Disabled', 'Error']).default('Active'),
+})
+export const insertWebHookSchema = baseNotificationChannel.safeExtend({
+    category: z.enum(['slack', 'discord']),
+    config: z.object({
+        webhookUrl: z.url(),
+    })
+});
+export type InsertWebHookSchema = z.infer<typeof insertWebHookSchema>;
+export const updateWebHookSchema = insertWebHookSchema.safeExtend({
+    id: z.number().positive(),
+});
+export type UpdateWebHookSchema = z.infer<typeof updateWebHookSchema>;
+export const insertTelegramSchema = baseNotificationChannel.safeExtend({
+    category: z.enum(['telegram']),
+    config: z.object({
+        botToken: z.string().min(1),
+        chatId: z.string().min(1),
+    })
+});
+export type InsertTelegramSchema = z.infer<typeof insertTelegramSchema>;
+export const updateTelegramSchema = insertTelegramSchema.safeExtend({
+    id: z.number().positive(),
+});
+export type UpdateTelegramSchema = z.infer<typeof updateTelegramSchema>;
+export const insertSmtpEmailSchema = baseNotificationChannel.safeExtend({
+    category: z.literal('smtp'),
+    config: z.object({
+        host: z.string().min(1),             // e.g., "://gmail.com"
+        port: z.number().int().positive(),   // e.g., 465 or 587
+        secure: z.boolean(),
+        auth: z.object({
+            user: z.email(),           // Your Gmail address
+            pass: z.string().min(1),           // Your 16-character App Password
+        }),
+        from: z.email(),             // e.g., "Home Server <me@gmail.com>"
+    })
+});
+export type InsertSmtpEmailSchema = z.infer<typeof insertSmtpEmailSchema>;
+export const updateSmtpEmailSchema = insertSmtpEmailSchema.safeExtend({
+    id: z.number().positive(),
+});
+export type UpdateSmtpEmailSchema = z.infer<typeof updateSmtpEmailSchema>;
+export const insertRelayEmailSchema = baseNotificationChannel.safeExtend({
+    category: z.literal('email-relay'),
+    config: z.object({
+        provider: z.enum(["resend", "sendgrid"]),
+        apiKey: z.string().min(1),
+        from: z.email(),
+    })
+});
+export type InsertRelayEmailSchema = z.infer<typeof insertRelayEmailSchema>;
+export const updateRelayEmailSchema = insertRelayEmailSchema.safeExtend({
+    id: z.number().positive(),
+});
+export type UpdateRelayEmailSchema = z.infer<typeof updateRelayEmailSchema>;
+export const insertNotificationChannelSchema = z.discriminatedUnion('category', [
+    insertWebHookSchema,
+    insertTelegramSchema,
+    insertSmtpEmailSchema,
+    insertRelayEmailSchema,
+]);
+export type InsertNotificationChannelSchema = z.infer<typeof insertNotificationChannelSchema>;
+export const updateNotificationChannelSchema = z.discriminatedUnion('category', [
+    updateWebHookSchema,
+    updateTelegramSchema,
+    updateSmtpEmailSchema,
+    updateRelayEmailSchema,
+]);
+export type UpdateNotificationChannelSchema = z.infer<typeof updateNotificationChannelSchema>;
