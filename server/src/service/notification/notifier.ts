@@ -9,8 +9,9 @@ import {eq} from "drizzle-orm";
 import {db} from "../db";
 import {IncomingWebhook} from "@slack/webhook";
 import {Bot} from "grammy";
-import nodemailer from "nodemailer";
+import nodemailer from 'nodemailer';
 import {SocksProxyAgent} from "socks-proxy-agent";
+import { fetch, ProxyAgent } from 'undici';
 
 class SlackChannel {
     static async send(msg: UnifiedMessage, channel: UpdateWebHookSchema) {
@@ -21,10 +22,12 @@ class SlackChannel {
 
 class DiscordChannel {
     static async send(msg: UnifiedMessage, channel: UpdateWebHookSchema) {
+        const proxyAgent = new ProxyAgent('http://172.17.144.1:10812');
         await fetch(channel.config.webhookUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ content: msg.title ? `**${msg.title}**\n${msg.body}` : msg.body }),
+            dispatcher: proxyAgent,
         });
     }
 }
@@ -50,8 +53,12 @@ class SMTPChannel {
             host: channel.config.host,
             port: channel.config.port,
             secure: channel.config.secure,
-            auth: channel.config.auth,
-        });
+            proxy: 'http://172.17.144.1:10810', // This is now recognized
+            auth: {
+                user: channel.config.auth.user,
+                pass: channel.config.auth.pass,
+            }
+        } as nodemailer.TransportOptions);
         await transporter.sendMail({
             from: channel.config.from,
             to: channel.config.to,
