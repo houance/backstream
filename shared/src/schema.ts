@@ -134,6 +134,7 @@ export const notificationChannels = sqliteTable("notification_channels", {
     id: integer("id").primaryKey({ autoIncrement: true }),
     category: text("category").notNull(), // 'slack', 'telegram', etc.
     channelStatus: text("channel_status").notNull(),
+    proxyStatus: text("proxy_status").notNull(),
     // Store the validated JSON as a string
     config: text("config", { mode: 'json' }).notNull(),
 });

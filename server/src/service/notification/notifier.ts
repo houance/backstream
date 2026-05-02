@@ -1,6 +1,6 @@
 import {
     type InsertNotificationChannelSchema,
-    notificationChannels, updateNotificationChannelSchema,
+    notificationChannels, type UpdateNotificationChannelSchema, updateNotificationChannelSchema,
     type UpdateSMTPEmailSchema, type UpdateSMTPServiceSchema,
     type UpdateTelegramSchema,
     type UpdateWebHookSchema
@@ -11,9 +11,9 @@ import nodemailer from 'nodemailer';
 import { fetch, ProxyAgent } from 'undici';
 import { client } from '../setting/client';
 
-function getProxyAgent() {
+function getProxyAgent(channel: UpdateNotificationChannelSchema) {
     const httpProxy = client.get().httpProxy;
-    if (httpProxy) {
+    if (httpProxy && channel.proxyStatus === 'Active') {
         return new ProxyAgent(httpProxy);
     }
     return undefined;
@@ -25,31 +25,29 @@ class SlackChannel {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text: msg.title ? `**${msg.title}**\n${msg.body}` : msg.body }),
-            dispatcher: getProxyAgent(),
+            dispatcher: getProxyAgent(channel),
         });
     }
 }
 
 class DiscordChannel {
     static async send(msg: UnifiedMessage, channel: UpdateWebHookSchema) {
-        const proxyAgent = new ProxyAgent('http://172.17.144.1:10812');
         await fetch(channel.config.webhookUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ content: msg.title ? `**${msg.title}**\n${msg.body}` : msg.body }),
-            dispatcher: getProxyAgent(),
+            dispatcher: getProxyAgent(channel),
         });
     }
 }
 
 class TelegramChannel {
     static async send(msg: UnifiedMessage, channel: UpdateTelegramSchema) {
-        const proxyAgent = new ProxyAgent('http://172.17.144.1:10812');
         await fetch(`https://api.telegram.org/bot${channel.config.botToken}/sendMessage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ chat_id: channel.config.chatId, text: msg.body }),
-            dispatcher: getProxyAgent()
+            dispatcher: getProxyAgent(channel)
         });
     }
 }
@@ -61,7 +59,7 @@ class SMTPChannel {
                 user: channel.config.auth.user,
                 pass: channel.config.auth.pass,
             },
-            proxy: client.get().httpProxy,
+            proxy: channel.proxyStatus === 'Active' ? client.get().httpProxy : undefined,
         };
         if ('service' in channel.config) {
             transportConfig.service = channel.config.service;

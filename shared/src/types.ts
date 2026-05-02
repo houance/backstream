@@ -401,7 +401,8 @@ export const channelCategory = {
 export type ChannelCategory = typeof channelCategory[keyof typeof channelCategory];
 const baseNotificationChannel = createInsertSchema(notificationChannels, {
     channelStatus: z.enum(['Active', 'Disabled', 'Error']).default('Active'),
-})
+    proxyStatus: z.enum(['Active', 'Disabled']).default('Disabled'),
+});
 export const insertWebHookSchema = baseNotificationChannel.safeExtend({
     category: z.enum([channelCategory.SLACK, channelCategory.DISCORD]),
     config: z.object({
