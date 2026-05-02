@@ -394,6 +394,7 @@ export const channelCategory = {
     DISCORD: "DISCORD",
     TELEGRAM: "TELEGRAM",
     SMTP: "SMTP",
+    SMTP_SERVICE: "SMTP_SERVICE",
     EMAIL_RELAY: "EMAIL_RELAY",
 } as const;
 // This extracts "success" | "fail" | "running" | etc.
@@ -443,6 +444,23 @@ export const updateSMTPEmailSchema = insertSMTPEmailSchema.safeExtend({
     id: z.number().positive(),
 });
 export type UpdateSMTPEmailSchema = z.infer<typeof updateSMTPEmailSchema>;
+export const insertSMTPServiceSchema = baseNotificationChannel.safeExtend({
+    category: z.literal(channelCategory.SMTP_SERVICE),
+    config: z.object({
+        service: z.enum(['gmail', 'hotmail', 'Outlook365']),
+        auth: z.object({
+            user: z.email(),           // Your Gmail address
+            pass: z.string().min(1),           // Your 16-character App Password
+        }),
+        from: z.email(),             // e.g., "Home Server <me@gmail.com>"
+        to: z.email(),
+    })
+});
+export type InsertSMTPServiceSchema = z.infer<typeof insertSMTPServiceSchema>;
+export const updateSMTPServiceSchema = insertSMTPServiceSchema.safeExtend({
+    id: z.number().positive(),
+});
+export type UpdateSMTPServiceSchema = z.infer<typeof updateSMTPServiceSchema>;
 export const insertRelayEmailSchema = baseNotificationChannel.safeExtend({
     category: z.literal(channelCategory.EMAIL_RELAY),
     config: z.object({
@@ -461,6 +479,7 @@ export const insertNotificationChannelSchema = z.discriminatedUnion('category', 
     insertWebHookSchema,
     insertTelegramSchema,
     insertSMTPEmailSchema,
+    insertSMTPServiceSchema,
     insertRelayEmailSchema,
 ]);
 export type InsertNotificationChannelSchema = z.infer<typeof insertNotificationChannelSchema>;
@@ -468,6 +487,7 @@ export const updateNotificationChannelSchema = z.discriminatedUnion('category', 
     updateWebHookSchema,
     updateTelegramSchema,
     updateSMTPEmailSchema,
+    updateSMTPServiceSchema,
     updateRelayEmailSchema,
 ]);
 export type UpdateNotificationChannelSchema = z.infer<typeof updateNotificationChannelSchema>;

@@ -1,22 +1,24 @@
 import {
     type InsertNotificationChannelSchema,
     notificationChannels, updateNotificationChannelSchema,
-    type UpdateSMTPEmailSchema,
+    type UpdateSMTPEmailSchema, type UpdateSMTPServiceSchema,
     type UpdateTelegramSchema,
     type UpdateWebHookSchema
 } from "@backstream/shared";
 import {eq} from "drizzle-orm";
 import {db} from "../db";
-import {IncomingWebhook} from "@slack/webhook";
-import {Bot} from "grammy";
 import nodemailer from 'nodemailer';
-import {SocksProxyAgent} from "socks-proxy-agent";
 import { fetch, ProxyAgent } from 'undici';
 
 class SlackChannel {
     static async send(msg: UnifiedMessage, channel: UpdateWebHookSchema) {
-        const webhook = new IncomingWebhook(channel.config.webhookUrl);
-        await webhook.send({ text: msg.body });
+        const proxyAgent = new ProxyAgent('http://172.17.144.1:10812');
+        await fetch(channel.config.webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: msg.title ? `**${msg.title}**\n${msg.body}` : msg.body }),
+            dispatcher: proxyAgent,
+        });
     }
 }
 
@@ -34,31 +36,33 @@ class DiscordChannel {
 
 class TelegramChannel {
     static async send(msg: UnifiedMessage, channel: UpdateTelegramSchema) {
-        const socksAgent = new SocksProxyAgent('socks5://172.17.144.1:10811')
-        const bot = new Bot(channel.config.botToken, {
-            client: {
-                baseFetchConfig: {
-                    agent: socksAgent,
-                    compress: true,
-                }
-            }
+        const proxyAgent = new ProxyAgent('http://172.17.144.1:10812');
+        await fetch(`https://api.telegram.org/bot${channel.config.botToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: channel.config.chatId, text: msg.body }),
+            dispatcher: proxyAgent
         });
-        await bot.api.sendMessage(channel.config.chatId, msg.body);
     }
 }
 
 class SMTPChannel {
-    static async send(msg: UnifiedMessage, channel: UpdateSMTPEmailSchema) {
-        const transporter = nodemailer.createTransport({
-            host: channel.config.host,
-            port: channel.config.port,
-            secure: channel.config.secure,
-            proxy: 'http://172.17.144.1:10810', // This is now recognized
+    static async send(msg: UnifiedMessage, channel: UpdateSMTPEmailSchema | UpdateSMTPServiceSchema) {
+        const transportConfig: any = {
             auth: {
                 user: channel.config.auth.user,
                 pass: channel.config.auth.pass,
-            }
-        } as nodemailer.TransportOptions);
+            },
+            proxy: 'http://172.17.144.1:10812',
+        };
+        if ('service' in channel.config) {
+            transportConfig.service = channel.config.service;
+        } else {
+            transportConfig.host = channel.config.host;
+            transportConfig.port = channel.config.port;
+            transportConfig.secure = channel.config.secure;
+        }
+        const transporter = nodemailer.createTransport(transportConfig);
         await transporter.sendMail({
             from: channel.config.from,
             to: channel.config.to,
@@ -84,7 +88,8 @@ export class Notifier {
                 case 'SLACK': SlackChannel.send(msg, row); break;
                 case 'DISCORD': DiscordChannel.send(msg, row); break;
                 case 'TELEGRAM': TelegramChannel.send(msg, row); break;
-                case 'SMTP': SMTPChannel.send(msg, row); break;
+                case 'SMTP':
+                case 'SMTP_SERVICE': SMTPChannel.send(msg, row); break;
                 default: throw new Error(`not supported channel ${row.category}.`);
             }
         }));
