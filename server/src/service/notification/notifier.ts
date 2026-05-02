@@ -9,15 +9,23 @@ import {eq} from "drizzle-orm";
 import {db} from "../db";
 import nodemailer from 'nodemailer';
 import { fetch, ProxyAgent } from 'undici';
+import { client } from '../setting/client';
+
+function getProxyAgent() {
+    const httpProxy = client.get().httpProxy;
+    if (httpProxy) {
+        return new ProxyAgent(httpProxy);
+    }
+    return undefined;
+}
 
 class SlackChannel {
     static async send(msg: UnifiedMessage, channel: UpdateWebHookSchema) {
-        const proxyAgent = new ProxyAgent('http://172.17.144.1:10812');
         await fetch(channel.config.webhookUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text: msg.title ? `**${msg.title}**\n${msg.body}` : msg.body }),
-            dispatcher: proxyAgent,
+            dispatcher: getProxyAgent(),
         });
     }
 }
@@ -29,7 +37,7 @@ class DiscordChannel {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ content: msg.title ? `**${msg.title}**\n${msg.body}` : msg.body }),
-            dispatcher: proxyAgent,
+            dispatcher: getProxyAgent(),
         });
     }
 }
@@ -41,7 +49,7 @@ class TelegramChannel {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ chat_id: channel.config.chatId, text: msg.body }),
-            dispatcher: proxyAgent
+            dispatcher: getProxyAgent()
         });
     }
 }
@@ -53,7 +61,7 @@ class SMTPChannel {
                 user: channel.config.auth.user,
                 pass: channel.config.auth.pass,
             },
-            proxy: 'http://172.17.144.1:10812',
+            proxy: client.get().httpProxy,
         };
         if ('service' in channel.config) {
             transportConfig.service = channel.config.service;

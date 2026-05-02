@@ -126,6 +126,7 @@ export const setting = sqliteTable("system_setting", {
     id: integer("setting_id").primaryKey({ autoIncrement: true }),
     ioPriority: text("io_priority").notNull(),
     logRetentionDays: integer("log_retention_days").notNull(),
+    httpProxy: text('http_proxy')
 })
 
 // Notification Channel Table
