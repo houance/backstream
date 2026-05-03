@@ -393,6 +393,8 @@ export const channelCategory = {
     SLACK: "SLACK",
     DISCORD: "DISCORD",
     TELEGRAM: "TELEGRAM",
+    APPRISE: "APPRISE",
+    NTFY: "NTFY",
     SMTP: "SMTP",
     SMTP_SERVICE: "SMTP_SERVICE",
     EMAIL_RELAY: "EMAIL_RELAY",
@@ -404,7 +406,7 @@ const baseNotificationChannel = createInsertSchema(notificationChannels, {
     proxyStatus: z.enum(['Active', 'Disabled']).default('Disabled'),
 });
 export const insertWebHookSchema = baseNotificationChannel.safeExtend({
-    category: z.enum([channelCategory.SLACK, channelCategory.DISCORD]),
+    category: z.enum([channelCategory.SLACK, channelCategory.DISCORD, channelCategory.APPRISE, channelCategory.NTFY]),
     config: z.object({
         webhookUrl: z.url(),
     })
@@ -445,10 +447,17 @@ export const updateSMTPEmailSchema = insertSMTPEmailSchema.safeExtend({
     id: z.number().positive(),
 });
 export type UpdateSMTPEmailSchema = z.infer<typeof updateSMTPEmailSchema>;
+const SERVICES = [
+    "1und1", "AOL", "DebugMail", "DynectEmail", "FastMail", "GandiMail",
+    "Gmail", "GMX", "Godaddy", "GodaddyAsia", "GodaddyEurope", "hot.ee",
+    "Hotmail", "iCloud", "mail.ee", "Mail.ru", "Mailgun", "Mailjet",
+    "Mandrill", "Naver", "Postmark", "QQ", "QQex", "SendCloud",
+    "SendGrid", "SES", "Sparkpost", "Yahoo", "Yandex", "Zoho"
+] as const;
 export const insertSMTPServiceSchema = baseNotificationChannel.safeExtend({
     category: z.literal(channelCategory.SMTP_SERVICE),
     config: z.object({
-        service: z.enum(['gmail', 'hotmail', 'Outlook365']),
+        service: z.enum(SERVICES),
         auth: z.object({
             user: z.email(),           // Your Gmail address
             pass: z.string().min(1),           // Your 16-character App Password

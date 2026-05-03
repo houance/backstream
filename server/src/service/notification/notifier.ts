@@ -41,6 +41,35 @@ class DiscordChannel {
     }
 }
 
+class AppriseChannel {
+    static async send(msg: UnifiedMessage, channel: UpdateWebHookSchema) {
+        await fetch(channel.config.webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                urls: ['"json://"'],
+                body: msg.body,
+                title: msg.title,
+                type: 'info'
+            }),
+            dispatcher: getProxyAgent(channel),
+        });
+    }
+}
+
+class NtfyChannel {
+    static async send(msg: UnifiedMessage, channel: UpdateWebHookSchema) {
+        await fetch(channel.config.webhookUrl, {
+            method: 'POST',
+            headers: {
+                'Title': msg.title ?? 'Alert',
+            },
+            body: msg.body.trim(),
+            dispatcher: getProxyAgent(channel),
+        });
+    }
+}
+
 class TelegramChannel {
     static async send(msg: UnifiedMessage, channel: UpdateTelegramSchema) {
         await fetch(`https://api.telegram.org/bot${channel.config.botToken}/sendMessage`, {
@@ -94,6 +123,8 @@ export class Notifier {
                 case 'SLACK': SlackChannel.send(msg, row); break;
                 case 'DISCORD': DiscordChannel.send(msg, row); break;
                 case 'TELEGRAM': TelegramChannel.send(msg, row); break;
+                case 'NTFY': NtfyChannel.send(msg, row); break;
+                case 'APPRISE': AppriseChannel.send(msg, row); break;
                 case 'SMTP':
                 case 'SMTP_SERVICE': SMTPChannel.send(msg, row); break;
                 default: throw new Error(`not supported channel ${row.category}.`);
